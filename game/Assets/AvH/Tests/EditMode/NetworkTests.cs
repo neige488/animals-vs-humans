@@ -169,5 +169,16 @@ namespace AvH.Tests {
     foreach(int slot in animalSlots)Assert.That(client.Snapshot.Players[slot].IsBot,Is.True);
    }
   }
+  [Test] public void CompletingChunkedVisualsPublishesNewSnapshotWithoutMutatingOldOne() {
+   var world=new PlaytestSession(2);world.StartSolo("host");
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    host.CaptureVisuals=()=>new NetworkVisualState{Bubbles=Enumerable.Range(0,1500).Select(n=>new NetworkBubble{Id=n}).ToArray()};
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);
+    NetworkVisualState first=null;for(int n=0;n<50&&first==null;n++){host.Pump();client.Pump();first=client.Visuals;Thread.Sleep(2);}
+    Assert.That(first,Is.Not.Null);Assert.That(first.Bubbles,Is.Empty);
+    Until(host,client,()=>client.Visuals.Bubbles.Length==1500);
+    Assert.That(ReferenceEquals(first,client.Visuals),Is.False);Assert.That(first.Bubbles,Is.Empty);
+   }
+  }
  }
 }
