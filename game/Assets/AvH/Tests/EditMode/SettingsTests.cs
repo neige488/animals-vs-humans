@@ -74,4 +74,11 @@ public class SettingsTests {
    Assert.AreEqual("broken",System.IO.File.ReadAllText(path));
   } finally {System.IO.Directory.Delete(dir,true);}
  }
+ [Test] public void ResultDurationIsReservedThenUsedByTheNextRound() {
+  var s=new PlaytestSession(1);s.StartSolo("host");s.BeginSettingsEdit(0);
+  var v=s.ObserveSettings().Edit;v.ResultSeconds=9;s.UpdateSettingsEdit(0,v);Assert.IsTrue(s.ApplySettings(0));
+  s.Advance(200);Assert.AreEqual(5,s.Observe().SecondsRemaining);
+  s.Advance(5+200);Assert.AreEqual(RoundPhase.Results,s.Observe().Phase);Assert.AreEqual(9,s.Observe().SecondsRemaining);
+  s.Advance(8);Assert.AreEqual(2,s.Observe().Round);s.Advance(1);Assert.AreEqual(3,s.Observe().Round);
+ }
 }}
