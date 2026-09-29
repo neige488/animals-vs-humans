@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -22,6 +23,17 @@ namespace AvH.Tests {
     Assert.That(clientWorld.ObserveActiveSettings().Version,Is.EqualTo(hostWorld.ObserveActiveSettings().Version));
     client.Leave();for(int n=0;n<20;n++)yield return new WaitForSecondsRealtime(.02f);Assert.That(hostWorld.Observe().Players[slot].IsBot,Is.True);
    }finally{Object.Destroy(h);Object.Destroy(c);}
+  }
+  [UnityTest] public IEnumerator RemoteEffectSnapshotReconcilesLargeSetAndRemovesDepartedIds() {
+   var go=new GameObject("Remote effects test");
+   try {
+    var state=new PlaytestSession(2);state.StartSolo("host");var world=go.AddComponent<UnityPlaytestSession>();world.StartRemote(state.Observe());
+    var full=new NetworkVisualState{Bubbles=Enumerable.Range(0,1000).Select(i=>new NetworkBubble{Id=i,Position=new WorldPosition(i%20,5,i/20)}).ToArray()};
+    world.ApplyRemoteVisuals(full);world.ApplyRemoteVisuals(full);yield return null;
+    Assert.That(go.GetComponentsInChildren<Renderer>().Count(r=>r.name=="Remote Bubble"),Is.EqualTo(1000));
+    world.ApplyRemoteVisuals(new NetworkVisualState{Bubbles=full.Bubbles.Where(b=>b.Id%2==0).ToArray()});yield return null;
+    Assert.That(go.GetComponentsInChildren<Renderer>().Count(r=>r.name=="Remote Bubble"),Is.EqualTo(500));
+   } finally{Object.Destroy(go);}
   }
  }
 }
