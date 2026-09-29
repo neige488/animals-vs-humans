@@ -18,7 +18,7 @@ namespace AvH {
   readonly Vector3[] pushVelocity=new Vector3[12];
   int nextBubbleId;
   Material bubbleMaterial;
-  public BubbleState[] ObserveBubbles()=>bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.Owner,Round=b.Round,Position=ToPosition(b.Position),Direction=ToPosition(b.Direction),RemainingLife=b.Life,Travelled=b.Travelled}).ToArray();
+  public BubbleState[] ObserveBubbles()=>remoteVisuals!=null?remoteVisuals.Bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray():bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.Owner,Round=b.Round,Position=ToPosition(b.Position),Direction=ToPosition(b.Direction),RemainingLife=b.Life,Travelled=b.Travelled}).ToArray();
   static WorldPosition ToPosition(Vector3 v)=>new WorldPosition(v.x,v.y,v.z);
   void PrepareCombatWorld(SessionState state,int oldRound) {
    if(state.Round!=oldRound){foreach(var bubble in bubbles)Destroy(bubble.Visual);bubbles.Clear();Array.Clear(pushVelocity,0,pushVelocity.Length);Array.Clear(inputs,0,inputs.Length);}
