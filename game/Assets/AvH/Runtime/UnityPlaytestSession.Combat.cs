@@ -16,6 +16,9 @@ namespace AvH {
   readonly List<Bubble> bubbles=new List<Bubble>();
   readonly List<(GameObject visual,float remaining)> bursts=new List<(GameObject,float)>();
   readonly Vector3[] pushVelocity=new Vector3[12];
+  readonly int[] bubbleHits=new int[12];
+  // Actual authoritative physics hits, for combat feedback and session diagnostics.
+  public int[] ObserveBubbleHits()=>(int[])bubbleHits.Clone();
   int nextBubbleId;
   Material bubbleMaterial;
   public BubbleState[] ObserveBubbles()=>bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.Owner,Round=b.Round,Position=ToPosition(b.Position),Direction=ToPosition(b.Direction),RemainingLife=b.Life,Travelled=b.Travelled}).ToArray();
@@ -38,7 +41,7 @@ namespace AvH {
      if(target==bubble.Owner)continue;
      if(target>=0 && beforeCombat.Players[target].Faction==Faction.Human && !bubble.FriendlyPush)continue;
      bubble.Position+=bubble.Direction*hit.distance;
-     if(target>=0)pushVelocity[target]+=bubble.Direction*bubble.PushForce+Vector3.up*1.5f;
+     if(target>=0){bubbleHits[target]++;pushVelocity[target]+=bubble.Direction*bubble.PushForce+Vector3.up*1.5f;}
      Pop(bubble);popped=true;break;
     }
     if(!popped){bubble.Position+=bubble.Direction*distance;bubble.Travelled+=distance;bubble.Life-=seconds;bubble.Visual.transform.position=bubble.Position;
