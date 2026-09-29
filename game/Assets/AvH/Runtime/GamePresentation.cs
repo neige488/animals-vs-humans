@@ -61,7 +61,7 @@ namespace AvH {
    string phase=state.Phase==RoundPhase.Preparation?"준비":state.Phase==RoundPhase.Chase?"추격":"인간 승리 · 다음 라운드";
    GUI.Box(new Rect(w/2-300,12,600,90),"");
    GUI.Label(new Rect(w/2-295,15,590,40),$"인간 {12-animals}   |   {phase} {Mathf.CeilToInt((float)state.SecondsRemaining)}초   |   동물 {animals}",label);
-   if(state.Phase==RoundPhase.Chase && state.SecondsRemaining>174) {
+   if(state.Phase==RoundPhase.Chase && state.SecondsRemaining>session.Session.ObserveSettings().Current.RoundSeconds-6) {
     var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
     GUI.color=catalog==null?Color.white:catalog.RarityColor;
     GUI.Label(new Rect(w/2-290,55,580,35),string.Join(" / ",state.Births.Select(b=>$"{b.Rarity} {b.Kind} ×{b.Count} 탄생!")),label);GUI.color=Color.white;

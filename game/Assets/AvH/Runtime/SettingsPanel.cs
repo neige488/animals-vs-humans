@@ -59,8 +59,8 @@ namespace AvH {
    var state=session.ObserveSettings();if(string.IsNullOrEmpty(state.Error))return;
    GUILayout.BeginArea(new Rect(Screen.width/2-280,Screen.height/2-90,560,180),GUI.skin.box);
    GUILayout.Label(state.Error);
-   if(GUILayout.Button("저장 재시도"))session.RetrySettingsSave(0);
-   if(GUILayout.Button("닫기"))session.DismissSettingsError();
+   if(state.Failure==SettingsFailure.Save && GUILayout.Button("저장 재시도"))session.RetrySettingsSave(0);
+   if(GUILayout.Button(state.Failure==SettingsFailure.Load?"확인":"닫기"))session.DismissSettingsError();
    GUILayout.EndArea();
   }
  }
