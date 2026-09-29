@@ -28,7 +28,7 @@ namespace AvH.Tests {
      if(++windowSteps>=500) {
       foreach(var bot in state.Players.Where(p=>p.IsBot)) {
        float net=Vector3.Distance(V(bot.Position),V(window.Players[bot.Slot].Position));
-       Assert.IsTrue(net>1||productive[bot.Slot],$"Unproductive stop/oscillation slot {bot.Slot}: path={travel[bot.Slot]:F2}, net={net:F2}");
+       Assert.IsTrue(net>1||productive[bot.Slot],$"Unproductive stop/oscillation slot {bot.Slot}: path={travel[bot.Slot]:F2}, net={net:F2}, role={bot.Faction}, position={V(bot.Position)}, round={state.Round}, phase={state.Phase}, remaining={state.SecondsRemaining:F2}, peers="+string.Join(";",state.Players.Select(p=>$"{p.Slot}:{p.Faction}:{V(p.Position)}")));
       }
       window=state;windowSteps=0;System.Array.Clear(travel,0,12);System.Array.Clear(productive,0,12);
      }
