@@ -14,11 +14,12 @@ namespace AvH {
    public GameObject Visual;
   }
   readonly List<Bubble> bubbles=new List<Bubble>();
-  readonly List<(GameObject visual,float remaining)> bursts=new List<(GameObject,float)>();
+  readonly List<(GameObject visual,float remaining,int id)> bursts=new List<(GameObject,float,int)>();
   readonly Vector3[] pushVelocity=new Vector3[12];
   int nextBubbleId;
   Material bubbleMaterial;
-  public BubbleState[] ObserveBubbles()=>bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.Owner,Round=b.Round,Position=ToPosition(b.Position),Direction=ToPosition(b.Direction),RemainingLife=b.Life,Travelled=b.Travelled}).ToArray();
+  public BubbleState[] ObserveBubbles()=>remoteVisuals!=null?remoteVisuals.Bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray():bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.Owner,Round=b.Round,Position=ToPosition(b.Position),Direction=ToPosition(b.Direction),RemainingLife=b.Life,Travelled=b.Travelled}).ToArray();
+  public NetworkBurst[] ObserveBursts()=>bursts.Select(b=>new NetworkBurst{Id=b.id,Position=ToPosition(b.visual.transform.position),Remaining=b.remaining}).ToArray();
   static WorldPosition ToPosition(Vector3 v)=>new WorldPosition(v.x,v.y,v.z);
   void PrepareCombatWorld(SessionState state,int oldRound) {
    if(state.Round!=oldRound){foreach(var bubble in bubbles)Destroy(bubble.Visual);bubbles.Clear();Array.Clear(pushVelocity,0,pushVelocity.Length);Array.Clear(inputs,0,inputs.Length);}
@@ -69,7 +70,7 @@ namespace AvH {
    visual.GetComponent<Renderer>().sharedMaterial=bubbleMaterial;
    bubbles.Add(new Bubble{Id=++nextBubbleId,Owner=slot,Round=input.RoundId,Position=position,Direction=direction,Life=rules.BubbleLifetime,Radius=rules.BubbleRadius,Speed=rules.BubbleSpeed,Range=rules.BubbleRange,PushForce=rules.PushForce,FriendlyPush=rules.FriendlyPush,Visual=visual});
   }
-  void Pop(Bubble bubble){bubble.Visual.transform.position=bubble.Position;bursts.Add((bubble.Visual,.15f));}
+  void Pop(Bubble bubble){bubble.Visual.transform.position=bubble.Position;bursts.Add((bubble.Visual,.15f,bubble.Id));}
   void Melee(int slot,PlayerInput input) {
    var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.forward;
    var origin=bodies[slot].transform.position+Vector3.up*.9f;
