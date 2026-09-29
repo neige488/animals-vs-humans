@@ -109,7 +109,12 @@ namespace AvH {
    for(int i=0;i<points.Length;i++)if(walkable[i]){float d=(points[i]-p).sqrMagnitude;if(d<score){score=d;best=i;}}
    return best;
   }
-  public List<Vector3> Find(Vector3 from,Vector3 to,out bool reachable) {
+  static bool ClearDrop(Vector3 from,Vector3 to) {
+   var delta=to-from;delta.y=0;
+   return !Physics.CapsuleCastAll(from+Vector3.up*.42f,from+Vector3.up*1.42f,.36f,
+    delta.normalized,delta.magnitude,~0,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
+  }
+  public List<Vector3> Find(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false) {
    if(!rebuiltThisStep && (!built || rebuildRequested&&sinceBuild>=1))Build();
    int start=Nearest(from),goal=Nearest(to);var result=new List<Vector3>();reachable=false;if(start<0||goal<0)return result;
    for(int i=0;i<distance.Length;i++){distance[i]=float.MaxValue;parent[i]=-1;closed[i]=false;}open.Clear();
@@ -117,15 +122,20 @@ namespace AvH {
    while(open.Count>0) {
     var current=open.Min;open.Remove(current);int id=current.id;if(closed[id])continue;closed[id]=true;if((points[id]-to).sqrMagnitude<(points[nearestReachable]-to).sqrMagnitude)nearestReachable=id;if(id==goal)break;
     int x=id%Size,z=id/Size;
-    for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++) {
-     if(dx==0&&dz==0)continue;int nx=x+dx,nz=z+dz;if(nx<0||nx>=Size||nz<0||nz>=Size)continue;int next=nz*Size+nx;
+    for(int span=1;span<=(allowDrop?4:1);span++)for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++) {
+     if(dx==0&&dz==0)continue;int nx=x+dx*span,nz=z+dz*span;if(nx<0||nx>=Size||nz<0||nz>=Size)continue;int next=nz*Size+nx;
      if(!walkable[next]||closed[next]||points[next].y-points[id].y>.36f||points[id].y-points[next].y>4.2f)continue;
-     if(dx!=0&&dz!=0&&(!walkable[z*Size+nx]||!walkable[nz*Size+x]))continue;
+     if(span>1) {
+      // A roof can be an isolated grid island: its steep eave has no standable cells.
+      // Permit a one-way walk-off only when the full body can clear the edge at roof height.
+      if(points[id].y-points[next].y<.4f||!ClearDrop(points[id],points[next]))continue;
+     } else if(dx!=0&&dz!=0&&(!walkable[z*Size+nx]||!walkable[nz*Size+x]))continue;
      float cost=distance[id]+Vector3.Distance(points[id],points[next]);if(cost>=distance[next])continue;
      distance[next]=cost;parent[next]=id;open.Add((cost+Vector3.Distance(points[next],points[goal]),next));
     }
    }
    reachable=start==goal||parent[goal]>=0;
+   if(!reachable&&!allowDrop)return Find(from,to,out reachable,true);
    if(!reachable)goal=nearestReachable;
    for(int id=goal;id!=start;id=parent[id]){if(id<0)return new List<Vector3>();result.Add(points[id]);}result.Reverse();return result;
   }
