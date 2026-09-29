@@ -25,8 +25,8 @@ namespace AvH {
    if(session.Session==null)return;
    if(Input.GetKeyDown(KeyCode.Escape)) {menu=!menu;SetCursor();}
    if(!menu) {yaw+=Input.GetAxisRaw("Mouse X")*2;pitch=Mathf.Clamp(pitch-Input.GetAxisRaw("Mouse Y")*2,-20,65);}
-   var input=new PlayerInput {Yaw=yaw};
-   if(!menu) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);}
+   var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
+   if(!menu) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
    session.SubmitInput(0,input);
   }
   void LateUpdate() {
@@ -57,20 +57,24 @@ namespace AvH {
     GUI.enabled=true;return;
    }
    var state=session.Observe();var animals=state.Players.Count(p=>p.Faction==Faction.Animal);
-   string phase=state.Phase==RoundPhase.Preparation?"준비":state.Phase==RoundPhase.Chase?"추격":"인간 승리 · 다음 라운드";
+   string phase=state.Phase==RoundPhase.Preparation?"준비":state.Phase==RoundPhase.Chase?"추격":(state.Winner==Faction.Animal?"동물 승리 · 다음 라운드":"인간 승리 · 다음 라운드");
    GUI.Box(new Rect(w/2-300,12,600,90),"");
    GUI.Label(new Rect(w/2-295,15,590,40),$"인간 {12-animals}   |   {phase} {Mathf.CeilToInt((float)state.SecondsRemaining)}초   |   동물 {animals}",label);
-   if(state.Phase==RoundPhase.Chase && state.SecondsRemaining>174) {
+   if(state.BirthSecondsRemaining>0) {
     var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
     GUI.color=catalog==null?Color.white:catalog.RarityColor;
-    GUI.Label(new Rect(w/2-290,55,580,35),string.Join(" / ",state.Births.Select(b=>$"{b.Rarity} {b.Kind} ×{b.Count} 탄생!")),label);GUI.color=Color.white;
+    GUI.Label(new Rect(w/2-290,55,580,35),"새로운 동물이 탄생했습니다! " + string.Join(" / ",state.Births.Select(b=>$"[{b.Rarity}] {b.Kind} ×{b.Count}")),label);GUI.color=Color.white;
    }
    GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
-   GUI.Label(new Rect(w/2-275,h-85,550,35),$"{(state.Players[0].Faction==Faction.Human?"인간":"동물")}  ·  라운드 {state.Round}",label);
-   GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · Esc 메뉴",new GUIStyle(label){fontSize=15});
+   GUI.Label(new Rect(w/2-275,h-85,550,35),$"{(state.Players[0].Faction==Faction.Human?"인간":"동물")} · {WeaponLabel(state.Players[0])} · 라운드 {state.Round}",label);
+   GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전",new GUIStyle(label){fontSize=15});
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
    if(menu) {GUI.Box(new Rect(w/2-150,h/2-80,300,150),"메뉴 · 라운드는 계속됩니다");if(GUI.Button(new Rect(w/2-125,h/2-30,250,40),"계속하기")){menu=false;SetCursor();}}
+  }
+  static string WeaponLabel(PlayerState player) {
+   if(player.Faction==Faction.Animal)return player.AttackGraceRemaining>0?$"공격 대기 {player.AttackGraceRemaining:F1}초":"근접 공격";
+   return player.ReloadRemaining>0?$"재장전 {player.ReloadRemaining:F1}초":$"버블 {player.Ammo} / ∞";
   }
   void OnDestroy(){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
  }
