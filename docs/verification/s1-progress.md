@@ -1,9 +1,9 @@
-# S1 구현 체크포인트 — 미완·제품 검증 차단
+# S1 구현 체크포인트 — 보유 에셋 적용·제품 검증 진행 중
 
 - 프로젝트: `game/`, Unity 6000.6.3f1, `com.unity.template.3d`.
 - Unity CLI `projects create ... --no-cloud`로 생성. `--vcs` 생략으로 원격·자동 커밋 없음. `--no-initial-commit`는 `--vcs` 없을 때 CLI 오류이므로 제외했다.
-- Editor 생성 exit198: 활성 Unity 라이선스 없음. Hub 템플릿 캐시 접근은 sandbox 밖 허용 재시도로 통과했지만 라이선스 오류는 계속됨.
-- PlayMode 시도는 sandbox UPM socket EPERM으로 실행되지 않았고 프로세스를 중단했다. 라이선스 복구와 정확한 Editor 실행 권한이 선행되어야 한다.
+- 최초 실행 기록(현재 해소): Editor 생성 exit198: 활성 Unity 라이선스 없음. Hub 템플릿 캐시 접근은 sandbox 밖 허용 재시도로 통과했지만 라이선스 오류는 계속됨.
+- 최초 실행 기록(현재 해소): PlayMode 시도는 sandbox UPM socket EPERM으로 실행되지 않았고 프로세스를 중단했다. 라이선스 복구와 정확한 Editor 실행 권한이 선행되어야 한다.
 
 ## 실행한 자동 검증
 
@@ -41,3 +41,15 @@
 - 빌드 로그: `/private/tmp/avh-s1-mac-build.log`, `/private/tmp/avh-s1-windows-build.log`.
 
 위 결과는 실제 엔진 테스트와 빌드 생성이다. **구매 에셋 미적용, 실제 Windows 실행/양 OS 플레이, 모든 쉘터 접근, 낙하·복귀, 카메라/한글 UI·재미 검증은 여전히 미완이다.** 어떤 PA도 live VERIFIED로 바꾸지 않는다. Editor가 생성한 GUID/meta 및 프로젝트 버전·설정 migration 파일을 함께 보존한다.
+
+
+## 보유 에셋 적용 (2026-09-29)
+
+- 실제 구매 팩에서 선택한 prefab 의존성만 `Assets/ThirdParty`로 안전 배치했다. vendor C#/demos/ShaderGraph는 컴파일에 포함하지 않았다. 구매원본·파생 prefab/material/catalog 모두 Git 제외다.
+- Polyperfect People 3.02 `man_casual`, Animals 4.1.1 `Fox`, Synty Adventure 1.8.2 마을·벽·바닥·계단 mesh를 사용한다. 화면 동물 이름은 여우, 등급은 일반이다.
+- 캐릭터는 vendor 행동 대신 실제 이동 입력과 Animator 걷기/달리기를 연결했다. 원본 모델 콜라이더/root motion은 조작과 충돌하지 않게 분리했다.
+- Synty ShaderGraph albedo를 `Generated`의 Standard 파생 머티리얼로 매핑했다. 원본 머티리얼은 보존하며 지면 머티리얼도 persistent asset이다.
+- 원래 세 쉘터의 검증된 충돌 공간을 유지하고 Synty mesh로 표현했다. 외곽 마을 건물은 footprint 충돌을 가진다. 창고 입구를 막을 수 있는 장식 stall은 배치하지 않았다.
+- 구매 에셋이 로드된 Unity PlayMode **2/2 PASS**: 실제 이동/점프와 공개 이동 입력으로 옥상 접근→일반 낙하→맵 밖 복귀·진영 유지. `/private/tmp/avh-s1-owned-playmode.xml`.
+- 폰트는 OS 동적 fallback Apple SD Gothic Neo / Malgun Gothic / Arial을 사용한다. 실제 Mac/Win 한글 표시는 사람 확인 대상이다.
+- 실제 양 OS 플레이·모든 역할/경로·렌더·재미 PA 완료는 별도 검증한다.

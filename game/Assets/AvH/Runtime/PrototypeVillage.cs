@@ -5,10 +5,10 @@ namespace AvH {
    var shader=Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
    var material=new Material(shader);material.color=color;return material;
   }
-  public static void Build(Transform parent) {
+  public static void Build(Transform parent, bool useOwned = true) {
    var map=new GameObject("Village");map.transform.SetParent(parent);
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
-   if(catalog!=null && catalog.Village!=null) Object.Instantiate(catalog.Village,map.transform);
+   if(useOwned && catalog!=null && catalog.Village!=null) {Object.Instantiate(catalog.Village,map.transform);return;}
    // Traversable collision blockout retained until owned village layout is verified.
    Box(map.transform,"Ground",new Vector3(0,-.5f,0),new Vector3(46,1,46),new Color(.32f,.44f,.35f));
    Box(map.transform,"Rooftop shelter",new Vector3(-12,2,10),new Vector3(7,4,6),new Color(.5f,.35f,.23f));

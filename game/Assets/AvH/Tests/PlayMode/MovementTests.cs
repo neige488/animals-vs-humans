@@ -4,6 +4,32 @@ using UnityEngine;
 using UnityEngine.TestTools;
 namespace AvH.Tests {
  public class MovementTests {
+  [UnityTest] public IEnumerator BasicInputsReachRooftopAndRecoverFromMapEdge() {
+   var root=new GameObject("route session");var session=root.AddComponent<UnityPlaytestSession>();
+   session.AutomaticStep=false;session.StartSolo("route tester");yield return null;
+   MoveTo(session,-12,-3,130);MoveTo(session,-12,10,250);
+   Assert.Greater(session.Observe().Players[0].Position.Y,3.7f,"Rooftop must be reachable by basic movement");
+   // Walk off the rooftop toward the map edge; ordinary falling must continue before recovery.
+   MoveTo(session,-20,10,150);
+   Assert.Less(session.Observe().Players[0].Position.Y,1f,"Ordinary rooftop fall returns to ground without teleport");
+   var faction=session.Observe().Players[0].Faction;bool recovered=false;
+   for(int i=0;i<250;i++) {
+    var before=session.Observe().Players[0].Position;
+    session.SubmitInput(0,new PlayerInput{Right=-1});session.Step(.02f);
+    var after=session.Observe().Players[0].Position;
+    if(before.Y< -8 && after.Y>0){recovered=true;Assert.AreEqual(faction,session.Observe().Players[0].Faction);break;}
+   }
+   Assert.IsTrue(recovered,"Map-edge fall must return to a ground point");
+   Object.Destroy(root);yield return null;
+  }
+  static void MoveTo(UnityPlaytestSession session,float x,float z,int maxSteps) {
+   for(int i=0;i<maxSteps;i++) {
+    var p=session.Observe().Players[0].Position;var delta=new Vector2(x-p.X,z-p.Z);
+    if(delta.magnitude<.15f)break;delta=delta.normalized;
+    session.SubmitInput(0,new PlayerInput{Right=delta.x,Forward=delta.y});session.Step(.02f);
+   }
+  }
+
   [UnityTest] public IEnumerator PublicMovementInputMovesAndJumpsInActualWorld() {
    var root = new GameObject("test session");
    var session = root.AddComponent<UnityPlaytestSession>();

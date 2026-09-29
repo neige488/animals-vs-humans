@@ -52,6 +52,14 @@ namespace AvH {
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      body.Move((direction*(p.Faction==Faction.Human?5:5.6f)+Vector3.up*vertical[i])*seconds);
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.LookRotation(direction);
+     foreach(var animator in body.GetComponentsInChildren<Animator>()) {
+      animator.applyRootMotion=false;
+      foreach(var parameter in animator.parameters) {
+       if(parameter.type!=AnimatorControllerParameterType.Bool)continue;
+       if(parameter.name=="isRunning")animator.SetBool(parameter.name,direction.sqrMagnitude>.01f);
+       if(parameter.name=="isWalking")animator.SetBool(parameter.name,false);
+      }
+     }
      if(body.transform.position.y < -12) {
       var closest=returns[0]; float distance=float.MaxValue;
       foreach(var point in returns) { var d=Vector2.SqrMagnitude(new Vector2(point.x-body.transform.position.x,point.z-body.transform.position.z)); if(d<distance) {distance=d;closest=point;} }
