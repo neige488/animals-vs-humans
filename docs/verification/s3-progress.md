@@ -41,3 +41,11 @@
 - 실제 Unity6000.6.3f1 전체 PlayMode16/16PASS,212초 전원 관찰(`/private/tmp/avh-s3-fixed-full.xml`, `.log`). Editor CPU Step 최대 초기21.048ms/차단 후15.855ms는 참고값이며 실제 Player 측정과 구분한다.
 - 실제 macOS 테스트 Player1/1PASS. 독립 실행 기능 회귀 근거이지 사람의 실제 플레이·재미 검토나 양 OS 제품 PA 완료가 아니다. Player 빌드 과정의 managedCodeVariant 임시 변경은 원래 프로젝트 값으로 복원했다.
 - 구매 원본과 파생 catalog/prefab은 계속 Git ignored다. 원본 에셋 데이터는 reviewer packet에 포함하지 않는다.
+
+
+### 통합 정체 회귀 재검증 (2026-09-29)
+
+- 통합 preview에서 창고 모서리 동물을 무생산 정지로 판단한 실제 실패를 단독/반복 세션에서도 재현했다. 실패 순간 실제 버블 잔여충격은 `(10.40,4.01,-17.62)`였으며, 순이동이 작아도 인간이 버블로 진입을 막는 교전이었다. 근거 `/private/tmp/avh-preview-bot-impulse-failure.xml`. 회피 방향 변경과 무조건 점프 제거 비교도 실패를 없애지 못했고, 최종 코드에는 이 시험 변경을 모두 되돌렸다.
+- `ObserveBubbleHits()`는 호스트 물리에서 실제 해결한 버블 명중만 세는 읽기 전용 복사본이다. 전송 DTO·설정·물리·봇 판단은 바꾸지 않는다. 10초 관찰창에서 실제 피격이 증가한 경우 방어 교전으로 분류한다. 피격 없는 봇의 순변위 1m 기준, 쉘터 교체 상한, 진짜 접근/명중 요구는 그대로다. 벽으로 이동이 막혀도 실제 버블 명중이 발생하는 독립 회귀와 212초 솔로 세션 3회 반복을 추가했다. private-field 진단과 임시 로그는 제거했다.
+- local RED `1d27ab7`(preview `ce575d9`), GREEN `a8e7cb6`(preview `727bf8b`). 통합 preview 전체23/23 PASS(`/private/tmp/avh-preview-bot-hit-observed-final.xml`), 통합Core34/34 PASS. S3 최종 코드의 Core13/13, 실제 Edit13/13, Play18/18 PASS(`/private/tmp/avh-s3-a8e7-edit.xml`, `-play.xml`). S3 Play에도 동일 반복 세션이 포함된다.
+- 동일 최종 코드의 실제 macOS Player1/1PASS(`/private/tmp/avh-s3-a8e7-mac.xml`), CPU Step 최대 초기29.131ms/차단후15.931ms, 공유 rebuild 최대1/Step. 렌더링 전체 프레임 성능/실제 참가자 재미/Windows 검증은 여전히 미검증이다. Player runner의 임시 managedCodeVariant 변경은 원복했다.
