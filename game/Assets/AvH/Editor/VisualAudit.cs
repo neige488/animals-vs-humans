@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using UnityEngine;
 namespace AvH.Editor {
  // Render the actual owned prefabs for scale/layout inspection. This is not an interactive gameplay gate.
@@ -15,7 +16,11 @@ namespace AvH.Editor {
    foreach(var p in catalog.ShelterPoints)Pose(catalog.Human,root.transform,p);
    Pose(catalog.Animal,root.transform,new Vector3(-11,4,9));
    Shot(camera,new Vector3(35,32,-40),Vector3.zero,"map");
-   Shot(camera,new Vector3(-5,8,3),new Vector3(-12,4.8f,10),"shelter");root.SetActive(false);
+   Shot(camera,new Vector3(-5,8,3),new Vector3(-12,4.8f,10),"shelter");
+   Physics.SyncTransforms();
+   var surface=Physics.RaycastAll(new Vector3(-6,12,7),Vector3.down,20).OrderBy(h=>h.distance).First();
+   Pose(catalog.Human,root.transform,surface.point);
+   Shot(camera,new Vector3(0,7,2),surface.point+Vector3.up*.6f,"prop-contact");root.SetActive(false);
    var floor=GameObject.CreatePrimitive(PrimitiveType.Cube);floor.transform.position=new Vector3(0,-.025f,0);floor.transform.localScale=new Vector3(12,.05f,12);
    foreach(var prefab in new[]{catalog.Human,catalog.Animal}) {
     var model=Pose(prefab,null,Vector3.zero);

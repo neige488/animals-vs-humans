@@ -12,3 +12,11 @@
 Unity6000.6.3f1 PlayMode24/24 PASS: `/private/tmp/avh-visual-repair-play4.xml` (2026-09-29). 추가 소품 때문에 발생한 초기 이동/봇 실패는 배치와 닫힌 장애물 구성으로 수정했다. 실험한 BotDirector 경로 변경은 모두 되돌렸고 기존 알고리즘을 유지했다.
 
 `AvH.Editor.VisualAudit.GenerateAndCapture`는 실제 구매 prefab을 Unity Camera.Render로 촬영해 `game/Builds/VisualAudit`에 저장한다. 이 정적 배치 검사는 독립 실행 게임의 전체 사용자 흐름·Windows 실기·2~4인 재미 검증을 대체하지 않는다. 이전 제품 VERIFIED/완료 상태를 새로 주장하지 않는다.
+
+## 독립 검토 후 보완
+
+- 나무는 수관 AABB 대신 줄기 캡슐을 사용하고, 소품은 실제 정점의 볼록 실루엣으로 장식 내부를 닫는다. 주택은 보이는 지붕 deck과 일치하는 단순 닫힌 체적을 유지한다.
+- 원격 회전은 호스트 회전을 추가 속도 제한 없이 지수 보간하고, 최초 스냅샷/라운드/순간 위치 재설정 후 받은 방향을 즉시 반영한다. 별도 회귀 검사를 추가했다.
+- 몸이 아직 돌아가는 중에도 실제 버블 방향과 근접 변신이 input.Yaw를 사용함을 검사했다. 카메라는 GamePresentation의 별도 yaw/pitch를 사용한다.
+- 새 배치에서 재현한 창고 모서리 정체는 경로가 아니라 누적 버블 외력 문제였다. 실제 접촉 법선 안쪽의 밀림 성분만 제거한다. 벽을 따라 미끄러지는 힘과 공중 넉백은 보존한다. 연속 실제 피격 후 다시 이동하는 검사와 봇7/7이 통과했다. BotDirector 변경은 없다.
+- BakeMesh true가 스케일을 보상한다는 최신 Unity 문서와 실측을 대조했다. 여우 renderer lossyScale100에서 false+TransformPoint는 높이 약98.8m, true+TransformPoint는 약.988m. 실제 renderer의 보수적 bounds 높이는1.74m이며 정적 렌더 발 위치로도 교차 확인했다. https://docs.unity.com/en-us/engine/6000.5/script-reference/unityengine/skinnedmeshrenderer/bakemesh

@@ -28,6 +28,7 @@ namespace AvH {
     controller.height=1.8f; controller.radius=.38f; controller.center=new Vector3(0,.9f,0);
     controller.stepOffset=.3f; controller.slopeLimit=50;
     bodies.Add(controller);
+    var contacts=body.AddComponent<KnockbackContact>();contacts.World=this;contacts.Slot=p.Slot;
     RefreshVisual(p.Slot,p.Faction);
    }
   }
@@ -83,6 +84,10 @@ namespace AvH {
     inputs[i].Jump=false;
    }
    StepCombatWorld(seconds,state);
+  }
+  internal void ResolveKnockbackContact(int slot,Vector3 normal) {
+   float inward=Vector3.Dot(pushVelocity[slot],normal);
+   if(inward<0)pushVelocity[slot]-=normal*inward;
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}

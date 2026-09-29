@@ -66,6 +66,7 @@ namespace AvH.Editor {
      var meshPath=Generated+"Collision_"+map.transform.childCount+".asset";
      var stored=AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
      if(stored==null){AssetDatabase.CreateAsset(mesh,meshPath);stored=mesh;}else {EditorUtility.CopySerialized(mesh,stored);Object.DestroyImmediate(mesh);}
+     EditorUtility.SetDirty(stored);
      var hull=obstacle.AddComponent<MeshCollider>();hull.sharedMesh=stored;hull.convex=true;
     }
     if(path.Contains("SM_Bld_Village_")) {

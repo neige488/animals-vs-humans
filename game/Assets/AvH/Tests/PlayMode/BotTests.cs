@@ -19,6 +19,11 @@ namespace AvH.Tests {
     Assert.AreEqual(1,game.ObserveBubbleHits()[4],"Only a resolved physical bubble hit counts as defensive combat");
     Assert.AreEqual(0,original[4],"Observers cannot mutate or retain a live counter array");
     Assert.Less(Vector3.Distance(before,V(game.Observe().Players[4].Position)),.3f,"Wall prevents travel while actual bubble defense remains observable");
+    for(int i=0;i<200;i++){game.SubmitInput(0,new PlayerInput{Attack=true});game.Step(.02f);}
+    Assert.Greater(game.ObserveBubbleHits()[4],4,"Repeated actual hits must exercise wall contact");
+    game.SubmitInput(0,new PlayerInput());var pinned=V(game.Observe().Players[4].Position);
+    for(int i=0;i<20;i++){game.SubmitInput(4,new PlayerInput{Forward=-1});game.Step(.02f);}
+    Assert.Greater(pinned.z-game.Observe().Players[4].Position.Z,1,"Blocked knockback must not remain banked after firing stops");
    } finally {Object.Destroy(root);}yield return null;
   }
   [UnityTest] public IEnumerator ConsecutiveSoloMatchesDoNotTrapBotsAtWarehouseCorners() {
