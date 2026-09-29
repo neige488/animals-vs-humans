@@ -50,6 +50,7 @@ namespace AvH.Editor {
    var path=Root+"Resources/OwnedAssetCatalog.asset";
    var catalog=AssetDatabase.LoadAssetAtPath<OwnedAssetCatalog>(path);
    if(catalog==null){catalog=ScriptableObject.CreateInstance<OwnedAssetCatalog>();AssetDatabase.CreateAsset(catalog,path);}
+   catalog.ShelterPoints=PrototypeVillage.DefaultShelters.ToArray();
    catalog.Human=human;catalog.Animal=animal;catalog.Village=village;
    catalog.AnimalDisplayName="여우";catalog.Rarity="일반";catalog.RarityColor=new Color(.85f,.95f,1);
    catalog.HumanSource="Polyperfect Low Poly Animated People 3.02 / man_casual";

@@ -74,7 +74,7 @@ namespace AvH {
   void Melee(int slot,PlayerInput input) {
    var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.forward;
    var origin=bodies[slot].transform.position+Vector3.up*.9f;
-   foreach(var collider in Physics.OverlapSphere(origin,1.7f,~0,QueryTriggerInteraction.Ignore).OrderBy(c=>(c.bounds.center-origin).sqrMagnitude)) {
+   foreach(var collider in Physics.OverlapSphere(origin,CombatRules.MeleeDistance-.1f,~0,QueryTriggerInteraction.Ignore).OrderBy(c=>(c.bounds.center-origin).sqrMagnitude)) {
     int victim=bodies.IndexOf(collider as CharacterController);if(victim<0||victim==slot)continue;
     var offset=bodies[victim].transform.position-bodies[slot].transform.position;
     if(offset.sqrMagnitude>.04f && Vector3.Dot(direction,offset.normalized)<.2f)continue;

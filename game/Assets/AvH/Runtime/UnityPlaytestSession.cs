@@ -7,6 +7,7 @@ namespace AvH {
  public sealed partial class UnityPlaytestSession : MonoBehaviour {
   public bool AutomaticStep = true;
   public bool BotAutomationEnabled=true;
+  public IReadOnlyList<Vector3> ShelterPoints {get;private set;}
   readonly BotDirector botDirector=new BotDirector();
   public PlaytestSession Session { get; private set; }
   readonly List<CharacterController> bodies = new List<CharacterController>();
@@ -19,7 +20,7 @@ namespace AvH {
    Session = new PlaytestSession(randomSeed ?? Environment.TickCount, settingsPath ?? System.IO.Path.Combine(Application.persistentDataPath,"playtest-settings.xml"));
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity);
-   PrototypeVillage.Build(transform);
+   ShelterPoints=PrototypeVillage.Build(transform);
    foreach(var p in Session.Observe().Players) {
     var body = new GameObject("Slot " + p.Slot); body.transform.SetParent(transform);
     body.transform.position=ToVector(p.Position);
@@ -31,6 +32,7 @@ namespace AvH {
    }
   }
   public SessionState Observe() => remoteSnapshot ?? Session.Observe();
+  public BotNavigationDiagnostics ObserveBotNavigation()=>botDirector.ObserveNavigation();
   public void SubmitInput(int slot, PlayerInput input) {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
    if(float.IsNaN(input.Right) || float.IsInfinity(input.Right) || float.IsNaN(input.Forward) || float.IsInfinity(input.Forward) || float.IsNaN(input.Yaw) || float.IsInfinity(input.Yaw)) return;
