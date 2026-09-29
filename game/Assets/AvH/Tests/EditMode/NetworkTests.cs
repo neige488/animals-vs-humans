@@ -12,7 +12,8 @@ namespace AvH.Tests {
    using(var host=new PrivateRoomHost(world,"127.0.0.1")) using(var client=new PrivateRoomClient()) {
     client.Connect(host.RoomCode,"guest"); Until(host,client,()=>client.Status==ConnectionStatus.Loading);
     Assert.That(world.Observe().Players.Count(p=>!p.IsBot),Is.EqualTo(1));
-    world.RecordWorldPosition(1,new WorldPosition(9,1,8));client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    world.RecordWorldPosition(1,new WorldPosition(9,1,8));world.TryFire(1,1);world.TryReload(1,1);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    Assert.That(client.Snapshot.Players[1].Ammo,Is.EqualTo(11));Assert.That(client.Snapshot.Players[1].ReloadRemaining,Is.EqualTo(1.5));
     Assert.That(client.Slot,Is.EqualTo(1));Assert.That(client.Snapshot.Players[1].Position.X,Is.EqualTo(9));
     client.Cancel();for(int i=0;i<20;i++){host.Pump();Thread.Sleep(2);}
     Assert.That(world.Observe().Players[1].IsBot,Is.True);Assert.That(world.Observe().Players[1].Position.X,Is.EqualTo(9));
@@ -91,6 +92,36 @@ namespace AvH.Tests {
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     Assert.That(client.Visuals.CurrentRules.HumanSpeed,Is.EqualTo(5));Assert.That(client.Visuals.HasPending,Is.True);Assert.That(client.Visuals.PendingRules.HumanSpeed,Is.EqualTo(8));
     world.Advance(205);Until(host,client,()=>client.Visuals.SettingsVersion==2);Assert.That(client.Visuals.CurrentRules.HumanSpeed,Is.EqualTo(8));Assert.That(client.Visuals.HasPending,Is.False);
+   }
+  }
+  [Test] public void AnimalBotFallbackKeepsFactionPositionAndAttackGrace() {
+   int seed=Enumerable.Range(0,100).First(n=>{var w=new PlaytestSession(n);w.StartSolo("host");w.Advance(20);return w.Observe().Players[0].Faction==Faction.Human;});
+   var world=new PlaytestSession(seed);world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.TransformAttackGrace=30;world.UpdateSettingsEdit(0,rules);world.ApplySettings(0);world.StartSolo("host");
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);
+    world.Advance(22);int attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal).Slot;
+    foreach(var victim in world.Observe().Players.Where(p=>p.IsBot&&p.Faction==Faction.Human)){world.RecordWorldPosition(victim.Slot,world.Observe().Players[attacker].Position);Assert.That(world.TryMeleeHit(attacker,victim.Slot,1),Is.True);world.Advance(.6);}
+    var before=world.Observe();client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    Assert.That(client.Snapshot.Players[client.Slot].Faction,Is.EqualTo(Faction.Animal));
+    Assert.That(client.Snapshot.Players[client.Slot].AttackGraceRemaining,Is.EqualTo(before.Players[client.Slot].AttackGraceRemaining));
+    Assert.That(client.Snapshot.Players[client.Slot].Position.X,Is.EqualTo(before.Players[client.Slot].Position.X));
+    Assert.That(client.Snapshot.Players.Count(p=>p.Faction==Faction.Human),Is.EqualTo(1));
+   }
+  }
+  [Test] public void SilentConnectedPeerTimesOutAndReturnsItsSlotToBot() {
+   var world=new PlaytestSession(2);world.StartSolo("host");
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);int slot=client.Slot;
+    var deadline=DateTime.UtcNow.AddSeconds(12);while(!world.Observe().Players[slot].IsBot&&DateTime.UtcNow<deadline){host.Pump();Thread.Sleep(100);}
+    Assert.That(world.Observe().Players[slot].IsBot,Is.True);
+   }
+  }
+  [Test] public void LargeVisualSnapshotUsesBoundedFramesAndCommitsCompleteBubbleSet() {
+   var world=new PlaytestSession(2);world.StartSolo("host");
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    host.CaptureVisuals=()=>new NetworkVisualState{Bubbles=Enumerable.Range(0,1500).Select(i=>new NetworkBubble{Id=i,Round=1,Position=new WorldPosition(i,1,0)}).ToArray()};
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Visuals!=null&&client.Visuals.Bubbles.Length==1500);
+    Assert.That(client.Status,Is.EqualTo(ConnectionStatus.Playing));Assert.That(client.Visuals.Bubbles[1499].Id,Is.EqualTo(1499));
    }
   }
  }
