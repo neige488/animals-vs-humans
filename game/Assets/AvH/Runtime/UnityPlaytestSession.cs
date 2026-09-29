@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 namespace AvH {
- [Serializable] public struct PlayerInput { public float Right, Forward, Yaw; public bool Jump; }
+ [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload; public int RoundId; }
  /// <summary>Public game execution boundary. Inputs flow through real CharacterControllers.</summary>
- public sealed class UnityPlaytestSession : MonoBehaviour {
+ public sealed partial class UnityPlaytestSession : MonoBehaviour {
   public bool AutomaticStep = true;
   public PlaytestSession Session { get; private set; }
   readonly List<CharacterController> bodies = new List<CharacterController>();
@@ -33,6 +33,9 @@ namespace AvH {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
    if(float.IsNaN(input.Right) || float.IsInfinity(input.Right) || float.IsNaN(input.Forward) || float.IsInfinity(input.Forward) || float.IsNaN(input.Yaw) || float.IsInfinity(input.Yaw)) return;
    input.Right=Mathf.Clamp(input.Right,-1,1); input.Forward=Mathf.Clamp(input.Forward,-1,1);
+   if(float.IsNaN(input.Pitch)||float.IsInfinity(input.Pitch))return;
+   input.Pitch=Mathf.Clamp(input.Pitch,-80,80);
+   if(input.RoundId==0)input.RoundId=Session.Observe().Round;
    inputs[slot]=input;
   }
   void Update() { if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
@@ -41,17 +44,18 @@ namespace AvH {
    var before=Session.Observe();
    Session.Advance(seconds);
    var state=Session.Observe();
+   PrepareCombatWorld(state,before.Round);
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; }
     if(p.Faction!=before.Players[i].Faction) RefreshVisual(i,p.Faction);
     if(state.Phase!=RoundPhase.Results) {
-     var input=inputs[i];
+     var input=inputs[i].RoundId==state.Round?inputs[i]:default;
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
      if(body.isGrounded && input.Jump) vertical[i]=Mathf.Sqrt(2*22*1.5f);
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
-     body.Move((direction*(p.Faction==Faction.Human?5:5.6f)+Vector3.up*vertical[i])*seconds);
+     body.Move((direction*(p.Faction==Faction.Human?5:5.6f)+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.LookRotation(direction);
      foreach(var animator in body.GetComponentsInChildren<Animator>()) {
       animator.applyRootMotion=false;
@@ -69,8 +73,10 @@ namespace AvH {
     }
     var pos=body.transform.position;
     Session.RecordWorldPosition(i,new WorldPosition(pos.x,pos.y,pos.z));
+    pushVelocity[i]=Vector3.MoveTowards(pushVelocity[i],Vector3.zero,20*seconds);
     inputs[i].Jump=false;
    }
+   StepCombatWorld(seconds,state);
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
