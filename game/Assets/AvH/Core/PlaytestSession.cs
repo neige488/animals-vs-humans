@@ -36,11 +36,13 @@ namespace AvH
         private double remaining;
         private int round;
         private Faction? winner;
+        private string animalKind, animalRarity;
         private BirthNotice[] births = Array.Empty<BirthNotice>();
         public PlaytestSession(int randomSeed) { random = new Random(randomSeed); }
-        public void StartSolo(string nickname)
+        public void StartSolo(string nickname, string animalKind = "임시 동물", string animalRarity = "일반")
         {
             if (string.IsNullOrWhiteSpace(nickname) || nickname.Trim().Length > 20) throw new ArgumentException("닉네임은 1~20자입니다.");
+            this.animalKind = animalKind; this.animalRarity = animalRarity;
             round = 0;
             players = Enumerable.Range(0, 12).Select(i => new PlayerState {
                 Slot = i, Nickname = i == 0 ? nickname : "봇 " + i, IsBot = i != 0,
@@ -65,13 +67,18 @@ namespace AvH
                         int swap = slots[i]; slots[i] = slots[selected]; slots[selected] = swap;
                         players[slots[i]].Faction = Faction.Animal;
                     }
-                    births = new[] { new BirthNotice { Kind = "동물", Rarity = "일반", Count = 2 } };
+                    births = new[] { new BirthNotice { Kind = animalKind, Rarity = animalRarity, Count = 2 } };
                     phase = RoundPhase.Chase; remaining = 180;
                 } else if (phase == RoundPhase.Chase) {
                     phase = RoundPhase.Results; remaining = 5; winner = Faction.Human;
                 } else BeginRound();
             }
             remaining -= elapsed;
+        }
+        // Called only by the authoritative physics adapter, never by remote participant messages.
+        public void RecordWorldPosition(int slot, WorldPosition position) {
+            if (slot < 0 || slot >= players.Length) throw new ArgumentOutOfRangeException(nameof(slot));
+            players[slot].Position = position;
         }
         private static WorldPosition Spawn(int slot) => new WorldPosition((slot % 4 - 1.5f) * 3, 1, (slot / 4 - 1) * 3);
         public SessionState Observe() => new SessionState {

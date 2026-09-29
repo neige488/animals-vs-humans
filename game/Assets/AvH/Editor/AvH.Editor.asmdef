@@ -1,0 +1,1 @@
+{"name":"AvH.Editor","references":["AvH.Core","AvH.Runtime"],"includePlatforms":["Editor"]}
