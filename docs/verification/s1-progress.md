@@ -72,3 +72,10 @@
 - 파생 인간 prefab에 vendor 기본 Controller를 연결하고 원본은 보존했다. 인간·여우를 실제 Idle pose의 baked mesh로 크기·발 접지를 정렬해 importer의 보수적 renderer bounds로 인한 떠 보임을 방지했다.
 - PlayMode **5/5 PASS**: 정상 서 있는 대기 clip과 인간·여우의 실제 mesh 최하단이 CharacterController 발 기준에서 0.15m 이내임을 검증했다. `/private/tmp/avh-s1-pose-green.xml`.
 - 동작 clip·모델 데이터 자체를 외부 리뷰 payload나 Git에 넣지 않는다. 수정 빌드의 실제 화면 확인은 root가 수행한다.
+
+## Final 수정 — S1-FIN-001/002
+
+- 공개 세션의 미시작 진행, 빈/공백/과도한 닉네임, NaN·무한·음수 시간, 범위 밖 슬롯 입력이 예외를 내고 기존 상태를 보존하는 테스트를 보강했다. 기존 거부 구현이 올바르게 동작해 추가 테스트는 최초 실행부터 PASS였으며, 실패를 만들려고 정상 guard를 제거하지 않았다.
+- 실제 월드에서도 NaN 이동 입력과 0/NaN/무한 Step이 위치·시간을 망가뜨리지 않는 공개 경계 회귀를 추가했다. 실제 PlayMode 실행은 Editor 슬롯 확보 후 수행한다.
+- 결과를 화면 중앙의 독립 패널로 분리하고 SessionState.Winner로 인간/동물 승리 문구를 선택하며 다음 라운드 MM:SS를 표시한다. 결과 구간에서는 인원·추격 시간 HUD를 숨긴다.
+- standalone Core 4/4 및 Unity 어셈블리 컴파일 PASS. Build/Library의 Git 제외를 git check-ignore로 확인했다. 실제 양 OS PA는 여전히 유예/미검증이다.
