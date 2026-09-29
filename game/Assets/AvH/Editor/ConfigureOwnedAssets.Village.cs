@@ -46,14 +46,28 @@ namespace AvH.Editor {
   }
   static void Surface(GameObject map,string name,Vector3 center,Vector3 size,Color color) {
    var go=GameObject.CreatePrimitive(PrimitiveType.Cube);go.name=name;go.transform.SetParent(map.transform);go.transform.position=center;go.transform.localScale=size;
-   Object.DestroyImmediate(go.GetComponent<Collider>());go.GetComponent<Renderer>().sharedMaterial=VillageMaterial(name.EndsWith("roof deck")?"Deck":"Path",color);
+   Object.DestroyImmediate(go.GetComponent<Collider>());go.GetComponent<Renderer>().sharedMaterial=VillageMaterial("Surface_"+name,color);
   }
   static GameObject Place(GameObject map,string path,Vector3 floor,float yaw,float scale,bool solid=true) {
    var go=Object.Instantiate(Load(Adventure+path),map.transform);Clean(go);go.transform.localScale*=scale;go.transform.rotation=Quaternion.Euler(0,yaw,0);
    var bounds=Bounds(go);go.transform.position+=floor-new Vector3(bounds.center.x,bounds.min.y,bounds.center.z);
    foreach(var collider in go.GetComponentsInChildren<Collider>())Object.DestroyImmediate(collider);
    if(solid) {
-    var b=Bounds(go);var obstacle=new GameObject(go.name+" collision");obstacle.transform.SetParent(map.transform);obstacle.transform.position=b.center;obstacle.AddComponent<BoxCollider>().size=b.size;
+    var b=Bounds(go);var obstacle=new GameObject(go.name+" collision");obstacle.transform.SetParent(map.transform);
+    if(path.Contains("Tree")) {
+     // Foliage is visual; only the visible trunk blocks movement.
+     obstacle.transform.position=new Vector3(b.center.x,b.min.y+b.size.y*.22f,b.center.z);
+     var trunk=obstacle.AddComponent<CapsuleCollider>();trunk.height=b.size.y*.44f;trunk.radius=Mathf.Min(b.size.x,b.size.z)*.055f;
+    } else if(path.Contains("SM_Bld_Village_")) {obstacle.transform.position=b.center;obstacle.AddComponent<BoxCollider>().size=b.size;}
+    else {
+     // One convex silhouette closes decorative cavities without an invisible flat AABB top.
+     var parts=go.GetComponentsInChildren<MeshFilter>().Where(f=>f.sharedMesh!=null).Select(f=>new CombineInstance{mesh=f.sharedMesh,transform=f.transform.localToWorldMatrix}).ToArray();
+     var mesh=new Mesh();mesh.CombineMeshes(parts,true,true);
+     var meshPath=Generated+"Collision_"+map.transform.childCount+".asset";
+     var stored=AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+     if(stored==null){AssetDatabase.CreateAsset(mesh,meshPath);stored=mesh;}else {EditorUtility.CopySerialized(mesh,stored);Object.DestroyImmediate(mesh);}
+     var hull=obstacle.AddComponent<MeshCollider>();hull.sharedMesh=stored;hull.convex=true;
+    }
     if(path.Contains("SM_Bld_Village_")) {
      // These modular houses have open parapets. A visible flat deck closes the same volume as collision.
      Surface(map,go.name+" roof deck",new Vector3(b.center.x,b.max.y,b.center.z),new Vector3(b.size.x,.025f,b.size.z),new Color(.51f,.36f,.23f));

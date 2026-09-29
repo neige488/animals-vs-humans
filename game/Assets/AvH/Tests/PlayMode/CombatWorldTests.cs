@@ -9,6 +9,14 @@ namespace AvH.Tests {
   readonly System.Collections.Generic.List<string> profiles=new System.Collections.Generic.List<string>();
   string Profile(){var path=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid()+".xml");profiles.Add(path);return path;}
   [TearDown] public void CleanupProfiles(){foreach(var p in profiles){if(File.Exists(p))File.Delete(p);if(File.Exists(p+".bak"))File.Delete(p+".bak");}profiles.Clear();}
+  [UnityTest] public IEnumerator BubbleAimUsesInputWhileBodyIsStillTurning() {
+   var root=new GameObject("aim during turn");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;session.BotAutomationEnabled=false;session.StartSolo("aim",123,Profile());yield return null;
+   session.SubmitInput(0,new PlayerInput{Forward=1,Yaw=123,Attack=true});session.Step(.02f);
+   Assert.Greater(Mathf.Abs(Mathf.DeltaAngle(session.PlayerTransform(0).eulerAngles.y,123)),90);
+   var direction=session.ObserveBubbles().Single().Direction;var expected=Quaternion.Euler(0,123,0)*Vector3.forward;
+   Assert.Less(Vector3.Distance(new Vector3(direction.X,direction.Y,direction.Z),expected),.001f);
+   Object.Destroy(root);yield return null;
+  }
   [UnityTest] public IEnumerator BubblesBurstOnTerrainAndExpireByRangeOrLifetime() {
    for(int mode=0;mode<3;mode++) {
     var root=new GameObject("bubble limits");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("tester",123,Profile());yield return null;
@@ -44,7 +52,9 @@ namespace AvH.Tests {
    Assert.AreEqual(Faction.Human,session.Observe().Players[4].Faction,"Initial grace prevents attacks even while moving into contact");
    session.SubmitInput(0,new PlayerInput());for(int i=0;i<100;i++)session.Step(.02f);
    Assert.AreEqual(Faction.Human,session.Observe().Players[4].Faction,"Contact alone cannot transform");
-   session.SubmitInput(0,new PlayerInput{Attack=true});session.Step(.02f);
+   session.SubmitInput(0,new PlayerInput{Forward=-1});session.Step(.1f);
+   Assert.Greater(Mathf.Abs(Mathf.DeltaAngle(session.PlayerTransform(0).eulerAngles.y,0)),45,"Body is still facing away from aim");
+   session.SubmitInput(0,new PlayerInput{Attack=true,Yaw=0});session.Step(.02f);
    Assert.AreEqual(Faction.Animal,session.Observe().Players[4].Faction);
    Assert.Greater(session.Observe().Players[4].AttackGraceRemaining,0);
    Object.Destroy(root);yield return null;

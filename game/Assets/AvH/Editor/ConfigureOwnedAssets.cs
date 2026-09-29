@@ -25,7 +25,7 @@ namespace AvH.Editor {
     converted.mainTexture=tex;converted.color=Color.white;converted.SetFloat("_Glossiness",.15f);EditorUtility.SetDirty(converted);Converted[mat]=converted;
    }
    var human=Character("polyperfect/Low Poly Animated People/- Prefabs/man_casual.prefab","Human",1.8f);
-   var animal=Character("polyperfect/Low Poly Animated Animals/Prefabs/Animals/Fox.prefab","Fox",1.0f);
+   var animal=Character("polyperfect/Low Poly Animated Animals/Prefabs/Animals/Fox.prefab","Fox",null);
    var map=BuildVillage();
    var village=PrefabUtility.SaveAsPrefabAsset(map,Generated+"Village.prefab");UnityEngine.Object.DestroyImmediate(map);
    var path=Root+"Resources/OwnedAssetCatalog.asset";
@@ -40,7 +40,7 @@ namespace AvH.Editor {
    EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();Debug.Log("Owned assets configured: human, fox and Synty village; source assets remain Git ignored.");
   }
   static GameObject Load(string path) {var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(Root+path);if(prefab==null)throw new InvalidOperationException("Missing owned prefab: "+path);return prefab;}
-  static GameObject Character(string path,string name,float height) {
+  static GameObject Character(string path,string name,float? height) {
    var instance=UnityEngine.Object.Instantiate(Load(path));Clean(instance);
    foreach(var animator in instance.GetComponentsInChildren<Animator>()) {
     if(name=="Human" && animator.runtimeAnimatorController is AnimatorOverrideController demo)
@@ -53,7 +53,7 @@ namespace AvH.Editor {
    instance.transform.SetParent(holder.transform,true);
    // Preserve the fox rig's authored metre scale; its skinned node already has a 100x import conversion.
    // Normalize humans outside the Animator hierarchy.
-   holder.transform.localScale=Vector3.one*(name=="Human"?height/bounds.size.y:1f);
+   holder.transform.localScale=Vector3.one*(height.HasValue?height.Value/bounds.size.y:1f);
    foreach(var animator in holder.GetComponentsInChildren<Animator>()){animator.applyRootMotion=false;animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;}
    foreach(var collider in holder.GetComponentsInChildren<Collider>())UnityEngine.Object.DestroyImmediate(collider);
    foreach(var body in holder.GetComponentsInChildren<Rigidbody>())UnityEngine.Object.DestroyImmediate(body);

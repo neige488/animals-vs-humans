@@ -33,8 +33,7 @@ namespace AvH.Tests {
     var rendered=body.GetComponentsInChildren<SkinnedMeshRenderer>();
     Assert.IsNotEmpty(rendered,"Both factions must have a visible mesh");
     var visibleBounds=rendered[0].bounds;foreach(var renderer in rendered)visibleBounds.Encapsulate(renderer.bounds);
-    Assert.Greater(visibleBounds.size.y,faction==Faction.Animal?.65f:1.4f,"Rendered character must not shrink to a dot");
-    Assert.Less(visibleBounds.size.y,3f,"Rendered character must remain at gameplay scale");
+    Assert.That(visibleBounds.size.y,Is.EqualTo(faction==Faction.Animal?1.74f:1.88f).Within(.2f),"Conservative renderer bounds must stay at the measured authored size");
     float bottom=float.MaxValue;
     foreach(var renderer in body.GetComponentsInChildren<SkinnedMeshRenderer>()) {
      var mesh=new Mesh();renderer.BakeMesh(mesh,true);
@@ -53,6 +52,19 @@ namespace AvH.Tests {
    float first=session.PlayerTransform(0).eulerAngles.y;Assert.Greater(first,0);Assert.Less(first,45,"No instant 8-way snap");
    for(int i=0;i<12;i++){session.SubmitInput(0,new PlayerInput{Forward=1,Yaw=123});session.Step(.02f);}
    Assert.Less(Mathf.Abs(Mathf.DeltaAngle(session.PlayerTransform(0).eulerAngles.y,123)),.1f);
+   Object.Destroy(root);yield return null;
+  }
+
+  [UnityTest] public IEnumerator RemoteFacingSmoothlyCatchesUpAndSnapsAtWarp() {
+   var source=new PlaytestSession(123);source.StartSolo("source");
+   var root=new GameObject("remote facing");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(source.Observe());
+   var first=new NetworkVisualState();first.Yaws[0]=10;remote.ApplyRemoteVisuals(first);
+   Assert.Less(Mathf.Abs(Mathf.DeltaAngle(remote.PlayerTransform(0).eulerAngles.y,10)),.01f);
+   var next=new NetworkVisualState();next.Yaws[0]=123;remote.ApplyRemoteVisuals(next);yield return null;
+   float angle=remote.PlayerTransform(0).eulerAngles.y;Assert.Greater(angle,10);Assert.Less(angle,123);
+   var reset=source.Observe();reset.Players[0].Position=new WorldPosition(12,1,0);remote.ApplyRemoteSnapshot(reset,true);
+   var resetVisual=new NetworkVisualState();resetVisual.Yaws[0]=270;remote.ApplyRemoteVisuals(resetVisual);
+   Assert.Less(Mathf.Abs(Mathf.DeltaAngle(remote.PlayerTransform(0).eulerAngles.y,270)),.01f);
    Object.Destroy(root);yield return null;
   }
 

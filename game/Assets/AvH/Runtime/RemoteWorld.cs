@@ -5,6 +5,7 @@ namespace AvH {
  public sealed partial class UnityPlaytestSession {
   SessionState remoteSnapshot;
   NetworkVisualState remoteVisuals;
+  readonly bool[] snapRemoteFacing=new bool[12];
   readonly Dictionary<int,GameObject> remoteBubbles=new Dictionary<int,GameObject>();
   readonly Dictionary<int,GameObject> remoteBursts=new Dictionary<int,GameObject>();
   public bool IsRemote=>remoteSnapshot!=null;
@@ -16,20 +17,21 @@ namespace AvH {
    var old=remoteSnapshot;remoteSnapshot=state;
    foreach(var p in state.Players){
     if(old==null||old.Players[p.Slot].Faction!=p.Faction)RefreshVisual(p.Slot,p.Faction);
-    if(immediate||old==null||state.Round!=old.Round||Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>6)Warp(bodies[p.Slot],ToVector(p.Position));
+    if(immediate||old==null||state.Round!=old.Round||Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>6){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
     bodies[p.Slot].enabled=false;
    }
   }
   void InterpolateRemote() {
    foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];var next=ToVector(p.Position);var delta=next-body.transform.position;
     body.transform.position=Vector3.Lerp(body.transform.position,next,Mathf.Min(1,Time.deltaTime*20));
-    var flat=new Vector3(delta.x,0,delta.z);if(remoteVisuals!=null&&remoteVisuals.Yaws.Length==12)body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.Euler(0,remoteVisuals.Yaws[p.Slot],0),540f*Time.deltaTime);
+    var flat=new Vector3(delta.x,0,delta.z);if(remoteVisuals!=null&&remoteVisuals.Yaws.Length==12)body.transform.rotation=Quaternion.Slerp(body.transform.rotation,Quaternion.Euler(0,remoteVisuals.Yaws[p.Slot],0),1-Mathf.Exp(-24f*Time.deltaTime));
     foreach(var animator in body.GetComponentsInChildren<Animator>())foreach(var parameter in animator.parameters)if(parameter.type==AnimatorControllerParameterType.Bool&&parameter.name=="isRunning")animator.SetBool(parameter.name,flat.sqrMagnitude>.002f);
    }
   }
   public void ApplyRemoteVisuals(NetworkVisualState visual) {
    if(ReferenceEquals(remoteVisuals,visual))return;
    remoteVisuals=visual;if(visual==null)return;
+   for(int i=0;i<bodies.Count;i++)if(snapRemoteFacing[i]){bodies[i].transform.rotation=Quaternion.Euler(0,visual.Yaws[i],0);snapRemoteFacing[i]=false;}
    if(bubbleMaterial==null){bubbleMaterial=PrototypeVillage.Material(new Color(.25f,.8f,1,.55f));bubbleMaterial.SetFloat("_Mode",3);bubbleMaterial.SetInt("_SrcBlend",5);bubbleMaterial.SetInt("_DstBlend",10);bubbleMaterial.SetInt("_ZWrite",0);bubbleMaterial.EnableKeyword("_ALPHAPREMULTIPLY_ON");bubbleMaterial.renderQueue=3000;}
    var incoming=new HashSet<int>(visual.Bubbles.Select(b=>b.Id));
    foreach(int id in remoteBubbles.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBubbles[id]);remoteBubbles.Remove(id);}
