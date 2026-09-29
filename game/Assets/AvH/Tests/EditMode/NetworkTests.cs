@@ -153,5 +153,21 @@ namespace AvH.Tests {
    Assert.That(world.TryClaimSlot(a,"renamed",out restored),Is.True);Assert.That(restored,Is.EqualTo(slot));Assert.That(world.Observe().Players[restored].Position.X,Is.EqualTo(8));
    Assert.That(typeof(PlaytestSession).GetMethod("SetSlotOwner"),Is.Null,"No public raw ownership setter");
   }
+  [Test] public void MixedBotPoolPrefersHumanAndKeepsLatestWeaponAndGrace() {
+   int seed=-1;for(int n=0;n<100;n++){var trial=new PlaytestSession(n);trial.StartSolo("host");trial.Advance(20);if(trial.Observe().Players[1].Faction==Faction.Animal){seed=n;break;}}
+   Assert.That(seed,Is.GreaterThanOrEqualTo(0),"Fixture needs lowest bot slot to be an animal");
+   var world=new PlaytestSession(seed);world.StartSolo("host");world.Advance(20);
+   var animalSlots=world.Observe().Players.Where(p=>p.IsBot&&p.Faction==Faction.Animal).Select(p=>p.Slot).ToArray();
+   int expected=world.Observe().Players.First(p=>p.IsBot&&p.Faction==Faction.Human).Slot;
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);
+    world.RecordWorldPosition(expected,new WorldPosition(9,2,7));world.TryFire(expected,1);world.TryReload(expected,1);var latest=world.Observe().Players[expected];
+    client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);var assigned=client.Snapshot.Players[client.Slot];
+    Assert.That(client.Slot,Is.EqualTo(expected));Assert.That(assigned.Faction,Is.EqualTo(Faction.Human));
+    Assert.That(assigned.Position.X,Is.EqualTo(latest.Position.X));Assert.That(assigned.Position.Y,Is.EqualTo(latest.Position.Y));Assert.That(assigned.Position.Z,Is.EqualTo(latest.Position.Z));
+    Assert.That(assigned.Ammo,Is.EqualTo(latest.Ammo));Assert.That(assigned.ReloadRemaining,Is.EqualTo(latest.ReloadRemaining));Assert.That(assigned.AttackGraceRemaining,Is.EqualTo(latest.AttackGraceRemaining));
+    foreach(int slot in animalSlots)Assert.That(client.Snapshot.Players[slot].IsBot,Is.True);
+   }
+  }
  }
 }
