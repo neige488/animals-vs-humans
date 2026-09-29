@@ -57,9 +57,19 @@ namespace AvH {
     GUI.enabled=true;return;
    }
    var state=session.Observe();var animals=state.Players.Count(p=>p.Faction==Faction.Animal);
-   string phase=state.Phase==RoundPhase.Preparation?"준비":state.Phase==RoundPhase.Chase?"추격":"인간 승리 · 다음 라운드";
+   string phase=state.Phase==RoundPhase.Preparation?"준비":"추격";
+   if(state.Phase==RoundPhase.Results) {
+    GUI.Box(new Rect(w/2-260,h/2-120,520,240),"");
+    bool humansWon=state.Winner==Faction.Human;
+    string result=state.Winner.HasValue?(humansWon?"인간 팀 승리!":"동물 팀 승리!"):"라운드 종료";
+    GUI.Label(new Rect(w/2-250,h/2-100,500,55),result,title);
+    GUI.Label(new Rect(w/2-250,h/2-35,500,45),state.Winner.HasValue?(humansWon?"마지막까지 살아남았습니다":"모두 동물이 되었습니다"):"",label);
+    int seconds=Mathf.Max(0,Mathf.CeilToInt((float)state.SecondsRemaining));
+    GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
+   } else {
    GUI.Box(new Rect(w/2-300,12,600,90),"");
-   GUI.Label(new Rect(w/2-295,15,590,40),$"인간 {12-animals}   |   {phase} {Mathf.CeilToInt((float)state.SecondsRemaining)}초   |   동물 {animals}",label);
+   GUI.Label(new Rect(w/2-295,15,590,40),$"인간 {state.Players.Length-animals}   |   {phase} {Mathf.CeilToInt((float)state.SecondsRemaining)}초   |   동물 {animals}",label);
+   }
    if(state.Phase==RoundPhase.Chase && state.SecondsRemaining>174) {
     var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
     GUI.color=catalog==null?Color.white:catalog.RarityColor;
