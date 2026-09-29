@@ -64,7 +64,7 @@ namespace AvH {
     bool humansWon=state.Winner==Faction.Human;
     string result=state.Winner.HasValue?(humansWon?"인간 팀 승리!":"동물 팀 승리!"):"라운드 종료";
     GUI.Label(new Rect(w/2-250,h/2-100,500,55),result,title);
-    GUI.Label(new Rect(w/2-250,h/2-35,500,45),state.Winner.HasValue?(humansWon?"마지막까지 살아남았습니다":"모두 동물이 되었습니다"):"",label);
+    GUI.Label(new Rect(w/2-250,h/2-35,500,45),state.Winner.HasValue?(humansWon?"마지막까지 살아남았습니다":"모두 동물로 변신했습니다!"):"",label);
     int seconds=Mathf.Max(0,Mathf.CeilToInt((float)state.SecondsRemaining));
     GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
    } else {
@@ -76,7 +76,7 @@ namespace AvH {
     GUI.color=catalog==null?Color.white:catalog.RarityColor;
     GUI.Label(new Rect(w/2-290,55,580,35),"새로운 동물이 탄생했습니다! " + string.Join(" / ",state.Births.Select(b=>$"[{b.Rarity}] {b.Kind} ×{b.Count}")),label);GUI.color=Color.white;
    }
-   GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
+   if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
    GUI.Label(new Rect(w/2-275,h-85,550,35),$"{(state.Players[0].Faction==Faction.Human?"인간":"동물")} · {WeaponLabel(state.Players[0])} · 라운드 {state.Round}",label);
    GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전",new GUIStyle(label){fontSize=15});
