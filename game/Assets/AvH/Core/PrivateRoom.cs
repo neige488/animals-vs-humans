@@ -64,14 +64,12 @@ namespace AvH {
  }
  public sealed class PrivateRoomHost : IDisposable {
   readonly PlaytestSession world;readonly TcpListener listener;readonly List<RoomPeer> peers=new List<RoomPeer>();readonly string key=Guid.NewGuid().ToString("N");
-  int rememberedRound;
-  readonly Dictionary<string,Tuple<int,int>> previous=new Dictionary<string,Tuple<int,int>>(); bool disposed;
+  bool disposed;
   public string RoomCode {get;private set;}
   public Action<int,NetworkInput> InputReceived;
   public Func<NetworkVisualState> CaptureVisuals;
   public PrivateRoomHost(PlaytestSession world,string advertisedAddress,int port=0){this.world=world;listener=new TcpListener(IPAddress.Any,port);listener.Start(16);RoomCode=PrivateRoomCode.Create(advertisedAddress,((IPEndPoint)listener.LocalEndpoint).Port,key);}
   public void Pump(){if(disposed)return;
-   int round=world.Observe().Round;if(round!=rememberedRound){previous.Clear();rememberedRound=round;}
    for(int accepts=0;accepts<32&&listener.Pending();accepts++){var p=new RoomPeer(listener.AcceptTcpClient());if(peers.Count>=32){p.Dispose();continue;}peers.Add(p);}
    foreach(var p in peers.ToArray())try {
     foreach(var reader in p.Receive())using(reader){var command=reader.ReadString();
@@ -85,12 +83,9 @@ namespace AvH {
     if(!peers.Contains(p))continue;
     if(p.Socket.Client.Poll(0,SelectMode.SelectRead)&&p.Socket.Available==0){Remove(p);continue;}
     if((DateTime.UtcNow-p.Seen).TotalSeconds>10){Remove(p);continue;}
-    if(p.Ready&&p.Slot<0&&!world.Observe().Players.Any(x=>x.IsBot)){p.Send("error","방이 가득 찼습니다");Remove(p);continue;}
-    if(p.Ready&&p.Slot<0&&world.Observe().Phase!=RoundPhase.Results){var state=world.Observe();Tuple<int,int> old;PlayerState chosen=null;
-     if(previous.TryGetValue(p.Identity,out old)&&old.Item2==state.Round)chosen=state.Players.FirstOrDefault(x=>x.Slot==old.Item1&&x.IsBot);
-     chosen=chosen??state.Players.Where(x=>x.IsBot).OrderBy(x=>x.Faction).ThenBy(x=>x.Slot).FirstOrDefault();
-     if(chosen==null){p.Send("error","방이 가득 찼습니다");Remove(p);continue;}
-     p.Slot=chosen.Slot;world.SetSlotOwner(p.Slot,p.Nickname,false);InputReceived?.Invoke(p.Slot,new NetworkInput());
+    if(p.Ready&&p.Slot<0){int assigned;var result=world.ClaimSlot(p.Identity,p.Nickname,out assigned);
+     if(result==SlotClaimOutcome.Claimed){p.Slot=assigned;InputReceived?.Invoke(p.Slot,new NetworkInput());}
+     else if(result!=SlotClaimOutcome.WaitingForRound){p.Send("error",result==SlotClaimOutcome.Full?"방이 가득 찼습니다":"참가자 확인 실패");Remove(p);continue;}
     }
 
    }catch(Exception e)when(e is IOException||e is SocketException||e is ObjectDisposedException||e is ArgumentException){Remove(p);}
@@ -119,7 +114,7 @@ namespace AvH {
    }catch(Exception e)when(e is IOException||e is SocketException||e is ObjectDisposedException||e is ArgumentException){Remove(p);}
   }
   static bool Finite(float f)=>!float.IsNaN(f)&&!float.IsInfinity(f);
-  void Remove(RoomPeer p){if(p.Slot>=0){world.SetSlotOwner(p.Slot,"봇 "+p.Slot,true);if(previous.Count<1024||previous.ContainsKey(p.Identity))previous[p.Identity]=Tuple.Create(p.Slot,world.Observe().Round);InputReceived?.Invoke(p.Slot,new NetworkInput());}peers.Remove(p);p.Dispose();}
+  void Remove(RoomPeer p){if(p.Slot>=0&&world.ReleaseSlotToBot(p.Slot,p.Identity))InputReceived?.Invoke(p.Slot,new NetworkInput());peers.Remove(p);p.Dispose();}
   public void Dispose(){if(disposed)return;disposed=true;foreach(var p in peers.ToArray()){try{p.Send("closed");}catch{}Remove(p);}listener.Stop();}
  }
  public sealed class PrivateRoomClient : IDisposable {
