@@ -2,6 +2,22 @@ using System.Linq;
 using NUnit.Framework;
 namespace AvH.Tests {
  public class CombatTests {
+  [Test] public void DeadlineTieBelongsToHumansAndPriorRoundCommandsCannotChangeNextRound() {
+   foreach(double delta in new[]{-1e-10,0,1e-10}) {
+    var s=new PlaytestSession(123);s.StartSolo("tester");s.Advance(22);
+    var state=s.Observe();int attacker=state.Players.First(p=>p.Faction==Faction.Animal).Slot;
+    var victims=state.Players.Where(p=>p.Faction==Faction.Human).Select(p=>p.Slot).ToArray();
+    foreach(var victim in victims){s.RecordWorldPosition(victim,state.Players[attacker].Position);}
+    foreach(var victim in victims.Take(victims.Length-1)){Assert.IsTrue(s.TryMeleeHit(attacker,victim,state.Round));s.Advance(.51);}
+    s.Advance(s.Observe().SecondsRemaining+delta);
+    Assert.AreEqual(delta<0,s.TryMeleeHit(attacker,victims.Last(),state.Round));
+    Assert.AreEqual(delta<0?Faction.Animal:Faction.Human,s.Observe().Winner);
+    s.Advance(5.01);Assert.AreEqual(state.Round+1,s.Observe().Round);
+    Assert.IsFalse(s.TryMeleeHit(attacker,victims.Last(),state.Round));Assert.IsFalse(s.TryFire(0,state.Round));
+    Assert.AreEqual(12,s.Observe().Players.Count(p=>p.Faction==Faction.Human));
+   }
+  }
+
   [Test] public void MeleeRequiresAttackAndGraceThenTransformsAtCurrentPosition() {
    var s=new PlaytestSession(123);s.StartSolo("tester");s.Advance(20);
    var state=s.Observe();int attacker=state.Players.First(p=>p.Faction==Faction.Animal).Slot;
