@@ -80,6 +80,10 @@ namespace AvH
             if (slot < 0 || slot >= players.Length) throw new ArgumentOutOfRangeException(nameof(slot));
             players[slot].Position = position;
         }
+        public void SetSlotOwner(int slot, string nickname, bool isBot) {
+            if(slot <= 0 || slot >= players.Length) throw new ArgumentOutOfRangeException(nameof(slot));
+            players[slot].Nickname = nickname; players[slot].IsBot = isBot;
+        }
         private static WorldPosition Spawn(int slot) => new WorldPosition((slot % 4 - 1.5f) * 3, 1, (slot / 4 - 1) * 3);
         public SessionState Observe() => new SessionState {
             Players = players.Select(p => p.Copy()).ToArray(), Phase = phase, SecondsRemaining = remaining, Round = round, Winner = winner,
