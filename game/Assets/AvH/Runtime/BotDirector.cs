@@ -4,14 +4,15 @@ using System.Linq;
 using UnityEngine;
 namespace AvH {
  // Generates normal player inputs. No teleport, hit claim, or faction mutation exists here.
+ public struct BotNavigationDiagnostics {public int GridBuilds,MaxGridBuildsPerStep;}
  public sealed class BotDirector {
-  public static readonly Vector3[] Shelters={new Vector3(-12,4,10),new Vector3(14,0,15),new Vector3(9,0,-14)};
+  public BotNavigationDiagnostics ObserveNavigation()=>routes.Observe();
   sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;}
   readonly Brain[] brains=Enumerable.Range(0,12).Select(i=>new Brain{Shelter=i%3}).ToArray();
   readonly VillageRoutes routes=new VillageRoutes();
   
   public void Step(UnityPlaytestSession game,float seconds) {
-   var state=game.Observe();var rules=game.Session.ObserveSettings().Current;routes.BeginStep(seconds);
+   var Shelters=game.ShelterPoints;var state=game.Observe();var rules=game.Session.ObserveSettings().Current;routes.BeginStep(seconds);
    foreach(var player in state.Players) {
     if(!player.IsBot)continue;
     var brain=brains[player.Slot];var position=V(player.Position);
@@ -31,8 +32,8 @@ namespace AvH {
      if(!reachable) {
       routes.Invalidate();
       if(player.Faction==Faction.Human) {
-       for(int offset=1;offset<Shelters.Length;offset++) {
-        int alternate=(brain.Shelter+offset)%Shelters.Length;
+       for(int offset=1;offset<Shelters.Count;offset++) {
+        int alternate=(brain.Shelter+offset)%Shelters.Count;
         var alternative=Shelters[alternate]+new Vector3((player.Slot/3-1.5f)*.75f,0,0);
         var path=routes.Find(position,alternative,out bool success);
         if(success){brain.Shelter=alternate;brain.Path=path;goal=alternative;break;}
@@ -71,7 +72,7 @@ namespace AvH {
     if(target!=null && Physics.Linecast(position+Vector3.up*.9f,V(target.Position)+Vector3.up*.9f,out var sight,~0,QueryTriggerInteraction.Ignore)) visible=sight.collider.transform==game.PlayerTransform(target.Slot);
     game.SubmitInput(player.Slot,new PlayerInput {Right=local.x,Forward=local.z,Yaw=yaw,
      Pitch=-Mathf.Atan2(aim.y,Flat(aim).magnitude)*Mathf.Rad2Deg,
-     Jump=brain.Stuck>1.5f,Attack=target!=null&&visible&&distance<(player.Faction==Faction.Human?rules.BubbleRange:1.65f),
+     Jump=brain.Stuck>1.5f,Attack=target!=null&&visible&&distance<(player.Faction==Faction.Human?rules.BubbleRange:CombatRules.MeleeDistance-.15f),
      Reload=player.Faction==Faction.Human&&player.Ammo==0,RoundId=state.Round});
    }
   }
@@ -82,13 +83,15 @@ namespace AvH {
  sealed class VillageRoutes {
   const int Size=89;const float Cell=.5f,Origin=-22;
   readonly Vector3[] points=new Vector3[Size*Size];readonly bool[] walkable=new bool[Size*Size];
-  bool built,rebuildRequested,rebuiltThisStep;float sinceBuild=1;
+  bool built,rebuildRequested,rebuiltThisStep;float sinceBuild=1;int builds,thisStep,maxPerStep;
+  public BotNavigationDiagnostics Observe()=>new BotNavigationDiagnostics{GridBuilds=builds,MaxGridBuildsPerStep=maxPerStep};
   readonly float[] distance=new float[Size*Size];readonly int[] parent=new int[Size*Size];readonly bool[] closed=new bool[Size*Size];
   readonly SortedSet<(float score,int id)> open=new SortedSet<(float,int)>();
-  public void BeginStep(float seconds){sinceBuild+=seconds;rebuiltThisStep=false;}
+  public void BeginStep(float seconds){sinceBuild+=seconds;rebuiltThisStep=false;thisStep=0;}
   public void Invalidate(){rebuildRequested=true;}
   static bool Terrain(Collider c)=>!(c is CharacterController)&&c.GetComponentInParent<CharacterController>()==null;
   void Build() {
+   builds++;maxPerStep=Math.Max(maxPerStep,++thisStep);
    Physics.SyncTransforms();Array.Clear(walkable,0,walkable.Length);
    for(int z=0;z<Size;z++)for(int x=0;x<Size;x++) {
     int id=z*Size+x;var top=new Vector3(Origin+x*Cell,12,Origin+z*Cell);

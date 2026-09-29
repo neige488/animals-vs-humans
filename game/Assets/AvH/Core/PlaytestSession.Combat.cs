@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 namespace AvH {
+ public static class CombatRules {public const float MeleeDistance=1.8f;}
  public sealed partial class PlaytestSession {
   double birthSecondsRemaining, birthBatchAge;
   void ResetCombat() {
@@ -37,7 +38,7 @@ namespace AvH {
    var attacker=players[attackerSlot];var victim=players[victimSlot];
    if(attacker.Faction!=Faction.Animal||victim.Faction!=Faction.Human||attacker.AttackGraceRemaining>0||attacker.FireCooldownRemaining>0)return false;
    double x=attacker.Position.X-victim.Position.X,y=attacker.Position.Y-victim.Position.Y,z=attacker.Position.Z-victim.Position.Z;
-   if(x*x+y*y+z*z>1.8*1.8)return false;
+   if(x*x+y*y+z*z>CombatRules.MeleeDistance*CombatRules.MeleeDistance)return false;
    attacker.FireCooldownRemaining=.5;
    victim.Faction=Faction.Animal;victim.AttackGraceRemaining=settings.Current.TransformAttackGrace;
    victim.ReloadRemaining=0;victim.FireCooldownRemaining=0;PublishBirth(1);
