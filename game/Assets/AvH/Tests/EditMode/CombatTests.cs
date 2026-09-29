@@ -2,6 +2,15 @@ using System.Linq;
 using NUnit.Framework;
 namespace AvH.Tests {
  public class CombatTests {
+  [Test] public void ZeroGraceAllowsImmediateChainAndNearbyBirthsAreGrouped() {
+   var s=new PlaytestSession(123);s.BeginSettingsEdit(0);var rules=s.ObserveSettings().Edit;rules.InitialAttackGrace=0;rules.TransformAttackGrace=0;s.UpdateSettingsEdit(0,rules);s.ApplySettings(0);s.StartSolo("tester");s.Advance(21);
+   var state=s.Observe();var attackers=state.Players.Where(p=>p.Faction==Faction.Animal).ToArray();var humans=state.Players.Where(p=>p.Faction==Faction.Human).ToArray();
+   for(int i=0;i<2;i++){s.RecordWorldPosition(humans[i].Slot,attackers[i].Position);Assert.IsTrue(s.TryMeleeHit(attackers[i].Slot,humans[i].Slot,state.Round));}
+   Assert.AreEqual(2,s.Observe().Births.Single().Count);
+   s.RecordWorldPosition(humans[2].Slot,attackers[0].Position);Assert.IsTrue(s.TryMeleeHit(humans[0].Slot,humans[2].Slot,state.Round));
+   Assert.AreEqual(3,s.Observe().Births.Single().Count);
+  }
+
   [Test] public void DeadlineTieBelongsToHumansAndPriorRoundCommandsCannotChangeNextRound() {
    foreach(double delta in new[]{-1e-10,0,1e-10}) {
     var s=new PlaytestSession(123);s.StartSolo("tester");s.Advance(22);
@@ -27,7 +36,9 @@ namespace AvH.Tests {
    Assert.IsFalse(s.TryMeleeHit(attacker,victim,state.Round));s.Advance(2);
    Assert.IsTrue(s.TryMeleeHit(attacker,victim,state.Round));
    var transformed=s.Observe().Players[victim];Assert.AreEqual(Faction.Animal,transformed.Faction);Assert.AreEqual(point,transformed.Position);
-   Assert.AreEqual(1,transformed.AttackGraceRemaining);Assert.IsFalse(s.TryMeleeHit(victim,attacker,state.Round));
+   Assert.AreEqual(1,transformed.AttackGraceRemaining);
+   int next=s.Observe().Players.First(p=>p.Faction==Faction.Human).Slot;s.RecordWorldPosition(next,point);
+   Assert.IsFalse(s.TryMeleeHit(victim,next,state.Round));s.Advance(1);Assert.IsTrue(s.TryMeleeHit(victim,next,state.Round));
    Assert.AreEqual(1,s.Observe().Births.Single().Count);
   }
 
