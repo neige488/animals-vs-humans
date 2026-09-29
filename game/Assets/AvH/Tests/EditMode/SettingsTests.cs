@@ -1,6 +1,37 @@
 using NUnit.Framework;
 namespace AvH.Tests {
 public class SettingsTests {
+ [Test] public void ValidXmlWithInvalidValuesFallsBackWithoutChangingOriginal() {
+  var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString());
+  System.IO.Directory.CreateDirectory(dir);var path=System.IO.Path.Combine(dir,"settings.xml");
+  try {
+   var original=new PlaytestSession(1,path);original.StartSolo("host");original.BeginSettingsEdit(0);original.ApplySettings(0);
+   var corrupt=System.IO.File.ReadAllText(path).Replace("<RoundSeconds>180</RoundSeconds>","<RoundSeconds>-1</RoundSeconds>");
+   System.IO.File.WriteAllText(path,corrupt);
+   var restarted=new PlaytestSession(2,path);restarted.StartSolo("host");
+   Assert.AreEqual(180,restarted.ObserveSettings().Current.RoundSeconds);
+   Assert.IsNotEmpty(restarted.ObserveSettings().Error);
+   Assert.AreEqual(corrupt,System.IO.File.ReadAllText(path));
+  } finally {System.IO.Directory.Delete(dir,true);}
+ }
+ [Test] public void CollisionSwitchesAreIndependentAcrossRoundAndRestart() {
+  var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString());
+  System.IO.Directory.CreateDirectory(dir);var path=System.IO.Path.Combine(dir,"settings.xml");
+  try {
+   foreach(var key in new[]{"FriendlyCollision","EnemyCollision","FriendlyPush"}) {
+    var session=new PlaytestSession(1,path);session.StartSolo("host");session.BeginSettingsEdit(0);session.RestoreSettingsDefaults(0);
+    var values=session.ObserveSettings().Edit;
+    Assert.IsTrue(values.FriendlyCollision&&values.EnemyCollision&&values.FriendlyPush);
+    typeof(PlaytestValues).GetField(key).SetValue(values,false);
+    session.UpdateSettingsEdit(0,values);session.ApplySettings(0);session.Advance(205);
+    var current=session.ObserveSettings().Current;var saved=new PlaytestSession(2,path).ObserveSettings().Current;
+    foreach(var other in new[]{"FriendlyCollision","EnemyCollision","FriendlyPush"}) {
+     Assert.AreEqual(other!=key,typeof(PlaytestValues).GetField(other).GetValue(current));
+     Assert.AreEqual(other!=key,typeof(PlaytestValues).GetField(other).GetValue(saved));
+    }
+   }
+  } finally {System.IO.Directory.Delete(dir,true);}
+ }
  [Test] public void HostEditsStaySeparateUntilNextRoundAndGuestsCannotChangeThem() {
   var session=new PlaytestSession(1); session.StartSolo("host");
   Assert.IsFalse(session.BeginSettingsEdit(1)); Assert.IsTrue(session.BeginSettingsEdit(0));
