@@ -43,6 +43,13 @@ namespace AvH.Tests {
     for(int i=0;i<10000;i++) {
      game.Step(.02f);var state=game.Observe();var hits=game.ObserveBubbleHits();
      if(state.Round!=observedRound){threatened.Clear();departure.Clear();System.Array.Clear(visits,0,12);for(int slot=0;slot<12;slot++)lastShelter[slot]=-1;observedRound=state.Round;window=state;last=state;System.Array.Clear(travel,0,12);System.Array.Clear(productive,0,12);windowSteps=0;}
+     // Results intentionally stop player movement; never mix that interval into an active-play window.
+     if(state.Phase==RoundPhase.Results||last.Phase==RoundPhase.Results) {
+      window=state;last=state;lastHits=hits;windowSteps=0;
+      System.Array.Clear(travel,0,12);System.Array.Clear(productive,0,12);
+      if(i%50==0)yield return null;
+      continue;
+     }
      foreach(var bot in state.Players.Where(p=>p.IsBot)) {
       travel[bot.Slot]+=Vector3.Distance(V(bot.Position),V(last.Players[bot.Slot].Position));
       productive[bot.Slot]|=hits[bot.Slot]>lastHits[bot.Slot]||bot.Ammo<last.Players[bot.Slot].Ammo||bot.ReloadRemaining>0||
