@@ -11,9 +11,10 @@ namespace AvH {
   readonly PlayerInput[] inputs = new PlayerInput[12];
   readonly float[] vertical = new float[12];
   readonly Vector3[] returns = { new Vector3(-12,1,0), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
-  public void StartSolo(string nickname) {
+  public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
+  public void StartSolo(string nickname, int? randomSeed = null) {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");
-   Session = new PlaytestSession(Environment.TickCount);
+   Session = new PlaytestSession(randomSeed ?? Environment.TickCount);
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity);
    PrototypeVillage.Build(transform);

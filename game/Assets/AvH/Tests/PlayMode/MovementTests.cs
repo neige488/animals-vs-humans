@@ -1,9 +1,39 @@
 using System.Collections;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 namespace AvH.Tests {
  public class MovementTests {
+  [UnityTest] public IEnumerator AllRecoveryPointsHaveClearStandingCapsules() {
+   var root=new GameObject("recovery clearance");var session=root.AddComponent<UnityPlaytestSession>();
+   session.AutomaticStep=false;session.StartSolo("clearance");yield return null;Physics.SyncTransforms();
+   foreach(var point in session.RecoveryPoints)
+    Assert.IsFalse(Physics.CheckCapsule(point+Vector3.up*.38f,point+Vector3.up*1.42f,.38f,~0,QueryTriggerInteraction.Ignore),"Recovery capsule overlaps terrain: "+point);
+   Object.Destroy(root);yield return null;
+  }
+  [UnityTest] public IEnumerator AnimalMapEdgeRecoveryPreservesFactionAndSlot() {
+   // Randomness is controlled at the public start boundary; select a seed that makes slot zero an animal.
+   int seed=0;
+   for(;seed<1000;seed++){var probe=new PlaytestSession(seed);probe.StartSolo("probe");probe.Advance(20);if(probe.Observe().Players[0].Faction==Faction.Animal)break;}
+   Assert.Less(seed,1000);
+   var root=new GameObject("animal recovery");var session=root.AddComponent<UnityPlaytestSession>();
+   session.AutomaticStep=false;session.StartSolo("animal tester",seed);yield return null;
+   for(int i=0;i<1001;i++)session.Step(.02f);
+   Assert.AreEqual(RoundPhase.Chase,session.Observe().Phase);
+   var animal=session.Observe().Players.First(p=>p.Slot==0);
+   Assert.AreEqual(Faction.Animal,animal.Faction);
+   bool recovered=false;
+   for(int i=0;i<350;i++) {
+    var before=session.Observe().Players[animal.Slot].Position;
+    session.SubmitInput(animal.Slot,new PlayerInput{Right=-1});session.Step(.02f);
+    var after=session.Observe().Players[animal.Slot];
+    if(before.Y< -8 && after.Position.Y>0){recovered=true;Assert.AreEqual(animal.Faction,after.Faction);Assert.AreEqual(animal.Slot,after.Slot);break;}
+   }
+   Assert.IsTrue(recovered,"Selected animal must actually fall and recover during Chase");
+   Object.Destroy(root);yield return null;
+  }
+
   [UnityTest] public IEnumerator BasicInputsReachRooftopAndRecoverFromMapEdge() {
    var root=new GameObject("route session");var session=root.AddComponent<UnityPlaytestSession>();
    session.AutomaticStep=false;session.StartSolo("route tester");yield return null;
