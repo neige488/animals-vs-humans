@@ -30,14 +30,29 @@ namespace AvH.Tests {
      var clips=animator.GetCurrentAnimatorClipInfo(0);
      foreach(var clip in clips)Assert.IsFalse(clip.clip.name.ToLowerInvariant().Contains("crouch"),"Standing idle must not use a crouch demo override");
     }
+    var rendered=body.GetComponentsInChildren<SkinnedMeshRenderer>();
+    Assert.IsNotEmpty(rendered,"Both factions must have a visible mesh");
+    var visibleBounds=rendered[0].bounds;foreach(var renderer in rendered)visibleBounds.Encapsulate(renderer.bounds);
+    Assert.Greater(visibleBounds.size.y,faction==Faction.Animal?.65f:1.4f,"Rendered character must not shrink to a dot");
+    Assert.Less(visibleBounds.size.y,3f,"Rendered character must remain at gameplay scale");
     float bottom=float.MaxValue;
     foreach(var renderer in body.GetComponentsInChildren<SkinnedMeshRenderer>()) {
-     var mesh=new Mesh();renderer.BakeMesh(mesh);
+     var mesh=new Mesh();renderer.BakeMesh(mesh,true);
      foreach(var vertex in mesh.vertices)bottom=Mathf.Min(bottom,renderer.transform.TransformPoint(vertex).y);
      Object.Destroy(mesh);
     }
     Assert.Less(Mathf.Abs(bottom-body.position.y),.15f,faction+" feet must align with controller ground");
    }
+   Object.Destroy(root);yield return null;
+  }
+
+  [UnityTest] public IEnumerator TurningPassesThroughIntermediateAnglesAndAcceptsAnyHeading() {
+   var root=new GameObject("smooth rotation");var session=root.AddComponent<UnityPlaytestSession>();
+   session.AutomaticStep=false;session.BotAutomationEnabled=false;session.StartSolo("turn");yield return null;
+   session.SubmitInput(0,new PlayerInput{Right=1});session.Step(.02f);
+   float first=session.PlayerTransform(0).eulerAngles.y;Assert.Greater(first,0);Assert.Less(first,45,"No instant 8-way snap");
+   for(int i=0;i<12;i++){session.SubmitInput(0,new PlayerInput{Forward=1,Yaw=123});session.Step(.02f);}
+   Assert.Less(Mathf.Abs(Mathf.DeltaAngle(session.PlayerTransform(0).eulerAngles.y,123)),.1f);
    Object.Destroy(root);yield return null;
   }
 

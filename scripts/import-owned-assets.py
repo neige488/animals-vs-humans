@@ -14,7 +14,7 @@ for name in args.packages:
   if not str(path).startswith('Assets/') or '..' in path.parts or path.is_absolute():raise ValueError('Unsafe asset path')
   if any(x not in ('00','') for x in parts[1:]):raise ValueError('Unexpected pathname suffix')
   guid=member.name.split('/')[0];records[guid]=(archive,members,path,guid)
-seeds=[g for g,(_,_,p,_) in records.items() if str(p).endswith(('/Fox.prefab','/man_casual.prefab','/SM_Bld_Village_01.prefab','/SM_Bld_Village_02.prefab','/SM_Bld_Wall_01.prefab','/SM_Bld_Stall_01.prefab','/SM_Bld_Base_Floor_01.prefab','/SM_Bld_Base_Stairs_02.prefab','/SM_Env_Tree_05.prefab'))]
+seeds=[g for g,(_,_,p,_) in records.items() if str(p).endswith(('/Fox.prefab','/man_casual.prefab','/SM_Bld_Village_01.prefab','/SM_Bld_Village_02.prefab','/SM_Bld_Wall_01.prefab','/SM_Bld_Stall_01.prefab','/SM_Bld_Base_Floor_01.prefab','/SM_Bld_Base_Stairs_02.prefab','/SM_Env_Tree_05.prefab','/SM_Bld_Village_03.prefab','/SM_Bld_Village_04.prefab','/SM_Bld_Village_Top_01.prefab','/SM_Bld_Stall_Cover_01.prefab','/SM_Prop_Crate_01.prefab','/SM_Prop_Barrel_01.prefab','/SM_Prop_Cart_01.prefab','/SM_Bld_Well_01.prefab','/SM_Bld_Fence_01.prefab'))]
 if len(seeds)<5:raise ValueError('Required owned prefabs not found')
 seen=set();pending=list(seeds);files=0;total=0
 # Game behavior uses our own C#. Vendor demos/scripts are never compiled.

@@ -23,7 +23,7 @@ namespace AvH {
   void InterpolateRemote() {
    foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];var next=ToVector(p.Position);var delta=next-body.transform.position;
     body.transform.position=Vector3.Lerp(body.transform.position,next,Mathf.Min(1,Time.deltaTime*20));
-    var flat=new Vector3(delta.x,0,delta.z);if(remoteVisuals!=null&&remoteVisuals.Yaws.Length==12)body.transform.rotation=Quaternion.Euler(0,remoteVisuals.Yaws[p.Slot],0);
+    var flat=new Vector3(delta.x,0,delta.z);if(remoteVisuals!=null&&remoteVisuals.Yaws.Length==12)body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.Euler(0,remoteVisuals.Yaws[p.Slot],0),540f*Time.deltaTime);
     foreach(var animator in body.GetComponentsInChildren<Animator>())foreach(var parameter in animator.parameters)if(parameter.type==AnimatorControllerParameterType.Bool&&parameter.name=="isRunning")animator.SetBool(parameter.name,flat.sqrMagnitude>.002f);
    }
   }

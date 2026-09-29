@@ -62,7 +62,7 @@ namespace AvH {
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      body.Move((direction*(p.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed)+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
-     if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.LookRotation(direction);
+     if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
      foreach(var animator in body.GetComponentsInChildren<Animator>()) {
       animator.applyRootMotion=false;
       foreach(var parameter in animator.parameters) {
