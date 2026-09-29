@@ -36,7 +36,7 @@ namespace AvH
         private PlayerState[] players = Array.Empty<PlayerState>();
         private readonly Random random;
         private RoundPhase phase;
-        private double remaining;
+        private double remaining, hostTime, phaseDeadline;
         private int round;
         private Faction? winner;
         private string animalKind, animalRarity;
@@ -46,7 +46,7 @@ namespace AvH
         {
             if (string.IsNullOrWhiteSpace(nickname) || nickname.Trim().Length > 20) throw new ArgumentException("닉네임은 1~20자입니다.");
             this.animalKind = animalKind; this.animalRarity = animalRarity;
-            round = 0;
+            round = 0; hostTime = 0;
             players = Enumerable.Range(0, 12).Select(i => new PlayerState {
                 Slot = i, Nickname = i == 0 ? nickname : "봇 " + i, IsBot = i != 0,
                 Faction = Faction.Human, Position = Spawn(i)
@@ -57,14 +57,15 @@ namespace AvH
             settings.BeginRound(); round++; phase = RoundPhase.Preparation; remaining = settings.Current.PreparationSeconds; winner = null;
             births = Array.Empty<BirthNotice>();
             foreach (var player in players) { player.Faction = Faction.Human; player.Position = Spawn(player.Slot); }
-            ResetCombat();
+            ResetCombat(); phaseDeadline=hostTime+remaining;
         }
         public void Advance(double elapsed) {
             if (double.IsNaN(elapsed) || double.IsInfinity(elapsed) || elapsed < 0) throw new ArgumentOutOfRangeException(nameof(elapsed));
             if (players.Length == 0) throw new InvalidOperationException("세션을 먼저 시작하세요.");
-            while (elapsed + 1e-9 >= remaining) {
-                AdvanceCombat(remaining);
-                elapsed = Math.Max(0, elapsed - remaining);
+            double targetTime=hostTime+elapsed;
+            while (targetTime >= phaseDeadline) {
+                AdvanceCombat(phaseDeadline-hostTime);
+                hostTime=phaseDeadline;
                 if (phase == RoundPhase.Preparation) {
                     var slots = Enumerable.Range(0, players.Length).ToArray();
                     for (int i = 0; i < settings.Current.InitialAnimals; i++) {
@@ -78,9 +79,11 @@ namespace AvH
                 } else if (phase == RoundPhase.Chase) {
                     phase = RoundPhase.Results; remaining = 5; winner = Faction.Human;
                 } else BeginRound();
+                phaseDeadline=hostTime+remaining;
             }
-            AdvanceCombat(elapsed);
-            remaining -= elapsed;
+            AdvanceCombat(targetTime-hostTime);
+            hostTime=targetTime;
+            remaining=phaseDeadline-hostTime;
         }
         // Called only by the authoritative physics adapter, never by remote participant messages.
         public void RecordWorldPosition(int slot, WorldPosition position) {
