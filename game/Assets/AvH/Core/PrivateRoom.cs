@@ -73,6 +73,7 @@ namespace AvH {
   public void Pump(){if(disposed)return;
    int round=world.Observe().Round;if(round!=rememberedRound){previous.Clear();rememberedRound=round;}
    for(int accepts=0;accepts<32&&listener.Pending();accepts++){var p=new RoomPeer(listener.AcceptTcpClient());if(peers.Count>=32){p.Dispose();continue;}peers.Add(p);}
+   NetworkVisualState sharedVisual=null;NetworkBubble[] sharedEffects=null;
    foreach(var p in peers.ToArray())try {
     foreach(var reader in p.Receive())using(reader){var command=reader.ReadString();
      if(command=="hello") {var protocol=reader.ReadString();var room=reader.ReadString();var identity=reader.ReadString();var name=reader.ReadString();
@@ -94,10 +95,13 @@ namespace AvH {
     }
     if(p.Identity!=null){
      if(p.Effects==null){
-      var visual=CaptureVisuals?.Invoke()??new NetworkVisualState();var settings=world.ObserveSettings();visual.CurrentRules=settings.Current;visual.PendingRules=settings.Pending??settings.Current;visual.HasPending=settings.Pending!=null;visual.SettingsVersion=settings.Version;
-      p.Effects=visual.Bubbles;visual.Bubbles=Array.Empty<NetworkBubble>();p.EffectsOffset=0;
+      if(sharedVisual==null){
+       var captured=CaptureVisuals?.Invoke()??new NetworkVisualState();var settings=world.ObserveSettings();sharedEffects=captured.Bubbles;
+       sharedVisual=new NetworkVisualState{Yaws=captured.Yaws,Bursts=captured.Bursts,CurrentRules=settings.Current,PendingRules=settings.Pending??settings.Current,HasPending=settings.Pending!=null,SettingsVersion=settings.Version};
+      }
+      p.Effects=sharedEffects;p.EffectsOffset=0;
       if(p.Effects.Length>16384){p.Send("error","버블 표현 상한을 초과했습니다. 호스트 설정을 낮춘 뒤 재시도하세요.");Remove(p);continue;}
-      p.Send("state",++p.SnapshotSerial,p.Slot,world.Observe(),visual);
+      p.Send("state",++p.SnapshotSerial,p.Slot,world.Observe(),sharedVisual);
       if(p.Effects.Length==0){p.Send("bubbles",p.SnapshotSerial,0,0,Array.Empty<NetworkBubble>());p.Effects=null;continue;}
      }
      // At most eight 128-item chunks per pump: bounded frames and no unbounded send queue.
