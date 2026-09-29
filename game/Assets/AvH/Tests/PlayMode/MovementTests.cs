@@ -5,6 +5,20 @@ using UnityEngine;
 using UnityEngine.TestTools;
 namespace AvH.Tests {
  public class MovementTests {
+  [UnityTest] public IEnumerator InvalidInputAndStepLeaveWorldUnchanged() {
+   var root=new GameObject("invalid inputs");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;
+   session.StartSolo("tester");
+   for(int i=0;i<50;i++)session.Step(.02f);
+   var before=session.Observe();var position=session.PlayerTransform(0).position;
+   session.Step(0);session.Step(float.NaN);session.Step(float.PositiveInfinity);
+   Assert.AreEqual(before.SecondsRemaining,session.Observe().SecondsRemaining);
+   Assert.AreEqual(position,session.PlayerTransform(0).position);
+   session.SubmitInput(0,new PlayerInput {Right=float.NaN,Forward=1});
+   for(int i=0;i<10;i++)session.Step(.02f);
+   var after=session.PlayerTransform(0).position;
+   Assert.AreEqual(position.x,after.x,.001f);Assert.AreEqual(position.z,after.z,.001f);
+   Object.Destroy(root);yield return null;
+  }
   [UnityTest] public IEnumerator OwnedCharactersStandIdleWithFeetAtControllerGround() {
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null)Assert.Ignore("Owned assets are required for visual integration");
    var root=new GameObject("owned pose");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;
