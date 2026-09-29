@@ -5,6 +5,25 @@ using UnityEngine;
 using UnityEngine.TestTools;
 namespace AvH.Tests {
  public class BotTests {
+  [UnityTest] public IEnumerator WallPinnedCharacterStillReportsActualDefensiveBubbleHit() {
+   var root=new GameObject("pinned bubble evidence");
+   try {
+    var game=root.AddComponent<UnityPlaytestSession>();game.AutomaticStep=false;game.BotAutomationEnabled=false;
+    game.StartSolo("observer",123,System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml"));yield return null;
+    for(int i=0;i<30;i++)game.Step(.02f);
+    var before=V(game.Observe().Players[4].Position);
+    Barrier(root,before+new Vector3(0,1.5f,.55f),new Vector3(3,3,.2f));Physics.SyncTransforms();
+    var original=game.ObserveBubbleHits();
+    game.SubmitInput(0,new PlayerInput{Attack=true});game.Step(.02f);game.SubmitInput(0,new PlayerInput());
+    for(int i=0;i<30;i++)game.Step(.02f);
+    Assert.AreEqual(1,game.ObserveBubbleHits()[4],"Only a resolved physical bubble hit counts as defensive combat");
+    Assert.AreEqual(0,original[4],"Observers cannot mutate or retain a live counter array");
+    Assert.Less(Vector3.Distance(before,V(game.Observe().Players[4].Position)),.3f,"Wall prevents travel while actual bubble defense remains observable");
+   } finally {Object.Destroy(root);}yield return null;
+  }
+  [UnityTest] public IEnumerator ConsecutiveSoloMatchesDoNotTrapBotsAtWarehouseCorners() {
+   for(int run=0;run<3;run++)yield return SoloBotsReachSheltersAndCreateCombatWithoutHitOverrides();
+  }
   [UnityTest] public IEnumerator SoloBotsReachSheltersAndCreateCombatWithoutHitOverrides() {
    var root=new GameObject("bot match");
    try {
@@ -15,13 +34,13 @@ namespace AvH.Tests {
     var threatened=new System.Collections.Generic.Dictionary<int,Vector3>();int observedRound=start.Round;var departure=new System.Collections.Generic.Dictionary<int,int>();var visits=new int[12];int maxVisits=0;var lastShelter=System.Linq.Enumerable.Repeat(-1,12).ToArray();
     for(int i=0;i<600;i++){game.Step(.02f);if(i%50==0)yield return null;}
     Assert.AreEqual(11,game.Observe().Players.Count(p=>p.IsBot && Vector3.Distance(V(p.Position),V(start.Players[p.Slot].Position))>6),"Bots must leave spawn toward shelters: "+string.Join(";",game.Observe().Players.Select(p=>$"{p.Slot}:{V(p.Position)}")));
-    var window=game.Observe();var last=window;var travel=new float[12];var productive=new bool[12];int windowSteps=0;
+    var lastHits=game.ObserveBubbleHits();var window=game.Observe();var last=window;var travel=new float[12];var productive=new bool[12];int windowSteps=0;
     for(int i=0;i<10000;i++) {
-     game.Step(.02f);var state=game.Observe();
+     game.Step(.02f);var state=game.Observe();var hits=game.ObserveBubbleHits();
      if(state.Round!=observedRound){threatened.Clear();departure.Clear();System.Array.Clear(visits,0,12);for(int slot=0;slot<12;slot++)lastShelter[slot]=-1;observedRound=state.Round;window=state;last=state;System.Array.Clear(travel,0,12);System.Array.Clear(productive,0,12);windowSteps=0;}
      foreach(var bot in state.Players.Where(p=>p.IsBot)) {
       travel[bot.Slot]+=Vector3.Distance(V(bot.Position),V(last.Players[bot.Slot].Position));
-      productive[bot.Slot]|=bot.Ammo<last.Players[bot.Slot].Ammo||bot.ReloadRemaining>0||
+      productive[bot.Slot]|=hits[bot.Slot]>lastHits[bot.Slot]||bot.Ammo<last.Players[bot.Slot].Ammo||bot.ReloadRemaining>0||
        (bot.Faction==Faction.Human&&game.ShelterPoints.Any(point=>Vector3.Distance(point,V(bot.Position))<3))||
        (bot.Faction==Faction.Animal&&state.Players.Any(h=>h.Faction==Faction.Human&&Vector3.Distance(V(h.Position),V(bot.Position))<CombatRules.MeleeDistance+.3f));
      }
@@ -32,7 +51,7 @@ namespace AvH.Tests {
       }
       window=state;windowSteps=0;System.Array.Clear(travel,0,12);System.Array.Clear(productive,0,12);
      }
-     last=state;
+     last=state;lastHits=hits;
      fired|=game.ObserveBubbles().Length>0;reloaded|=state.Players.Any(p=>p.ReloadRemaining>0);
      transformed|=state.Players.Count(p=>p.Faction==Faction.Animal)>2;
      foreach(var human in state.Players.Where(p=>p.IsBot&&p.Faction==Faction.Human)) {
