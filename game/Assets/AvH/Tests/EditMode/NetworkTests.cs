@@ -136,5 +136,14 @@ namespace AvH.Tests {
    Assert.That(System.IO.File.Exists(path),Is.True,"Standalone linker must preserve AvH.Core DTOs");
    StringAssert.Contains("fullname=\"AvH.Core\" preserve=\"all\"",System.IO.File.ReadAllText(path));
   }
+  [Test] public void ConnectedClientsShareOneVisualCapturePerHostPump() {
+   var world=new PlaytestSession(2);world.StartSolo("host");int captures=0;
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var a=new PrivateRoomClient())using(var b=new PrivateRoomClient()) {
+    host.CaptureVisuals=()=>{captures++;return new NetworkVisualState();};
+    a.Connect(host.RoomCode,"a");Until(host,a,()=>a.Status==ConnectionStatus.Loading);a.Ready();Until(host,a,()=>a.Status==ConnectionStatus.Playing);
+    b.Connect(host.RoomCode,"b");Until(host,b,()=>b.Status==ConnectionStatus.Loading);b.Ready();Until(host,b,()=>b.Status==ConnectionStatus.Playing);
+    captures=0;host.Pump();Assert.That(captures,Is.EqualTo(1));
+   }
+  }
  }
 }
