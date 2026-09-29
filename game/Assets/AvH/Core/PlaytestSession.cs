@@ -41,7 +41,7 @@ namespace AvH
         private Faction? winner;
         private string animalKind, animalRarity;
         private BirthNotice[] births = Array.Empty<BirthNotice>();
-        public PlaytestSession(int randomSeed) { random = new Random(randomSeed); }
+        public PlaytestSession(int randomSeed, string settingsPath = null) { random = new Random(randomSeed); settings.Load(settingsPath); }
         public void StartSolo(string nickname, string animalKind = "임시 동물", string animalRarity = "일반")
         {
             if (string.IsNullOrWhiteSpace(nickname) || nickname.Trim().Length > 20) throw new ArgumentException("닉네임은 1~20자입니다.");
