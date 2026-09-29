@@ -11,7 +11,7 @@ namespace AvH {
   public bool FriendlyCollision=true, EnemyCollision=true, FriendlyPush=true;
   public PlaytestValues Copy() => (PlaytestValues)MemberwiseClone();
  }
- public sealed class SettingsState {
+ [Serializable] public sealed class SettingsState {
   public PlaytestValues Current, Edit, Pending, Saved;
   public int Version;
   public string Error;
@@ -20,7 +20,7 @@ namespace AvH {
  sealed class PlaytestSettings {
   public PlaytestValues Current=new PlaytestValues(), Edit, Pending, Saved;
   public int Version=1;
-  string path, error; PlaytestValues unsaved;
+  string path, error; bool corrupt; PlaytestValues unsaved;
   public void Load(string file) {
    path=file;if(path==null||!File.Exists(path))return;
    try { using(var reader=File.OpenRead(path)) {
@@ -28,7 +28,7 @@ namespace AvH {
     if(value==null||Validate(value).Count>0)throw new InvalidDataException();
     Current=value.Copy();Saved=value.Copy();
    }}catch(Exception ex) when(ex is IOException||ex is UnauthorizedAccessException||ex is InvalidOperationException) {
-    error="저장된 설정을 불러오지 못했습니다. 원본을 보존하고 기본 설정으로 시작합니다.";
+    corrupt=true;error="저장된 설정을 불러오지 못했습니다. 원본을 보존하고 기본 설정으로 시작합니다.";
    }
   }
   public bool Save(PlaytestValues value) {
@@ -38,6 +38,7 @@ namespace AvH {
     using(var stream=new FileStream(path+".tmp",FileMode.Create,FileAccess.Write,FileShare.None)) {
      new XmlSerializer(typeof(PlaytestValues)).Serialize(stream,value);stream.Flush(true);
     }
+    if(corrupt&&File.Exists(path)){File.Copy(path,path+".corrupt-"+Guid.NewGuid().ToString("N"));corrupt=false;}
     if(File.Exists(path))File.Replace(path+".tmp",path,null);else File.Move(path+".tmp",path);
     Saved=value.Copy();unsaved=null;error=null;return true;
    }catch(Exception ex) when(ex is IOException||ex is UnauthorizedAccessException||ex is InvalidOperationException) {
