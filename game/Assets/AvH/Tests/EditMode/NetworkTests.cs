@@ -41,7 +41,7 @@ namespace AvH.Tests {
   [Test] public void HostRejectsNonFiniteInputAndDeliversOnlyCurrentRoundCommands() {
    var world=new PlaytestSession(2);world.StartSolo("host");int accepted=0;
    using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
-    host.InputReceived=(slot,input)=>accepted++;
+    host.InputReceived=(slot,input)=>{if(input.RoundId!=0)accepted++;};
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     client.SubmitInput(new NetworkInput {Right=float.NaN,RoundId=1});for(int n=0;n<20;n++){host.Pump();client.Pump();Thread.Sleep(2);}
     Assert.That(accepted,Is.EqualTo(0));

@@ -8,7 +8,11 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 namespace AvH {
- public static class RoomProtocol { public const string Version="avh-private-1"; }
+ public static class RoomProtocol {
+  public static readonly string Version=BuildVersion();
+  static string Schema(Type t){if(t.IsArray)return "[]"+Schema(t.GetElementType());if(Nullable.GetUnderlyingType(t)!=null)return "?"+Schema(Nullable.GetUnderlyingType(t));if(t.IsPrimitive||t==typeof(string)||t.IsEnum)return t.FullName;return t.FullName+"{"+string.Join(";",t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name,StringComparer.Ordinal).Select(f=>f.Name+":"+Schema(f.FieldType)))+"}";}
+  static string BuildVersion(){using(var hash=System.Security.Cryptography.SHA256.Create())return "avh-private-1-"+Convert.ToBase64String(hash.ComputeHash(Encoding.UTF8.GetBytes(Schema(typeof(SessionState))+Schema(typeof(NetworkInput)))));}
+ }
  public enum ConnectionStatus { Idle, Connecting, Loading, Waiting, Playing, Failed, Interrupted }
  [Serializable] public struct NetworkInput { public float Right,Forward,Yaw,Pitch; public bool Jump,Attack,Reload; public int RoundId; }
  // Discovery is independent of the authoritative world. Codes contain a reachable IPv4 endpoint and random capability.
@@ -29,14 +33,14 @@ namespace AvH {
    if(t==typeof(string)){w.Write((string)v??"");return;} if(t==typeof(int)){w.Write((int)v);return;}if(t==typeof(float)){w.Write((float)v);return;}if(t==typeof(double)){w.Write((double)v);return;}if(t==typeof(bool)){w.Write((bool)v);return;}
    if(t.IsEnum){w.Write(Convert.ToInt32(v));return;}var nullable=Nullable.GetUnderlyingType(t);if(nullable!=null){w.Write(v!=null);if(v!=null)Write(w,nullable,v);return;}
    if(t.IsArray){var array=(Array)v;w.Write(array==null?0:array.Length);if(array!=null)foreach(var item in array)Write(w,t.GetElementType(),item);return;}
-   foreach(var field in t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name))Write(w,field.FieldType,field.GetValue(v));
+   foreach(var field in t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name,StringComparer.Ordinal))Write(w,field.FieldType,field.GetValue(v));
   }
   public static T Read<T>(BinaryReader r)=>(T)Read(r,typeof(T));
   static object Read(BinaryReader r,Type t) {
    if(t==typeof(string)){var s=r.ReadString();if(s.Length>2048)throw new IOException("문자열 상한");return s;}if(t==typeof(int))return r.ReadInt32();if(t==typeof(float))return r.ReadSingle();if(t==typeof(double))return r.ReadDouble();if(t==typeof(bool))return r.ReadBoolean();
    if(t.IsEnum)return Enum.ToObject(t,r.ReadInt32());var nullable=Nullable.GetUnderlyingType(t);if(nullable!=null)return r.ReadBoolean()?Read(r,nullable):null;
    if(t.IsArray){int n=r.ReadInt32();if(n<0||n>512)throw new IOException("배열 상한");var a=Array.CreateInstance(t.GetElementType(),n);for(int i=0;i<n;i++)a.SetValue(Read(r,t.GetElementType()),i);return a;}
-   var result=Activator.CreateInstance(t);foreach(var f in t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name))f.SetValue(result,Read(r,f.FieldType));return result;
+   var result=Activator.CreateInstance(t);foreach(var f in t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name,StringComparer.Ordinal))f.SetValue(result,Read(r,f.FieldType));return result;
   }
  }
  sealed class RoomPeer : IDisposable {
@@ -53,12 +57,14 @@ namespace AvH {
  }
  public sealed class PrivateRoomHost : IDisposable {
   readonly PlaytestSession world;readonly TcpListener listener;readonly List<RoomPeer> peers=new List<RoomPeer>();readonly string key=Guid.NewGuid().ToString("N");
+  int rememberedRound;
   readonly Dictionary<string,Tuple<int,int>> previous=new Dictionary<string,Tuple<int,int>>(); bool disposed;
   public string RoomCode {get;private set;}
   public Action<int,NetworkInput> InputReceived;
   public PrivateRoomHost(PlaytestSession world,string advertisedAddress,int port=0){this.world=world;listener=new TcpListener(IPAddress.Any,port);listener.Start(16);RoomCode=PrivateRoomCode.Create(advertisedAddress,((IPEndPoint)listener.LocalEndpoint).Port,key);}
   public void Pump(){if(disposed)return;
-   while(listener.Pending()){var p=new RoomPeer(listener.AcceptTcpClient());if(peers.Count>=32){p.Dispose();continue;}peers.Add(p);}
+   int round=world.Observe().Round;if(round!=rememberedRound){previous.Clear();rememberedRound=round;}
+   for(int accepts=0;accepts<32&&listener.Pending();accepts++){var p=new RoomPeer(listener.AcceptTcpClient());if(peers.Count>=32){p.Dispose();continue;}peers.Add(p);}
    foreach(var p in peers.ToArray())try {
     foreach(var reader in p.Receive())using(reader){var command=reader.ReadString();
      if(command=="hello") {var protocol=reader.ReadString();var room=reader.ReadString();var identity=reader.ReadString();var name=reader.ReadString();
@@ -75,19 +81,19 @@ namespace AvH {
      if(previous.TryGetValue(p.Identity,out old)&&old.Item2==state.Round)chosen=state.Players.FirstOrDefault(x=>x.Slot==old.Item1&&x.IsBot);
      chosen=chosen??state.Players.Where(x=>x.IsBot).OrderBy(x=>x.Faction).ThenBy(x=>x.Slot).FirstOrDefault();
      if(chosen==null){p.Send("error","방이 가득 찼습니다");Remove(p);continue;}
-     p.Slot=chosen.Slot;world.SetSlotOwner(p.Slot,p.Nickname,false);previous[p.Identity]=Tuple.Create(p.Slot,state.Round);
+     p.Slot=chosen.Slot;world.SetSlotOwner(p.Slot,p.Nickname,false);InputReceived?.Invoke(p.Slot,new NetworkInput());
     }
     if(p.Identity!=null)p.Send("state",p.Slot,world.Observe());
    }catch(Exception e)when(e is IOException||e is SocketException||e is ObjectDisposedException||e is ArgumentException){Remove(p);}
   }
   static bool Finite(float f)=>!float.IsNaN(f)&&!float.IsInfinity(f);
-  void Remove(RoomPeer p){if(p.Slot>=0){world.SetSlotOwner(p.Slot,"봇 "+p.Slot,true);previous[p.Identity]=Tuple.Create(p.Slot,world.Observe().Round);InputReceived?.Invoke(p.Slot,new NetworkInput());}peers.Remove(p);p.Dispose();}
+  void Remove(RoomPeer p){if(p.Slot>=0){world.SetSlotOwner(p.Slot,"봇 "+p.Slot,true);if(previous.Count<1024||previous.ContainsKey(p.Identity))previous[p.Identity]=Tuple.Create(p.Slot,world.Observe().Round);InputReceived?.Invoke(p.Slot,new NetworkInput());}peers.Remove(p);p.Dispose();}
   public void Dispose(){if(disposed)return;disposed=true;foreach(var p in peers.ToArray()){try{p.Send("closed");}catch{}Remove(p);}listener.Stop();}
  }
  public sealed class PrivateRoomClient : IDisposable {
   readonly string identity,protocolVersion;RoomPeer peer;TcpClient pending;Task connect;string roomKey,nickname;DateTime started,lastPing;bool ready;
   public ConnectionStatus Status {get;private set;} public string Error {get;private set;} public SessionState Snapshot {get;private set;} public int Slot {get;private set;}=-1;
-  public PrivateRoomClient(string reconnectIdentity=null,string protocolVersion=RoomProtocol.Version){identity=reconnectIdentity??Guid.NewGuid().ToString("N");this.protocolVersion=protocolVersion;}
+  public PrivateRoomClient(string reconnectIdentity=null,string protocolVersion=null){identity=reconnectIdentity??Guid.NewGuid().ToString("N");this.protocolVersion=protocolVersion??RoomProtocol.Version;}
   public void Connect(string roomCode,string name){Cancel();string address,key;int port;if(!PrivateRoomCode.TryParse(roomCode,out address,out port,out key)||string.IsNullOrWhiteSpace(name)||name.Length>20){Fail("닉네임 또는 방 코드 형식을 확인하세요");return;}
    nickname=name;roomKey=key;Status=ConnectionStatus.Connecting;started=DateTime.UtcNow;pending=new TcpClient();connect=pending.ConnectAsync(address,port);
   }

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 namespace AvH {
- [Serializable] public struct PlayerInput { public float Right, Forward, Yaw; public bool Jump; }
+ [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload; public int RoundId; }
  /// <summary>Public game execution boundary. Inputs flow through real CharacterControllers.</summary>
- public sealed class UnityPlaytestSession : MonoBehaviour {
+ public sealed partial class UnityPlaytestSession : MonoBehaviour {
   public bool AutomaticStep = true;
   public PlaytestSession Session { get; private set; }
   readonly List<CharacterController> bodies = new List<CharacterController>();
@@ -28,14 +28,14 @@ namespace AvH {
     RefreshVisual(p.Slot,p.Faction);
    }
   }
-  public SessionState Observe() => Session.Observe();
+  public SessionState Observe() => remoteSnapshot ?? Session.Observe();
   public void SubmitInput(int slot, PlayerInput input) {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
    if(float.IsNaN(input.Right) || float.IsInfinity(input.Right) || float.IsNaN(input.Forward) || float.IsInfinity(input.Forward) || float.IsNaN(input.Yaw) || float.IsInfinity(input.Yaw)) return;
    input.Right=Mathf.Clamp(input.Right,-1,1); input.Forward=Mathf.Clamp(input.Forward,-1,1);
    inputs[slot]=input;
   }
-  void Update() { if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
+  void Update() { if(remoteSnapshot!=null){InterpolateRemote();return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
   public void Step(float seconds) {
    if(seconds<=0 || float.IsNaN(seconds) || float.IsInfinity(seconds)) return;
    var before=Session.Observe();
