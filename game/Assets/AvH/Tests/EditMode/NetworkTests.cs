@@ -58,6 +58,7 @@ namespace AvH.Tests {
     for(int n=0;n<100;n++){host.Pump();foreach(var c in clients){c.Pump();if(c.Status==ConnectionStatus.Loading)c.Ready();}Thread.Sleep(2);}
     Assert.That(clients.Count(c=>c.Status==ConnectionStatus.Playing),Is.EqualTo(11));Assert.That(clients.Count(c=>c.Status==ConnectionStatus.Failed),Is.EqualTo(1));
     Assert.That(world.Observe().Players.Count(p=>!p.IsBot),Is.EqualTo(12));Assert.That(clients.Where(c=>c.Slot>=0).Select(c=>c.Slot).Distinct().Count(),Is.EqualTo(11));
+    world.Advance(200);var overflow=clients.Single(c=>c.Status==ConnectionStatus.Failed);overflow.Connect(host.RoomCode,"retry");Until(host,overflow,()=>overflow.Status==ConnectionStatus.Loading);overflow.Ready();Until(host,overflow,()=>overflow.Status==ConnectionStatus.Failed);
    }finally{foreach(var c in clients)c.Dispose();}
    world=new PlaytestSession(2);world.StartSolo("host");string identity=Guid.NewGuid().ToString("N");
    using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var a=new PrivateRoomClient(identity))using(var b=new PrivateRoomClient(identity)) {
