@@ -65,7 +65,7 @@ namespace AvH {
       if(protocol!=RoomProtocol.Version||room!=key||identity.Length!=32||string.IsNullOrWhiteSpace(name)||name.Length>20||peers.Any(x=>x!=p&&x.Identity==identity)){p.Send("error","코드 또는 참가자 확인 실패");Remove(p);break;}
       if(p.Identity==null){p.Identity=identity;p.Nickname=name;}p.Send("loading");
      }else if(command=="ready"&&p.Identity!=null){p.Ready=true;}
-     else if(command=="input"&&p.Slot>=0){var input=RoomWire.Read<NetworkInput>(reader);if(input.RoundId==world.Observe().Round)InputReceived?.Invoke(p.Slot,input);}
+     else if(command=="input"&&p.Slot>=0){var input=RoomWire.Read<NetworkInput>(reader);if(input.RoundId==world.Observe().Round&&Finite(input.Right)&&Finite(input.Forward)&&Finite(input.Yaw)&&Finite(input.Pitch))InputReceived?.Invoke(p.Slot,input);}
      else if(command=="ping"){} else throw new IOException("잘못된 명령");
     }
     if(!peers.Contains(p))continue;
@@ -80,6 +80,7 @@ namespace AvH {
     if(p.Identity!=null)p.Send("state",p.Slot,world.Observe());
    }catch(Exception e)when(e is IOException||e is SocketException||e is ObjectDisposedException||e is ArgumentException){Remove(p);}
   }
+  static bool Finite(float f)=>!float.IsNaN(f)&&!float.IsInfinity(f);
   void Remove(RoomPeer p){if(p.Slot>=0){world.SetSlotOwner(p.Slot,"봇 "+p.Slot,true);previous[p.Identity]=Tuple.Create(p.Slot,world.Observe().Round);InputReceived?.Invoke(p.Slot,new NetworkInput());}peers.Remove(p);p.Dispose();}
   public void Dispose(){if(disposed)return;disposed=true;foreach(var p in peers.ToArray()){try{p.Send("closed");}catch{}Remove(p);}listener.Stop();}
  }
