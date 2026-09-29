@@ -2,6 +2,22 @@ using System.Linq;
 using NUnit.Framework;
 namespace AvH.Tests {
 public class SessionTests {
+ [Test] public void InvalidPublicCommandsPreserveSessionState() {
+  var session = new PlaytestSession(123);
+  Assert.Throws<System.InvalidOperationException>(() => session.Advance(1));
+  foreach(var nickname in new[]{"", "   ", new string('a',21)})
+   Assert.Throws<System.ArgumentException>(() => session.StartSolo(nickname));
+  session.StartSolo("테스터");
+  var before=session.Observe();
+  foreach(var time in new[]{-1d, double.NaN, double.PositiveInfinity})
+   Assert.Throws<System.ArgumentOutOfRangeException>(() => session.Advance(time));
+  foreach(var slot in new[]{-1,12})
+   Assert.Throws<System.ArgumentOutOfRangeException>(() => session.RecordWorldPosition(slot,new WorldPosition(1,2,3)));
+  var after=session.Observe();
+  Assert.AreEqual(before.Round,after.Round);
+  Assert.AreEqual(before.SecondsRemaining,after.SecondsRemaining);
+  CollectionAssert.AreEqual(before.Players.Select(p=>p.Position),after.Players.Select(p=>p.Position));
+ }
  [Test] public void BirthNoticeUsesTheSelectedAnimalIdentity() {
   var session = new PlaytestSession(456);
   session.StartSolo("테스터", "여우", "에픽");
