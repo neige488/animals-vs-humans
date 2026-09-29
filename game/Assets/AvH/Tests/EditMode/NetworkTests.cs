@@ -145,5 +145,13 @@ namespace AvH.Tests {
     captures=0;host.Pump();Assert.That(captures,Is.EqualTo(1));
    }
   }
+  [Test] public void SessionClaimsAreAtomicAndOnlyMatchingIdentityCanRelease() {
+   var world=new PlaytestSession(3);world.StartSolo("host");string a=Guid.NewGuid().ToString("N"),b=Guid.NewGuid().ToString("N");int slot,duplicate;
+   Assert.That(world.TryClaimSlot(a,"a",out slot),Is.True);Assert.That(world.TryClaimSlot(a,"duplicate",out duplicate),Is.False);
+   Assert.That(world.ReleaseSlotToBot(slot,b),Is.False);Assert.That(world.Observe().Players[slot].IsBot,Is.False);
+   world.RecordWorldPosition(slot,new WorldPosition(8,1,9));Assert.That(world.ReleaseSlotToBot(slot,a),Is.True);int restored;
+   Assert.That(world.TryClaimSlot(a,"renamed",out restored),Is.True);Assert.That(restored,Is.EqualTo(slot));Assert.That(world.Observe().Players[restored].Position.X,Is.EqualTo(8));
+   Assert.That(typeof(PlaytestSession).GetMethod("SetSlotOwner"),Is.Null,"No public raw ownership setter");
+  }
  }
 }
