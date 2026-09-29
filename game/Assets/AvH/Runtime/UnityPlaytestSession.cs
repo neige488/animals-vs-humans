@@ -12,9 +12,9 @@ namespace AvH {
   readonly float[] vertical = new float[12];
   readonly Vector3[] returns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
   public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
-  public void StartSolo(string nickname, int? randomSeed = null) {
+  public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null) {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");
-   Session = new PlaytestSession(randomSeed ?? Environment.TickCount);
+   Session = new PlaytestSession(randomSeed ?? Environment.TickCount, settingsPath ?? System.IO.Path.Combine(Application.persistentDataPath,"playtest-settings.xml"));
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity);
    PrototypeVillage.Build(transform);
@@ -33,6 +33,9 @@ namespace AvH {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
    if(float.IsNaN(input.Right) || float.IsInfinity(input.Right) || float.IsNaN(input.Forward) || float.IsInfinity(input.Forward) || float.IsNaN(input.Yaw) || float.IsInfinity(input.Yaw)) return;
    input.Right=Mathf.Clamp(input.Right,-1,1); input.Forward=Mathf.Clamp(input.Forward,-1,1);
+   if(float.IsNaN(input.Pitch)||float.IsInfinity(input.Pitch))return;
+   input.Pitch=Mathf.Clamp(input.Pitch,-80,80);
+   if(input.RoundId==0)input.RoundId=Session.Observe().Round;
    inputs[slot]=input;
   }
   void Update() { if(remoteSnapshot!=null){InterpolateRemote();return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
@@ -41,17 +44,19 @@ namespace AvH {
    var before=Session.Observe();
    Session.Advance(seconds);
    var state=Session.Observe();
+   PrepareCombatWorld(state,before.Round);
+   var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; }
     if(p.Faction!=before.Players[i].Faction) RefreshVisual(i,p.Faction);
     if(state.Phase!=RoundPhase.Results) {
-     var input=inputs[i];
+     var input=inputs[i].RoundId==state.Round?inputs[i]:default;
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
-     if(body.isGrounded && input.Jump) vertical[i]=Mathf.Sqrt(2*22*1.5f);
+     if(body.isGrounded && input.Jump) vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump));
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
-     body.Move((direction*(p.Faction==Faction.Human?5:5.6f)+Vector3.up*vertical[i])*seconds);
+     body.Move((direction*(p.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed)+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.LookRotation(direction);
      foreach(var animator in body.GetComponentsInChildren<Animator>()) {
       animator.applyRootMotion=false;
@@ -69,8 +74,10 @@ namespace AvH {
     }
     var pos=body.transform.position;
     Session.RecordWorldPosition(i,new WorldPosition(pos.x,pos.y,pos.z));
+    pushVelocity[i]=Vector3.MoveTowards(pushVelocity[i],Vector3.zero,20*seconds);
     inputs[i].Jump=false;
    }
+   StepCombatWorld(seconds,state);
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
