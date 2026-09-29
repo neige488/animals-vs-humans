@@ -190,5 +190,14 @@ namespace AvH.Tests {
     other.Connect(host.RoomCode,"other");Until(host,other,()=>other.Status==ConnectionStatus.Loading);other.Ready();Until(host,other,()=>other.Status==ConnectionStatus.Playing);
    }
   }
+  [Test] public void ProgressingLargeSnapshotCanFinishAfterTwoSeconds() {
+   var world=new PlaytestSession(2);world.StartSolo("host");var now=DateTime.UtcNow;
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient(clock:()=>now)) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    var items=Enumerable.Range(0,12000).Select(n=>new NetworkBubble{Id=n}).ToArray();host.CaptureVisuals=()=>new NetworkVisualState{Bubbles=items};
+    var started=now;for(int n=0;n<30&&client.Visuals.Bubbles.Length!=12000;n++){now=now.AddSeconds(.3);host.Pump();client.Pump();Thread.Sleep(2);}
+    Assert.That((now-started).TotalSeconds,Is.GreaterThan(2));Assert.That(client.Visuals.Bubbles.Length,Is.EqualTo(12000));Assert.That(client.VisualsDelayed,Is.False);
+   }
+  }
  }
 }
