@@ -12,9 +12,9 @@ namespace AvH {
   readonly float[] vertical = new float[12];
   readonly Vector3[] returns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
   public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
-  public void StartSolo(string nickname, int? randomSeed = null) {
+  public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null) {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");
-   Session = new PlaytestSession(randomSeed ?? Environment.TickCount, System.IO.Path.Combine(Application.persistentDataPath,"playtest-settings.xml"));
+   Session = new PlaytestSession(randomSeed ?? Environment.TickCount, settingsPath ?? System.IO.Path.Combine(Application.persistentDataPath,"playtest-settings.xml"));
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity);
    PrototypeVillage.Build(transform);

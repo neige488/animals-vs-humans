@@ -15,7 +15,7 @@ namespace AvH {
   public PlaytestValues Current, Edit, Pending, Saved;
   public int Version;
   public string Error;
-  public Dictionary<string,string> Errors;
+  [NonSerialized] public Dictionary<string,string> Errors;
  }
  sealed class PlaytestSettings {
   public PlaytestValues Current=new PlaytestValues(), Edit, Pending, Saved;
