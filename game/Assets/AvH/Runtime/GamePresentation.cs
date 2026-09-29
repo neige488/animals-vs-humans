@@ -57,7 +57,7 @@ namespace AvH {
     GUI.Label(new Rect(w/2-210,h/2-125,420,45),"Animals vs Humans",title);
     GUI.Label(new Rect(w/2-190,h/2-65,380,30),"닉네임 (1~20자)",label);
     nickname=GUI.TextField(new Rect(w/2-160,h/2-25,320,35),nickname,20);
-    if(string.IsNullOrWhiteSpace(nickname))GUI.Label(new Rect(w/2-210,h/2+15,420,30),"닉네임을 입력하세요",label);
+    if(string.IsNullOrWhiteSpace(nickname))GUI.Label(new Rect(w/2-210,h/2+15,420,30),"닉네임을 입력해주세요.",label);
     GUI.enabled=true;network.DrawStart(nickname,label);return;
    }
    var state=session.Observe();var animals=state.Players.Count(p=>p.Faction==Faction.Animal);

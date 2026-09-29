@@ -46,6 +46,7 @@ namespace AvH
         {
             if (string.IsNullOrWhiteSpace(nickname) || nickname.Trim().Length > 20) throw new ArgumentException("닉네임은 1~20자입니다.");
             this.animalKind = animalKind; this.animalRarity = animalRarity;
+            ResetParticipants();
             round = 0; hostTime = 0;
             players = Enumerable.Range(0, 12).Select(i => new PlayerState {
                 Slot = i, Nickname = i == 0 ? nickname : "봇 " + i, IsBot = i != 0,
@@ -89,10 +90,6 @@ namespace AvH
         public void RecordWorldPosition(int slot, WorldPosition position) {
             if (slot < 0 || slot >= players.Length) throw new ArgumentOutOfRangeException(nameof(slot));
             players[slot].Position = position;
-        }
-        public void SetSlotOwner(int slot, string nickname, bool isBot) {
-            if(slot <= 0 || slot >= players.Length) throw new ArgumentOutOfRangeException(nameof(slot));
-            players[slot].Nickname = nickname; players[slot].IsBot = isBot;
         }
         private static WorldPosition Spawn(int slot) => new WorldPosition((slot % 4 - 1.5f) * 3, 1, (slot / 4 - 1) * 3);
         public SessionState Observe() => new SessionState {

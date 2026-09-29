@@ -29,7 +29,7 @@ namespace AvH.Tests {
     Assert.That(client.Slot,Is.EqualTo(original));Assert.That(client.Snapshot.Players[original].Position.X,Is.EqualTo(7));
     impostor.Connect(host.RoomCode,"renamed");Until(host,impostor,()=>impostor.Status==ConnectionStatus.Loading);impostor.Ready();Until(host,impostor,()=>impostor.Status==ConnectionStatus.Playing);
     Assert.That(impostor.Slot,Is.Not.EqualTo(original));
-    host.Dispose();client.Pump();Assert.That(client.Status,Is.EqualTo(ConnectionStatus.Interrupted));Assert.That(client.Snapshot,Is.Null);
+    host.Dispose();Until(host,client,()=>client.Status==ConnectionStatus.Interrupted);Assert.That(client.Status,Is.EqualTo(ConnectionStatus.Interrupted));Assert.That(client.Snapshot,Is.Null);
    }
   }
   [Test] public void WireRejectsMismatchedBuildBeforeReadiness() {
@@ -123,6 +123,80 @@ namespace AvH.Tests {
     host.CaptureVisuals=()=>new NetworkVisualState{Bubbles=Enumerable.Range(0,1500).Select(i=>new NetworkBubble{Id=i,Round=1,Position=new WorldPosition(i,1,0)}).ToArray()};
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Visuals!=null&&client.Visuals.Bubbles.Length==1500);
     Assert.That(client.Status,Is.EqualTo(ConnectionStatus.Playing));Assert.That(client.Visuals.Bubbles[1499].Id,Is.EqualTo(1499));
+   }
+  }
+  [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-3"));
+   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("O1rOwjdYSzQP+ATOll1kh9LPBWWqGOnn46MpfAzGTV4="),"Schema changes require explicit protocol version and guard update");
+   foreach(var t in new[]{typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice)}) {
+    Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
+    Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);
+   }
+   var path=System.IO.File.Exists("Assets/AvH/link.xml")?"Assets/AvH/link.xml":"game/Assets/AvH/link.xml";
+   Assert.That(System.IO.File.Exists(path),Is.True,"Standalone linker must preserve AvH.Core DTOs");
+   StringAssert.Contains("fullname=\"AvH.Core\" preserve=\"all\"",System.IO.File.ReadAllText(path));
+  }
+  [Test] public void ConnectedClientsShareOneVisualCapturePerHostPump() {
+   var world=new PlaytestSession(2);world.StartSolo("host");int captures=0;
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var a=new PrivateRoomClient())using(var b=new PrivateRoomClient()) {
+    host.CaptureVisuals=()=>{captures++;return new NetworkVisualState();};
+    a.Connect(host.RoomCode,"a");Until(host,a,()=>a.Status==ConnectionStatus.Loading);a.Ready();Until(host,a,()=>a.Status==ConnectionStatus.Playing);
+    b.Connect(host.RoomCode,"b");Until(host,b,()=>b.Status==ConnectionStatus.Loading);b.Ready();Until(host,b,()=>b.Status==ConnectionStatus.Playing);
+    captures=0;host.Pump();Assert.That(captures,Is.EqualTo(1));
+   }
+  }
+  [Test] public void SessionClaimsAreAtomicAndOnlyMatchingIdentityCanRelease() {
+   var world=new PlaytestSession(3);world.StartSolo("host");string a=Guid.NewGuid().ToString("N"),b=Guid.NewGuid().ToString("N");int slot,duplicate;
+   Assert.That(world.TryClaimSlot(a,"a",out slot),Is.True);Assert.That(world.TryClaimSlot(a,"duplicate",out duplicate),Is.False);
+   Assert.That(world.ReleaseSlotToBot(slot,b),Is.False);Assert.That(world.Observe().Players[slot].IsBot,Is.False);
+   world.RecordWorldPosition(slot,new WorldPosition(8,1,9));Assert.That(world.ReleaseSlotToBot(slot,a),Is.True);int restored;
+   Assert.That(world.TryClaimSlot(a,"renamed",out restored),Is.True);Assert.That(restored,Is.EqualTo(slot));Assert.That(world.Observe().Players[restored].Position.X,Is.EqualTo(8));
+   Assert.That(typeof(PlaytestSession).GetMethod("SetSlotOwner"),Is.Null,"No public raw ownership setter");
+  }
+  [Test] public void MixedBotPoolPrefersHumanAndKeepsLatestWeaponAndGrace() {
+   int seed=-1;for(int n=0;n<100;n++){var trial=new PlaytestSession(n);trial.StartSolo("host");trial.Advance(20);if(trial.Observe().Players[1].Faction==Faction.Animal){seed=n;break;}}
+   Assert.That(seed,Is.GreaterThanOrEqualTo(0),"Fixture needs lowest bot slot to be an animal");
+   var world=new PlaytestSession(seed);world.StartSolo("host");world.Advance(20);
+   var animalSlots=world.Observe().Players.Where(p=>p.IsBot&&p.Faction==Faction.Animal).Select(p=>p.Slot).ToArray();
+   int expected=world.Observe().Players.First(p=>p.IsBot&&p.Faction==Faction.Human).Slot;
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);
+    world.RecordWorldPosition(expected,new WorldPosition(9,2,7));world.TryFire(expected,1);world.TryReload(expected,1);var latest=world.Observe().Players[expected];
+    client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);var assigned=client.Snapshot.Players[client.Slot];
+    Assert.That(client.Slot,Is.EqualTo(expected));Assert.That(assigned.Faction,Is.EqualTo(Faction.Human));
+    Assert.That(assigned.Position.X,Is.EqualTo(latest.Position.X));Assert.That(assigned.Position.Y,Is.EqualTo(latest.Position.Y));Assert.That(assigned.Position.Z,Is.EqualTo(latest.Position.Z));
+    Assert.That(assigned.Ammo,Is.EqualTo(latest.Ammo));Assert.That(assigned.ReloadRemaining,Is.EqualTo(latest.ReloadRemaining));Assert.That(assigned.AttackGraceRemaining,Is.EqualTo(latest.AttackGraceRemaining));
+    foreach(int slot in animalSlots)Assert.That(client.Snapshot.Players[slot].IsBot,Is.True);
+   }
+  }
+  [Test] public void CompletingChunkedVisualsPublishesNewSnapshotWithoutMutatingOldOne() {
+   var world=new PlaytestSession(2);world.StartSolo("host");
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    host.CaptureVisuals=()=>new NetworkVisualState{Bubbles=Enumerable.Range(0,1500).Select(n=>new NetworkBubble{Id=n}).ToArray()};
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);
+    NetworkVisualState first=null;for(int n=0;n<50&&first==null;n++){host.Pump();client.Pump();first=client.Visuals;Thread.Sleep(2);}
+    Assert.That(first,Is.Not.Null);Assert.That(first.Bubbles,Is.Empty);
+    Until(host,client,()=>client.Visuals.Bubbles.Length==1500);
+    Assert.That(ReferenceEquals(first,client.Visuals),Is.False);Assert.That(first.Bubbles,Is.Empty);
+   }
+  }
+  [Test] public void SlowReaderDoesNotLoseSlotOrBlockAnotherJoin() {
+   var world=new PlaytestSession(2);world.StartSolo("host");
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var slow=new PrivateRoomClient())using(var other=new PrivateRoomClient()) {
+    slow.Connect(host.RoomCode,"slow");Until(host,slow,()=>slow.Status==ConnectionStatus.Loading);slow.Ready();Until(host,slow,()=>slow.Status==ConnectionStatus.Playing);int slot=slow.Slot;
+    var bubbles=Enumerable.Range(0,1500).Select(n=>new NetworkBubble{Id=n}).ToArray();host.CaptureVisuals=()=>new NetworkVisualState{Bubbles=bubbles};
+    for(int n=0;n<400;n++)host.Pump();
+    Assert.That(world.Observe().Players[slot].IsBot,Is.False,"Slow receiver is not a disconnected participant");
+    other.Connect(host.RoomCode,"other");Until(host,other,()=>other.Status==ConnectionStatus.Loading);other.Ready();Until(host,other,()=>other.Status==ConnectionStatus.Playing);
+   }
+  }
+  [Test] public void ProgressingLargeSnapshotCanFinishAfterTwoSeconds() {
+   var world=new PlaytestSession(2);world.StartSolo("host");var now=DateTime.UtcNow;
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient(clock:()=>now)) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    var items=Enumerable.Range(0,12000).Select(n=>new NetworkBubble{Id=n}).ToArray();host.CaptureVisuals=()=>new NetworkVisualState{Bubbles=items};
+    var started=now;for(int n=0;n<30&&client.Visuals.Bubbles.Length!=12000;n++){now=now.AddSeconds(.3);host.Pump();client.Pump();Thread.Sleep(2);}
+    Assert.That((now-started).TotalSeconds,Is.GreaterThan(2));Assert.That(client.Visuals.Bubbles.Length,Is.EqualTo(12000));Assert.That(client.VisualsDelayed,Is.False);
    }
   }
  }

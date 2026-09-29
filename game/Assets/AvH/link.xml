@@ -1,0 +1,4 @@
+<linker>
+  <!-- Wire DTO public fields and reflection constructors remain available in stripped builds. -->
+  <assembly fullname="AvH.Core" preserve="all" />
+</linker>
