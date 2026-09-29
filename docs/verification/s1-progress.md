@@ -5,12 +5,12 @@
 - 최초 실행 기록(현재 해소): Editor 생성 exit198: 활성 Unity 라이선스 없음. Hub 템플릿 캐시 접근은 sandbox 밖 허용 재시도로 통과했지만 라이선스 오류는 계속됨.
 - 최초 실행 기록(현재 해소): PlayMode 시도는 sandbox UPM socket EPERM으로 실행되지 않았고 프로세스를 중단했다. 라이선스 복구와 정확한 Editor 실행 권한이 선행되어야 한다.
 
-## 실행한 자동 검증
+## 초기 자동 검증 기록 (이후 실제 Unity 검증으로 갱신)
 
 - `bash scripts/test-core.sh`: NUnit 3개 PASS, Unity 내장 Mono로 **실제 PlaytestSession 코드** 실행. 솔로 12명/11봇·분리 스폰, 준비/초기변신/생존/다음라운드, 종류·등급별 초기 탄생.
 - TDD: 5f6f6ed→b5f036d (첫 세션), 66dba4c→07cf903 (라운드), 56b8ad8→후속 (탄생 식별). RED는 없는 public API 컴파일 실패를 확인했다.
 - `bash scripts/compile-runtime.sh`: 설치된 Unity 6000.6.3f1 엔진 어셈블리 대상 C# 컴파일 PASS. Unity 엔진을 실행하지 않는다.
-- 실제 Unity PlayMode 이동·점프 테스트를 추가했으나 **실행 차단**. 그 구현에 대해 GREEN이라고 주장하지 않는다.
+- 당시 실제 Unity PlayMode는 실행 차단이었다. 이후 라이선스·패키지 복구와 하단 재검증으로 해소됐다.
 
 ## 구현된 초안
 
@@ -18,7 +18,7 @@
 
 ## 남은 조건
 
-모든 S1 AC는 일부 구현 또는 미검증 상태다. 에셋 원본과 catalog 없음, Unity 렌더·물리·한글 UI·쉘터 접근·양 OS 빌드 미검증. 실제 에셋과 blockout 충돌 중복을 정리해야 한다. 봇 행동·전투·설정·멀티는 후속 slice. 어느 PA도 live VERIFIED가 아니다. GitHub Issue 완료 또는 pr-ready 전환하지 않는다.
+현재 구매 에셋/catalog 적용, 실제 Unity 테스트와 양 OS 빌드 생성은 완료됐다. Mac 실제 시작 화면 한글 및 사용자 직접 Start로 라운드 진행이 확인됐다. Windows 실제 실행, 수정 빌드의 렌더/모든 쉘터·양 진영 경로와 전체 PA 검증은 남아 있다. 봇 행동·전투·설정·멀티는 후속 slice. 어느 PA도 live VERIFIED로 선언하지 않는다.
 
 ## In-flight decisions
 
@@ -63,3 +63,12 @@
 - S1-DISC-007: 사용 내역에서 미배치 stall을 빼고 tree를 추가했다.
 - S1-DISC-015: Gitignore 보호를 최적화 실행에서 제거되는 assert 대신 명시적 예외로 바꿨다. 격리된 비ignored Git 저장소에서 일반 Python과 `python -O` 모두 쓰기 전 거부함을 확인했다.
 - 나머지 frozen Minor 항목은 이 수정에서 범위를 넓히지 않았다. 실제 PA 판단은 별도다.
+
+
+## S1-LIVE-001 — 구매 캐릭터 대기 자세 수정
+
+- 사용자 실제 Mac 플레이에서 인간이 웅크린 채 대기함을 발견했다. 선택 prefab의 vendor demo AnimatorOverrideController가 Idle_Generic을 Idle_Crouching으로 바꾸고 있었다.
+- RED `1285e7b`: 실제 PlayMode에서 crouch 대기 clip 검출 실패 확인(5개 중 1개 실패).
+- 파생 인간 prefab에 vendor 기본 Controller를 연결하고 원본은 보존했다. 인간·여우를 실제 Idle pose의 baked mesh로 크기·발 접지를 정렬해 importer의 보수적 renderer bounds로 인한 떠 보임을 방지했다.
+- PlayMode **5/5 PASS**: 정상 서 있는 대기 clip과 인간·여우의 실제 mesh 최하단이 CharacterController 발 기준에서 0.15m 이내임을 검증했다. `/private/tmp/avh-s1-pose-green.xml`.
+- 동작 clip·모델 데이터 자체를 외부 리뷰 payload나 Git에 넣지 않는다. 수정 빌드의 실제 화면 확인은 root가 수행한다.

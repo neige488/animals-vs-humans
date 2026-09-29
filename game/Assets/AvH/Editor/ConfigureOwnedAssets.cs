@@ -60,7 +60,12 @@ namespace AvH.Editor {
   static GameObject Load(string path) {var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(Root+path);if(prefab==null)throw new InvalidOperationException("Missing owned prefab: "+path);return prefab;}
   static GameObject Character(string path,string name,float height) {
    var instance=UnityEngine.Object.Instantiate(Load(path));Clean(instance);
-   var bounds=Bounds(instance);instance.transform.localScale*=height/bounds.size.y;bounds=Bounds(instance);instance.transform.position-=new Vector3(bounds.center.x,bounds.min.y,bounds.center.z);
+   foreach(var animator in instance.GetComponentsInChildren<Animator>()) {
+    if(name=="Human" && animator.runtimeAnimatorController is AnimatorOverrideController demo)
+     animator.runtimeAnimatorController=demo.runtimeAnimatorController;
+    animator.applyRootMotion=false;animator.Rebind();animator.Update(0);animator.Play("Idle",0,0);animator.Update(0);
+   }
+   var bounds=PoseBounds(instance);instance.transform.localScale*=height/bounds.size.y;bounds=PoseBounds(instance);instance.transform.position-=new Vector3(bounds.center.x,bounds.min.y,bounds.center.z);
    var holder=new GameObject(name);instance.transform.SetParent(holder.transform,true);
    foreach(var animator in holder.GetComponentsInChildren<Animator>()){animator.applyRootMotion=false;animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;}
    foreach(var collider in holder.GetComponentsInChildren<Collider>())UnityEngine.Object.DestroyImmediate(collider);
@@ -70,6 +75,16 @@ namespace AvH.Editor {
   static void Clean(GameObject go){
    foreach(var renderer in go.GetComponentsInChildren<Renderer>(true)) renderer.sharedMaterials=renderer.sharedMaterials.Select(m=>m!=null && Converted.TryGetValue(m,out var converted)?converted:m).ToArray();
    foreach(var t in go.GetComponentsInChildren<Transform>(true)){GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);foreach(var behaviour in t.GetComponents<MonoBehaviour>())UnityEngine.Object.DestroyImmediate(behaviour);}}
+  static Bounds PoseBounds(GameObject go) {
+   var meshes=go.GetComponentsInChildren<SkinnedMeshRenderer>();if(meshes.Length==0)return Bounds(go);
+   Bounds bounds=default;bool first=true;
+   foreach(var renderer in meshes) {
+    var mesh=new Mesh();renderer.BakeMesh(mesh);
+    foreach(var vertex in mesh.vertices){var world=renderer.transform.TransformPoint(vertex);if(first){bounds=new Bounds(world,Vector3.zero);first=false;}else bounds.Encapsulate(world);}
+    UnityEngine.Object.DestroyImmediate(mesh);
+   }
+   return bounds;
+  }
   static Bounds Bounds(GameObject go){var renderers=go.GetComponentsInChildren<Renderer>();if(renderers.Length==0)throw new InvalidOperationException("Owned prefab has no renderer");var b=renderers[0].bounds;foreach(var r in renderers)b.Encapsulate(r.bounds);return b;}
   static void Fit(GameObject go,Vector3 center,Vector3 size){go.transform.rotation=Quaternion.identity;var b=Bounds(go);go.transform.localScale=Vector3.Scale(go.transform.localScale,new Vector3(size.x/Mathf.Max(.01f,b.size.x),size.y/Mathf.Max(.01f,b.size.y),size.z/Mathf.Max(.01f,b.size.z)));b=Bounds(go);go.transform.position+=center-b.center;}
   static void Decoration(GameObject map,string path,Vector3 floor,Vector3 size){var go=UnityEngine.Object.Instantiate(Load(path),map.transform);Clean(go);Fit(go,floor+Vector3.up*size.y/2,size);foreach(var c in go.GetComponentsInChildren<Collider>())UnityEngine.Object.DestroyImmediate(c);
