@@ -47,6 +47,22 @@ namespace AvH.Tests {
    } finally {Object.Destroy(root);}
    yield return null;
   }
+  [UnityTest] public IEnumerator UnreachableShelterDoesNotLeaveAnyBotFrozen() {
+   var root=new GameObject("unreachable shelter");
+   try {
+    var game=root.AddComponent<UnityPlaytestSession>();game.AutomaticStep=false;
+    game.StartSolo("observer",123,System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml"));yield return null;
+    Barrier(root,new Vector3(13.5f,2,12),new Vector3(8,4,1));
+    Barrier(root,new Vector3(10,2,15),new Vector3(1,4,7));Physics.SyncTransforms();
+    var initial=game.Observe();
+    for(int i=0;i<150;i++){game.Step(.02f);if(i%50==0)yield return null;}
+    foreach(var bot in game.Observe().Players.Where(p=>p.IsBot))
+     Assert.Greater(Vector3.Distance(V(bot.Position),V(initial.Players[bot.Slot].Position)),1,"Blocked target froze slot "+bot.Slot);
+   } finally {Object.Destroy(root);}yield return null;
+  }
+  static void Barrier(GameObject root,Vector3 position,Vector3 size) {
+   var wall=GameObject.CreatePrimitive(PrimitiveType.Cube);wall.transform.SetParent(root.transform);wall.transform.position=position;wall.transform.localScale=size;
+  }
   static Vector3 V(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
  }
 }
