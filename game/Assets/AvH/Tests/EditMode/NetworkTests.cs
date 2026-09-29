@@ -180,5 +180,15 @@ namespace AvH.Tests {
     Assert.That(ReferenceEquals(first,client.Visuals),Is.False);Assert.That(first.Bubbles,Is.Empty);
    }
   }
+  [Test] public void SlowReaderDoesNotLoseSlotOrBlockAnotherJoin() {
+   var world=new PlaytestSession(2);world.StartSolo("host");
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var slow=new PrivateRoomClient())using(var other=new PrivateRoomClient()) {
+    slow.Connect(host.RoomCode,"slow");Until(host,slow,()=>slow.Status==ConnectionStatus.Loading);slow.Ready();Until(host,slow,()=>slow.Status==ConnectionStatus.Playing);int slot=slow.Slot;
+    var bubbles=Enumerable.Range(0,1500).Select(n=>new NetworkBubble{Id=n}).ToArray();host.CaptureVisuals=()=>new NetworkVisualState{Bubbles=bubbles};
+    for(int n=0;n<400;n++)host.Pump();
+    Assert.That(world.Observe().Players[slot].IsBot,Is.False,"Slow receiver is not a disconnected participant");
+    other.Connect(host.RoomCode,"other");Until(host,other,()=>other.Status==ConnectionStatus.Loading);other.Ready();Until(host,other,()=>other.Status==ConnectionStatus.Playing);
+   }
+  }
  }
 }
