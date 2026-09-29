@@ -14,6 +14,8 @@ namespace AvH
         public int Slot;
         public string Nickname;
         public bool IsBot;
+        public int Ammo;
+        public double ReloadRemaining, AttackGraceRemaining, FireCooldownRemaining;
         public Faction Faction;
         public WorldPosition Position;
         public PlayerState Copy() => (PlayerState)MemberwiseClone();
@@ -54,11 +56,13 @@ namespace AvH
             settings.BeginRound(); round++; phase = RoundPhase.Preparation; remaining = settings.Current.PreparationSeconds; winner = null;
             births = Array.Empty<BirthNotice>();
             foreach (var player in players) { player.Faction = Faction.Human; player.Position = Spawn(player.Slot); }
+            ResetCombat();
         }
         public void Advance(double elapsed) {
             if (double.IsNaN(elapsed) || double.IsInfinity(elapsed) || elapsed < 0) throw new ArgumentOutOfRangeException(nameof(elapsed));
             if (players.Length == 0) throw new InvalidOperationException("세션을 먼저 시작하세요.");
             while (elapsed + 1e-9 >= remaining) {
+                AdvanceCombat(remaining);
                 elapsed = Math.Max(0, elapsed - remaining);
                 if (phase == RoundPhase.Preparation) {
                     var slots = Enumerable.Range(0, players.Length).ToArray();
@@ -73,6 +77,7 @@ namespace AvH
                     phase = RoundPhase.Results; remaining = 5; winner = Faction.Human;
                 } else BeginRound();
             }
+            AdvanceCombat(elapsed);
             remaining -= elapsed;
         }
         // Called only by the authoritative physics adapter, never by remote participant messages.
