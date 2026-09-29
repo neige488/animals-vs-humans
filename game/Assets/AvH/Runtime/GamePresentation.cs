@@ -57,7 +57,7 @@ namespace AvH {
     GUI.Label(new Rect(w/2-210,h/2-125,420,45),"Animals vs Humans",title);
     GUI.Label(new Rect(w/2-190,h/2-65,380,30),"닉네임 (1~20자)",label);
     nickname=GUI.TextField(new Rect(w/2-160,h/2-25,320,35),nickname,20);
-    GUI.enabled=!string.IsNullOrWhiteSpace(nickname);
+    if(string.IsNullOrWhiteSpace(nickname))GUI.Label(new Rect(w/2-210,h/2+15,420,30),"닉네임을 입력하세요",label);
     GUI.enabled=true;network.DrawStart(nickname,label);return;
    }
    var state=session.Observe();var animals=state.Players.Count(p=>p.Faction==Faction.Animal);
@@ -88,7 +88,7 @@ namespace AvH {
    if(menu) {
     if(!network.IsClient)settingsPanel.Draw(session.Session,()=>{menu=false;SetCursor();});
     else if(GUI.Button(new Rect(w/2-125,h/2-30,250,40),"계속하기")){menu=false;SetCursor();}
-    if(GUI.Button(new Rect(w-200,h-50,180,35),"방 나가기")){network.Leave();menu=false;}
+    if(GUI.Button(new Rect(w-200,h-50,180,35),"방 나가기")){network.Leave();menu=false;return;}
    }
    if(!(network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;settingsPanel.DrawError(session.Session);if((network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error)))SetCursor();}
 

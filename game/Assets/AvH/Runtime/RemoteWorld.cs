@@ -6,6 +6,7 @@ namespace AvH {
   SessionState remoteSnapshot;
   NetworkVisualState remoteVisuals;
   readonly Dictionary<int,GameObject> remoteBubbles=new Dictionary<int,GameObject>();
+  readonly Dictionary<int,GameObject> remoteBursts=new Dictionary<int,GameObject>();
   public bool IsRemote=>remoteSnapshot!=null;
   public void StartRemote(SessionState state) {
    StartSolo("연결 중");AutomaticStep=false;ApplyRemoteSnapshot(state,true);
@@ -27,15 +28,23 @@ namespace AvH {
   }
   public void ApplyRemoteVisuals(NetworkVisualState visual) {
    remoteVisuals=visual;if(visual==null)return;
+   if(bubbleMaterial==null){bubbleMaterial=PrototypeVillage.Material(new Color(.25f,.8f,1,.55f));bubbleMaterial.SetFloat("_Mode",3);bubbleMaterial.SetInt("_SrcBlend",5);bubbleMaterial.SetInt("_DstBlend",10);bubbleMaterial.SetInt("_ZWrite",0);bubbleMaterial.EnableKeyword("_ALPHAPREMULTIPLY_ON");bubbleMaterial.renderQueue=3000;}
    foreach(int id in remoteBubbles.Keys.ToArray())if(!visual.Bubbles.Any(b=>b.Id==id)){Destroy(remoteBubbles[id]);remoteBubbles.Remove(id);}
    foreach(var bubble in visual.Bubbles){GameObject obj;if(!remoteBubbles.TryGetValue(bubble.Id,out obj)){
     obj=GameObject.CreatePrimitive(PrimitiveType.Sphere);obj.name="Remote Bubble";obj.transform.SetParent(transform);obj.GetComponent<Collider>().enabled=false;Destroy(obj.GetComponent<Collider>());
-    if(bubbleMaterial==null)bubbleMaterial=PrototypeVillage.Material(new Color(.25f,.8f,1,.55f));obj.GetComponent<Renderer>().sharedMaterial=bubbleMaterial;remoteBubbles[bubble.Id]=obj;
+    obj.GetComponent<Renderer>().sharedMaterial=bubbleMaterial;remoteBubbles[bubble.Id]=obj;
    }obj.transform.position=ToVector(bubble.Position);obj.transform.localScale=Vector3.one*visual.CurrentRules.BubbleRadius*2;}
+   ApplyRemoteBursts(visual);
+  }
+  void ApplyRemoteBursts(NetworkVisualState visual) {
+   foreach(int id in remoteBursts.Keys.ToArray())if(!visual.Bursts.Any(b=>b.Id==id)){Destroy(remoteBursts[id]);remoteBursts.Remove(id);}
+   foreach(var burst in visual.Bursts){GameObject obj;if(!remoteBursts.TryGetValue(burst.Id,out obj)){obj=GameObject.CreatePrimitive(PrimitiveType.Sphere);obj.name="Remote Bubble Burst";obj.transform.SetParent(transform);obj.GetComponent<Collider>().enabled=false;Destroy(obj.GetComponent<Collider>());obj.GetComponent<Renderer>().sharedMaterial=bubbleMaterial;remoteBursts[burst.Id]=obj;}
+    obj.transform.position=ToVector(burst.Position);obj.transform.localScale=Vector3.one*visual.CurrentRules.BubbleRadius*2*(1+(.15f-burst.Remaining)*5);
+   }
   }
   public SettingsState ObserveActiveSettings()=>remoteVisuals==null?Session.ObserveSettings():new SettingsState{Current=remoteVisuals.CurrentRules.Copy(),Pending=remoteVisuals.HasPending?remoteVisuals.PendingRules.Copy():null,Version=remoteVisuals.SettingsVersion};
   public void ResetSession() {
-   AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;Session=null;remoteBubbles.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
+   AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
    System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);
   }

@@ -17,7 +17,7 @@ namespace AvH {
   public NetworkVisualState RemoteVisuals=>client.Visuals;
   public void Initialize(UnityPlaytestSession session){world=session;address=FindAddress();}
   static string FindAddress(){try{return NetworkInterface.GetAllNetworkInterfaces().Where(n=>n.OperationalStatus==OperationalStatus.Up&&n.NetworkInterfaceType!=NetworkInterfaceType.Loopback).SelectMany(n=>n.GetIPProperties().UnicastAddresses).Select(a=>a.Address).FirstOrDefault(a=>a.AddressFamily==AddressFamily.InterNetwork&&!IPAddress.IsLoopback(a))?.ToString()??"127.0.0.1";}catch{return "127.0.0.1";}}
-  public void StartHost(string nickname,string advertisedAddress=null){try{world.StartSolo(nickname);host=new PrivateRoomHost(world.Session,advertisedAddress??address);host.InputReceived=(slot,input)=>{if(input.RoundId!=0){input.Jump|=buffered[slot].Jump;input.Attack|=buffered[slot].Attack;input.Reload|=buffered[slot].Reload;}buffered[slot]=input;hasInput[slot]=true;};host.CaptureVisuals=()=>new NetworkVisualState{Yaws=Enumerable.Range(0,12).Select(i=>world.PlayerTransform(i).eulerAngles.y).ToArray(),Bubbles=world.ObserveBubbles().Select(b=>new NetworkBubble{Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray()};message="";}catch(Exception){host?.Dispose();host=null;world.ResetSession();message="방을 열지 못했습니다. 호스트 주소와 네트워크 상태를 확인하세요.";}}
+  public void StartHost(string nickname,string advertisedAddress=null){try{world.StartSolo(nickname);host=new PrivateRoomHost(world.Session,advertisedAddress??address);host.InputReceived=(slot,input)=>{if(input.RoundId!=0){input.Jump|=buffered[slot].Jump;input.Attack|=buffered[slot].Attack;input.Reload|=buffered[slot].Reload;}buffered[slot]=input;hasInput[slot]=true;};host.CaptureVisuals=()=>new NetworkVisualState{Bursts=world.ObserveBursts(),Yaws=Enumerable.Range(0,12).Select(i=>world.PlayerTransform(i).eulerAngles.y).ToArray(),Bubbles=world.ObserveBubbles().Select(b=>new NetworkBubble{Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray()};message="";}catch(Exception){host?.Dispose();host=null;world.ResetSession();message="방을 열지 못했습니다. 호스트 주소와 네트워크 상태를 확인하세요.";}}
   public void JoinRoom(string roomCode,string nickname){code=roomCode;Join(nickname);}
   public void Join(string nickname){lastNickname=nickname;clientStarted=true;message="";client.Connect(code,nickname);}
   void Update(){
@@ -44,7 +44,8 @@ namespace AvH {
    GUI.Label(new Rect(w/2-270,h/2+180,90,25),"방 코드");code=GUI.TextField(new Rect(w/2-175,h/2+178,435,28),code,256);
    string endpoint,key;int port;GUI.enabled=!string.IsNullOrWhiteSpace(nickname)&&PrivateRoomCode.TryParse(code,out endpoint,out port,out key);
    if(GUI.Button(new Rect(w/2-260,h/2+214,520,36),"코드로 참가"))Join(nickname.Trim());GUI.enabled=true;
-   GUI.Label(new Rect(w/2-280,h/2+319,560,55),message,label);
+   string validation=!string.IsNullOrWhiteSpace(message)?message:!validAddress?"호스트 IPv4 주소를 확인하세요":!string.IsNullOrWhiteSpace(code)&&!PrivateRoomCode.TryParse(code,out endpoint,out port,out key)?"방 코드 형식을 확인하세요":"";
+   GUI.Label(new Rect(w/2-270,h/2+260,540,50),validation,new GUIStyle(label){fontSize=16,wordWrap=true});
   }
   public void DrawRoom(GUIStyle label){if(IsClient&&client.Visuals!=null)GUI.Label(new Rect(15,150,400,28),"호스트 설정 버전 "+client.Visuals.SettingsVersion+(client.Visuals.HasPending?" · 다음 라운드 적용 예정":""),label);if(host!=null){GUI.Label(new Rect(15,150,400,28),"비공개 방 · LAN/기존 VPN",label);if(GUI.Button(new Rect(20,184,170,30),"방 코드 복사"))GUIUtility.systemCopyBuffer=host.RoomCode;} }
   void OnDestroy(){host?.Dispose();client.Dispose();}

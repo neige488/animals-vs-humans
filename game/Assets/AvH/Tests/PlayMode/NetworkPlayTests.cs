@@ -16,6 +16,10 @@ namespace AvH.Tests {
     var after=hostWorld.Observe().Players[slot].Position;
     Assert.That(after.Z,Is.LessThan(before.Z-.5f));Assert.That(clientWorld.IsRemote,Is.True);
     Assert.That(clientWorld.Observe().Players[slot].Position.Z,Is.EqualTo(after.Z).Within(.5f));
+    bool sawHostBubble=false,sawRemoteBubble=false;
+    for(int n=0;n<30;n++){client.SubmitInput(new PlayerInput{Attack=true,Yaw=0});hostWorld.Step(.02f);yield return new WaitForSecondsRealtime(.02f);sawHostBubble|=hostWorld.ObserveBubbles().Length>0;sawRemoteBubble|=clientWorld.ObserveBubbles().Length>0;}
+    Assert.That(sawHostBubble,Is.True);Assert.That(sawRemoteBubble,Is.True);Assert.That(clientWorld.Observe().Players[slot].Ammo,Is.LessThan(12));
+    Assert.That(clientWorld.ObserveActiveSettings().Version,Is.EqualTo(hostWorld.ObserveActiveSettings().Version));
     client.Leave();for(int n=0;n<20;n++)yield return new WaitForSecondsRealtime(.02f);Assert.That(hostWorld.Observe().Players[slot].IsBot,Is.True);
    }finally{Object.Destroy(h);Object.Destroy(c);}
   }
