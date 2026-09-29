@@ -1,0 +1,20 @@
+# Unity generated state and local builds
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Bb]uild/
+[Bb]uilds/
+*.csproj
+*.sln
+*.slnx
+*.unitypackage
+.DS_Store
+
+# Purchased source assets stay local. Import tooling must route them here.
+Assets/ThirdParty/
+Assets/ThirdParty.meta
+
+# Local verification output may contain room codes or participant identities.
+LocalEvidence/
