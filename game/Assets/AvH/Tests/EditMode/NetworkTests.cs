@@ -38,5 +38,17 @@ namespace AvH.Tests {
     Assert.That(world.Observe().Players.Count(p=>!p.IsBot),Is.EqualTo(1));
    }
   }
+  [Test] public void HostRejectsNonFiniteInputAndDeliversOnlyCurrentRoundCommands() {
+   var world=new PlaytestSession(2);world.StartSolo("host");int accepted=0;
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    host.InputReceived=(slot,input)=>accepted++;
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    client.SubmitInput(new NetworkInput {Right=float.NaN,RoundId=1});for(int n=0;n<20;n++){host.Pump();client.Pump();Thread.Sleep(2);}
+    Assert.That(accepted,Is.EqualTo(0));
+    client.SubmitInput(new NetworkInput {Forward=1,RoundId=1});Until(host,client,()=>accepted==1);
+    client.SubmitInput(new NetworkInput {Attack=true,RoundId=99});for(int n=0;n<20;n++){host.Pump();client.Pump();Thread.Sleep(2);}
+    Assert.That(accepted,Is.EqualTo(1));
+   }
+  }
  }
 }
