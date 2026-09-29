@@ -8,6 +8,7 @@ namespace AvH {
   string nickname="플레이어";
   float yaw, pitch=20;
   bool menu;
+  readonly SettingsPanel settingsPanel=new SettingsPanel();
   GUIStyle label, title;
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
   static void Launch() {
@@ -23,10 +24,10 @@ namespace AvH {
   }
   void Update() {
    if(session.Session==null)return;
-   if(Input.GetKeyDown(KeyCode.Escape)) {menu=!menu;SetCursor();}
-   if(!menu) {yaw+=Input.GetAxisRaw("Mouse X")*2;pitch=Mathf.Clamp(pitch-Input.GetAxisRaw("Mouse Y")*2,-20,65);}
+   if(Input.GetKeyDown(KeyCode.Escape)) {menu=!menu;if(!menu)session.Session.CancelSettingsEdit(0);SetCursor();}
+   if(!menu && string.IsNullOrEmpty(session.Session.ObserveSettings().Error)) {yaw+=Input.GetAxisRaw("Mouse X")*2;pitch=Mathf.Clamp(pitch-Input.GetAxisRaw("Mouse Y")*2,-20,65);}
    var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
-   if(!menu) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
+   if(!menu && string.IsNullOrEmpty(session.Session.ObserveSettings().Error)) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
    session.SubmitInput(0,input);
   }
   void LateUpdate() {
@@ -70,7 +71,9 @@ namespace AvH {
    GUI.Label(new Rect(w/2-275,h-85,550,35),$"{(state.Players[0].Faction==Faction.Human?"인간":"동물")} · {WeaponLabel(state.Players[0])} · 라운드 {state.Round}",label);
    GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전",new GUIStyle(label){fontSize=15});
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
-   if(menu) {GUI.Box(new Rect(w/2-150,h/2-80,300,150),"메뉴 · 라운드는 계속됩니다");if(GUI.Button(new Rect(w/2-125,h/2-30,250,40),"계속하기")){menu=false;SetCursor();}}
+   if(menu) settingsPanel.Draw(session.Session,()=>{menu=false;SetCursor();});
+   if(!string.IsNullOrEmpty(session.Session.ObserveSettings().Error)){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;settingsPanel.DrawError(session.Session);if(string.IsNullOrEmpty(session.Session.ObserveSettings().Error))SetCursor();}
+
   }
   static string WeaponLabel(PlayerState player) {
    if(player.Faction==Faction.Animal)return player.AttackGraceRemaining>0?$"공격 대기 {player.AttackGraceRemaining:F1}초":"근접 공격";
