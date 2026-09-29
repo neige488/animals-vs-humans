@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 namespace AvH {
+ public static class RoomProtocol { public const string Version="avh-private-1"; }
  public enum ConnectionStatus { Idle, Connecting, Loading, Waiting, Playing, Failed, Interrupted }
  [Serializable] public struct NetworkInput { public float Right,Forward,Yaw,Pitch; public bool Jump,Attack,Reload; public int RoundId; }
  // Discovery is independent of the authoritative world. Codes contain a reachable IPv4 endpoint and random capability.
@@ -32,7 +33,7 @@ namespace AvH {
   }
   public static T Read<T>(BinaryReader r)=>(T)Read(r,typeof(T));
   static object Read(BinaryReader r,Type t) {
-   if(t==typeof(string)){var s=r.ReadString();if(s.Length>2048)throw new IOException("文字列上限");return s;}if(t==typeof(int))return r.ReadInt32();if(t==typeof(float))return r.ReadSingle();if(t==typeof(double))return r.ReadDouble();if(t==typeof(bool))return r.ReadBoolean();
+   if(t==typeof(string)){var s=r.ReadString();if(s.Length>2048)throw new IOException("문자열 상한");return s;}if(t==typeof(int))return r.ReadInt32();if(t==typeof(float))return r.ReadSingle();if(t==typeof(double))return r.ReadDouble();if(t==typeof(bool))return r.ReadBoolean();
    if(t.IsEnum)return Enum.ToObject(t,r.ReadInt32());var nullable=Nullable.GetUnderlyingType(t);if(nullable!=null)return r.ReadBoolean()?Read(r,nullable):null;
    if(t.IsArray){int n=r.ReadInt32();if(n<0||n>512)throw new IOException("배열 상한");var a=Array.CreateInstance(t.GetElementType(),n);for(int i=0;i<n;i++)a.SetValue(Read(r,t.GetElementType()),i);return a;}
    var result=Activator.CreateInstance(t);foreach(var f in t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name))f.SetValue(result,Read(r,f.FieldType));return result;
@@ -60,14 +61,15 @@ namespace AvH {
    while(listener.Pending()){var p=new RoomPeer(listener.AcceptTcpClient());if(peers.Count>=32){p.Dispose();continue;}peers.Add(p);}
    foreach(var p in peers.ToArray())try {
     foreach(var reader in p.Receive())using(reader){var command=reader.ReadString();
-     if(command=="hello") {var room=reader.ReadString();var identity=reader.ReadString();var name=reader.ReadString();
-      if(room!=key||identity.Length!=32||string.IsNullOrWhiteSpace(name)||name.Length>20||peers.Any(x=>x!=p&&x.Identity==identity)){p.Send("error","코드 또는 참가자 확인 실패");Remove(p);break;}
+     if(command=="hello") {var protocol=reader.ReadString();var room=reader.ReadString();var identity=reader.ReadString();var name=reader.ReadString();
+      if(protocol!=RoomProtocol.Version||room!=key||identity.Length!=32||string.IsNullOrWhiteSpace(name)||name.Length>20||peers.Any(x=>x!=p&&x.Identity==identity)){p.Send("error","코드 또는 참가자 확인 실패");Remove(p);break;}
       if(p.Identity==null){p.Identity=identity;p.Nickname=name;}p.Send("loading");
      }else if(command=="ready"&&p.Identity!=null){p.Ready=true;}
      else if(command=="input"&&p.Slot>=0){var input=RoomWire.Read<NetworkInput>(reader);if(input.RoundId==world.Observe().Round)InputReceived?.Invoke(p.Slot,input);}
      else if(command=="ping"){} else throw new IOException("잘못된 명령");
     }
     if(!peers.Contains(p))continue;
+    if(p.Socket.Client.Poll(0,SelectMode.SelectRead)&&p.Socket.Available==0){Remove(p);continue;}
     if((DateTime.UtcNow-p.Seen).TotalSeconds>10){Remove(p);continue;}
     if(p.Ready&&p.Slot<0&&world.Observe().Phase!=RoundPhase.Results){var state=world.Observe();Tuple<int,int> old;PlayerState chosen=null;
      if(previous.TryGetValue(p.Identity,out old)&&old.Item2==state.Round)chosen=state.Players.FirstOrDefault(x=>x.Slot==old.Item1&&x.IsBot);
@@ -82,14 +84,14 @@ namespace AvH {
   public void Dispose(){if(disposed)return;disposed=true;foreach(var p in peers.ToArray()){try{p.Send("closed");}catch{}Remove(p);}listener.Stop();}
  }
  public sealed class PrivateRoomClient : IDisposable {
-  readonly string identity;RoomPeer peer;TcpClient pending;Task connect;string roomKey,nickname;DateTime started,lastPing;bool ready;
+  readonly string identity,protocolVersion;RoomPeer peer;TcpClient pending;Task connect;string roomKey,nickname;DateTime started,lastPing;bool ready;
   public ConnectionStatus Status {get;private set;} public string Error {get;private set;} public SessionState Snapshot {get;private set;} public int Slot {get;private set;}=-1;
-  public PrivateRoomClient(string reconnectIdentity=null){identity=reconnectIdentity??Guid.NewGuid().ToString("N");}
+  public PrivateRoomClient(string reconnectIdentity=null,string protocolVersion=RoomProtocol.Version){identity=reconnectIdentity??Guid.NewGuid().ToString("N");this.protocolVersion=protocolVersion;}
   public void Connect(string roomCode,string name){Cancel();string address,key;int port;if(!PrivateRoomCode.TryParse(roomCode,out address,out port,out key)||string.IsNullOrWhiteSpace(name)||name.Length>20){Fail("닉네임 또는 방 코드 형식을 확인하세요");return;}
    nickname=name;roomKey=key;Status=ConnectionStatus.Connecting;started=DateTime.UtcNow;pending=new TcpClient();connect=pending.ConnectAsync(address,port);
   }
   public void Pump(){try {
-   if(Status==ConnectionStatus.Connecting){if(!connect.IsCompleted){if((DateTime.UtcNow-started).TotalSeconds>8)Fail("연결 시간이 초과되었습니다");return;}if(connect.IsFaulted){Fail("방에 연결하지 못했습니다");return;}peer=new RoomPeer(pending);pending=null;peer.Send("hello",roomKey,identity,nickname);Status=ConnectionStatus.Loading;}
+   if(Status==ConnectionStatus.Connecting){if(!connect.IsCompleted){if((DateTime.UtcNow-started).TotalSeconds>8)Fail("연결 시간이 초과되었습니다");return;}if(connect.IsFaulted){Fail("방에 연결하지 못했습니다");return;}peer=new RoomPeer(pending);pending=null;peer.Send("hello",protocolVersion,roomKey,identity,nickname);Status=ConnectionStatus.Loading;}
    if(peer==null)return;
    foreach(var r in peer.Receive())using(r){string kind=r.ReadString();if(kind=="state"){Slot=r.ReadInt32();Snapshot=RoomWire.Read<SessionState>(r);if(ready)Status=Slot>=0?ConnectionStatus.Playing:ConnectionStatus.Waiting;}else if(kind=="error"){Fail(r.ReadString());return;}else if(kind=="closed"){Interrupt();return;}else if(kind!="loading")throw new IOException("프로토콜 불일치");}
    if((DateTime.UtcNow-peer.Seen).TotalSeconds>10){Interrupt();return;}
