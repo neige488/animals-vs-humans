@@ -2,6 +2,14 @@ using System.Linq;
 using NUnit.Framework;
 namespace AvH.Tests {
 public class SessionTests {
+ [Test] public void BirthNoticeUsesTheSelectedAnimalIdentity() {
+  var session = new PlaytestSession(456);
+  session.StartSolo("테스터", "여우", "에픽");
+  session.Advance(20);
+  Assert.AreEqual("여우", session.Observe().Births.Single().Kind);
+  Assert.AreEqual("에픽", session.Observe().Births.Single().Rarity);
+ }
+
  [Test] public void PreparationSelectsTwoAtCurrentPositionAndSurvivalRepeatsRound() {
   var session = new PlaytestSession(123);
   session.StartSolo("테스터");
