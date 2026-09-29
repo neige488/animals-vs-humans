@@ -95,4 +95,37 @@ public class SettingsTests {
    Assert.AreEqual(90,new PlaytestSession(2,path).ObserveSettings().Current.RoundSeconds);
   } finally {System.IO.Directory.Delete(dir,true);}
  }
+ [Test] public void FloatMinimumInputsAreAcceptedWithoutRelaxingAdjacentBounds() {
+  var ranges=new[]{
+   ("PreparationSeconds",1f,120f),("RoundSeconds",1f,3600f),("ResultSeconds",1f,30f),
+   ("InitialAttackGrace",0f,30f),("TransformAttackGrace",0f,30f),
+   ("HumanSpeed",.01f,20f),("AnimalSpeed",.01f,20f),("HumanJump",.01f,5f),("AnimalJump",.01f,5f),
+   ("ReloadSeconds",.01f,30f),("BubbleRadius",.01f,2f),("BubbleSpeed",.01f,100f),
+   ("BubbleRange",.01f,100f),("BubbleLifetime",.01f,10f),("FireInterval",.01f,30f),("PushForce",.01f,30f)
+  };
+  foreach(var range in ranges) {
+   var session=new PlaytestSession(1);session.StartSolo("host");
+   var field=typeof(PlaytestValues).GetField(range.Item1);
+   // These are the exact float values produced by the settings UI parser.
+   foreach(float accepted in new[]{range.Item2,range.Item3}) {
+    session.BeginSettingsEdit(0);var values=session.ObserveSettings().Edit;field.SetValue(values,accepted);
+    session.UpdateSettingsEdit(0,values);
+    Assert.IsTrue(session.ApplySettings(0),range.Item1+" boundary "+accepted.ToString("R"));
+    Assert.AreEqual(accepted,field.GetValue(session.ObserveSettings().Pending));
+   }
+   float below=range.Item2==0?-float.Epsilon:AdjacentPositiveFloat(range.Item2,-1);
+   float above=AdjacentPositiveFloat(range.Item3,1);
+   foreach(float rejected in new[]{below,above,float.NaN,float.PositiveInfinity,float.NegativeInfinity}) {
+    session.BeginSettingsEdit(0);var values=session.ObserveSettings().Edit;field.SetValue(values,rejected);
+    session.UpdateSettingsEdit(0,values);
+    Assert.IsFalse(session.ApplySettings(0),range.Item1+" outside boundary "+rejected.ToString("R"));
+    Assert.IsTrue(session.ObserveSettings().Errors.ContainsKey(range.Item1));
+    Assert.AreEqual(range.Item3,field.GetValue(session.ObserveSettings().Pending),"Rejected edits retain the valid reservation");
+   }
+  }
+ }
+ static float AdjacentPositiveFloat(float value,int step) {
+  int bits=System.BitConverter.ToInt32(System.BitConverter.GetBytes(value),0);
+  return System.BitConverter.ToSingle(System.BitConverter.GetBytes(bits+step),0);
+ }
 }}
