@@ -1,7 +1,38 @@
 ---
 feature: core-playtest
 milestone: 1
-slices: []
+slices:
+  - id: 1
+    issue: 1
+    title: "혼자 시작하는 보유 에셋 기반 3인칭 라운드"
+    type: feature-e2e
+    product_dod: [PA-1, PA-2, PA-6, PA-11]
+  - id: 2
+    issue: 2
+    title: "버블 밀치기와 근접 변신 공방"
+    type: feature-e2e
+    product_dod: [PA-3, PA-6, PA-11]
+    blocked_by: [1]
+  - id: 3
+    issue: 3
+    title: "쉘터 방어와 도주·추격을 하는 봇"
+    type: feature-e2e
+    product_dod: [PA-5, PA-16]
+    blocked_by: [2]
+  - id: 4
+    issue: 4
+    title: "호스트 설정 예약·보존과 오류 복구"
+    type: feature-e2e
+    product_dod: [PA-4, PA-13, PA-14, PA-15]
+    blocked_by: [1]
+  - id: 5
+    issue: 5
+    title: "방 코드 난입과 이탈·재접속·정원 처리"
+    type: feature-e2e
+    product_dod: [PA-7, PA-8, PA-9, PA-10, PA-12]
+    blocked_by: [1]
+base_branch: autopilot/core-playtest
+merge_strategy: batch
 ---
 
 # Animals vs Humans — 첫 멀티플레이 재미 검증 PRD
