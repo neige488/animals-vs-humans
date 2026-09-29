@@ -6,6 +6,8 @@ namespace AvH {
  /// <summary>Public game execution boundary. Inputs flow through real CharacterControllers.</summary>
  public sealed partial class UnityPlaytestSession : MonoBehaviour {
   public bool AutomaticStep = true;
+  public bool BotAutomationEnabled=true;
+  readonly BotDirector botDirector=new BotDirector();
   public PlaytestSession Session { get; private set; }
   readonly List<CharacterController> bodies = new List<CharacterController>();
   readonly PlayerInput[] inputs = new PlayerInput[12];
@@ -45,6 +47,7 @@ namespace AvH {
    Session.Advance(seconds);
    var state=Session.Observe();
    PrepareCombatWorld(state,before.Round);
+   if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];

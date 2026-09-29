@@ -73,6 +73,8 @@ namespace AvH.Editor {
    var result=PrefabUtility.SaveAsPrefabAsset(holder,Generated+name+".prefab");UnityEngine.Object.DestroyImmediate(holder);return result;
   }
   static void Clean(GameObject go){
+   foreach(var component in go.GetComponentsInChildren<Component>(true))
+    if(component!=null && component.GetType().FullName=="UnityEngine.AI.NavMeshAgent")UnityEngine.Object.DestroyImmediate(component);
    foreach(var renderer in go.GetComponentsInChildren<Renderer>(true)) renderer.sharedMaterials=renderer.sharedMaterials.Select(m=>m!=null && Converted.TryGetValue(m,out var converted)?converted:m).ToArray();
    foreach(var t in go.GetComponentsInChildren<Transform>(true)){GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);foreach(var behaviour in t.GetComponents<MonoBehaviour>())UnityEngine.Object.DestroyImmediate(behaviour);}}
   static Bounds PoseBounds(GameObject go) {

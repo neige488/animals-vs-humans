@@ -13,7 +13,7 @@ namespace AvH.Tests {
     yield return null;
     var start=game.Observe();bool fired=false,reloaded=false,transformed=false;
     for(int i=0;i<600;i++){game.Step(.02f);if(i%50==0)yield return null;}
-    Assert.Greater(game.Observe().Players.Count(p=>p.IsBot && Vector3.Distance(V(p.Position),V(start.Players[p.Slot].Position))>6),8,"Bots must leave spawn toward shelters");
+    Assert.Greater(game.Observe().Players.Count(p=>p.IsBot && Vector3.Distance(V(p.Position),V(start.Players[p.Slot].Position))>6),8,"Bots must leave spawn toward shelters: "+string.Join(";",game.Observe().Players.Select(p=>$"{p.Slot}:{V(p.Position)}")));
     for(int i=0;i<5000;i++) {
      game.Step(.02f);var state=game.Observe();
      fired|=game.ObserveBubbles().Length>0;reloaded|=state.Players.Any(p=>p.ReloadRemaining>0);

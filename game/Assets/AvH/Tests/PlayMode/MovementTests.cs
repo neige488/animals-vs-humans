@@ -6,7 +6,7 @@ using UnityEngine.TestTools;
 namespace AvH.Tests {
  public class MovementTests {
   [UnityTest] public IEnumerator InvalidInputAndStepLeaveWorldUnchanged() {
-   var root=new GameObject("invalid inputs");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;
+   var root=new GameObject("invalid inputs");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;
    session.StartSolo("tester");
    for(int i=0;i<50;i++)session.Step(.02f);
    var before=session.Observe();var position=session.PlayerTransform(0).position;
@@ -21,7 +21,7 @@ namespace AvH.Tests {
   }
   [UnityTest] public IEnumerator OwnedCharactersStandIdleWithFeetAtControllerGround() {
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null)Assert.Ignore("Owned assets are required for visual integration");
-   var root=new GameObject("owned pose");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;
+   var root=new GameObject("owned pose");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;
    session.StartSolo("pose");session.Step(20.1f);yield return new WaitForSeconds(2);
    var state=session.Observe();
    foreach(var faction in new[]{Faction.Human,Faction.Animal}) {
@@ -43,7 +43,7 @@ namespace AvH.Tests {
 
   [UnityTest] public IEnumerator AllRecoveryPointsHaveClearStandingCapsules() {
    var root=new GameObject("recovery clearance");var session=root.AddComponent<UnityPlaytestSession>();
-   session.AutomaticStep=false;session.StartSolo("clearance");yield return null;Physics.SyncTransforms();
+   session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("clearance");yield return null;Physics.SyncTransforms();
    foreach(var point in session.RecoveryPoints)
     Assert.IsFalse(Physics.CheckCapsule(point+Vector3.up*.38f,point+Vector3.up*1.42f,.38f,~0,QueryTriggerInteraction.Ignore),"Recovery capsule overlaps terrain: "+point);
    Object.Destroy(root);yield return null;
@@ -54,7 +54,7 @@ namespace AvH.Tests {
    for(;seed<1000;seed++){var probe=new PlaytestSession(seed);probe.StartSolo("probe");probe.Advance(20);if(probe.Observe().Players[0].Faction==Faction.Animal)break;}
    Assert.Less(seed,1000);
    var root=new GameObject("animal recovery");var session=root.AddComponent<UnityPlaytestSession>();
-   session.AutomaticStep=false;session.StartSolo("animal tester",seed);yield return null;
+   session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("animal tester",seed);yield return null;
    for(int i=0;i<1001;i++)session.Step(.02f);
    Assert.AreEqual(RoundPhase.Chase,session.Observe().Phase);
    var animal=session.Observe().Players.First(p=>p.Slot==0);
@@ -72,7 +72,7 @@ namespace AvH.Tests {
 
   [UnityTest] public IEnumerator BasicInputsReachRooftopAndRecoverFromMapEdge() {
    var root=new GameObject("route session");var session=root.AddComponent<UnityPlaytestSession>();
-   session.AutomaticStep=false;session.StartSolo("route tester");yield return null;
+   session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("route tester");yield return null;
    MoveTo(session,-12,-3,130);MoveTo(session,-12,10,250);
    Assert.Greater(session.Observe().Players[0].Position.Y,3.7f,"Rooftop must be reachable by basic movement");
    // Walk off the rooftop toward the map edge; ordinary falling must continue before recovery.
@@ -99,7 +99,7 @@ namespace AvH.Tests {
   [UnityTest] public IEnumerator PublicMovementInputMovesAndJumpsInActualWorld() {
    var root = new GameObject("test session");
    var session = root.AddComponent<UnityPlaytestSession>();
-   session.AutomaticStep = false;
+   session.AutomaticStep = false; session.BotAutomationEnabled=false;
    session.StartSolo("tester");
    yield return null;
    var before = session.Observe().Players[0].Position;

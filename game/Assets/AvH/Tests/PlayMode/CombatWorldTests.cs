@@ -11,7 +11,7 @@ namespace AvH.Tests {
   [TearDown] public void CleanupProfiles(){foreach(var p in profiles){if(File.Exists(p))File.Delete(p);if(File.Exists(p+".bak"))File.Delete(p+".bak");}profiles.Clear();}
   [UnityTest] public IEnumerator BubblesBurstOnTerrainAndExpireByRangeOrLifetime() {
    for(int mode=0;mode<3;mode++) {
-    var root=new GameObject("bubble limits");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;session.StartSolo("tester",123,Profile());yield return null;
+    var root=new GameObject("bubble limits");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("tester",123,Profile());yield return null;
     if(mode>0){session.Session.BeginSettingsEdit(0);var rules=session.Session.ObserveSettings().Edit;if(mode==1)rules.BubbleRange=1;else rules.BubbleLifetime=.05f;session.Session.UpdateSettingsEdit(0,rules);session.Session.ApplySettings(0);session.Step(205);}
     session.SubmitInput(0,new PlayerInput{Attack=true,Yaw=mode==0?180:270});session.Step(.02f);Assert.AreEqual(1,session.ObserveBubbles().Length);session.SubmitInput(0,new PlayerInput());
     for(int i=0;i<(mode==0?25:5);i++)session.Step(.02f);
@@ -21,7 +21,7 @@ namespace AvH.Tests {
   }
 
   [UnityTest] public IEnumerator FriendlyBubblePassesThroughWhileBodyCollisionRemainsEnabled() {
-   var root=new GameObject("friendly pass");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;
+   var root=new GameObject("friendly pass");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;
    session.StartSolo("tester",123,Profile());yield return null;
    session.Session.BeginSettingsEdit(0);var rules=session.Session.ObserveSettings().Edit;rules.FriendlyPush=false;
    session.Session.UpdateSettingsEdit(0,rules);session.Session.ApplySettings(0);session.Step(205);
@@ -37,7 +37,7 @@ namespace AvH.Tests {
   [UnityTest] public IEnumerator ContactDoesNotTransformButAnimalAttackDoesAfterGrace() {
    int seed=0;
    for(;seed<1000;seed++){var probe=new PlaytestSession(seed);probe.StartSolo("seed");probe.Advance(20);var s=probe.Observe();if(s.Players[0].Faction==Faction.Animal&&s.Players[4].Faction==Faction.Human)break;}
-   var root=new GameObject("melee");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;
+   var root=new GameObject("melee");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;
    session.StartSolo("tester",seed,Profile());yield return null;
    for(int i=0;i<1001;i++)session.Step(.02f);
    for(int i=0;i<40;i++){session.SubmitInput(0,new PlayerInput{Forward=1,Attack=true});session.Step(.02f);}
@@ -51,7 +51,7 @@ namespace AvH.Tests {
   }
 
   [UnityTest] public IEnumerator BubbleConsumesAmmoTravelsHitsAndPushesWithoutChangingFaction() {
-   var root=new GameObject("combat");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;session.StartSolo("tester",123,Profile());
+   var root=new GameObject("combat");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("tester",123,Profile());
    yield return null;
    var before=session.Observe().Players[4];
    session.SubmitInput(0,new PlayerInput{Attack=true,Yaw=0});session.Step(.02f);

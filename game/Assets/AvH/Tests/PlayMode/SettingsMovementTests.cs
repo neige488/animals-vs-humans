@@ -9,7 +9,7 @@ namespace AvH.Tests {
    var directory=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid().ToString("N"));
    var root=new GameObject("settings session");
    try {
-    var adapter=root.AddComponent<UnityPlaytestSession>();adapter.AutomaticStep=false;
+    var adapter=root.AddComponent<UnityPlaytestSession>();adapter.AutomaticStep=false; adapter.BotAutomationEnabled=false;
     adapter.StartSolo("host",123,Path.Combine(directory,"settings.xml"));yield return null;
     var session=adapter.Session;session.BeginSettingsEdit(0);
     var values=session.ObserveSettings().Edit;values.HumanSpeed=2;values.AnimalSpeed=2;
