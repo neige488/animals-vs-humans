@@ -85,5 +85,13 @@ namespace AvH.Tests {
     Assert.That(world.Observe().Players.Count(p=>!p.IsBot),Is.EqualTo(2));
    }
   }
+  [Test] public void ClientReceivesHostCurrentAndReservedSettingsWithoutEditAuthority() {
+   var world=new PlaytestSession(2);world.StartSolo("host");world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.HumanSpeed=8;world.UpdateSettingsEdit(0,rules);world.ApplySettings(0);
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    Assert.That(client.Visuals.CurrentRules.HumanSpeed,Is.EqualTo(5));Assert.That(client.Visuals.HasPending,Is.True);Assert.That(client.Visuals.PendingRules.HumanSpeed,Is.EqualTo(8));
+    world.Advance(205);Until(host,client,()=>client.Visuals.SettingsVersion==2);Assert.That(client.Visuals.CurrentRules.HumanSpeed,Is.EqualTo(8));Assert.That(client.Visuals.HasPending,Is.False);
+   }
+  }
  }
 }
