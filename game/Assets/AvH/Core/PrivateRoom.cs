@@ -73,7 +73,6 @@ namespace AvH {
   public void Pump(){if(disposed)return;
    int round=world.Observe().Round;if(round!=rememberedRound){previous.Clear();rememberedRound=round;}
    for(int accepts=0;accepts<32&&listener.Pending();accepts++){var p=new RoomPeer(listener.AcceptTcpClient());if(peers.Count>=32){p.Dispose();continue;}peers.Add(p);}
-   NetworkVisualState sharedVisual=null;NetworkBubble[] sharedEffects=null;
    foreach(var p in peers.ToArray())try {
     foreach(var reader in p.Receive())using(reader){var command=reader.ReadString();
      if(command=="hello") {var protocol=reader.ReadString();var room=reader.ReadString();var identity=reader.ReadString();var name=reader.ReadString();
@@ -93,6 +92,13 @@ namespace AvH {
      if(chosen==null){p.Send("error","방이 가득 찼습니다");Remove(p);continue;}
      p.Slot=chosen.Slot;world.SetSlotOwner(p.Slot,p.Nickname,false);InputReceived?.Invoke(p.Slot,new NetworkInput());
     }
+
+   }catch(Exception e)when(e is IOException||e is SocketException||e is ObjectDisposedException||e is ArgumentException){Remove(p);}
+   PublishStates();
+  }
+  void PublishStates(){
+   NetworkVisualState sharedVisual=null;NetworkBubble[] sharedEffects=null;var sharedState=world.Observe();
+   foreach(var p in peers.ToArray())try {
     if(p.Identity!=null){
      if(p.Effects==null){
       if(sharedVisual==null){
@@ -101,7 +107,7 @@ namespace AvH {
       }
       p.Effects=sharedEffects;p.EffectsOffset=0;
       if(p.Effects.Length>16384){p.Send("error","버블 표현 상한을 초과했습니다. 호스트 설정을 낮춘 뒤 재시도하세요.");Remove(p);continue;}
-      p.Send("state",++p.SnapshotSerial,p.Slot,world.Observe(),sharedVisual);
+      p.Send("state",++p.SnapshotSerial,p.Slot,sharedState,sharedVisual);
       if(p.Effects.Length==0){p.Send("bubbles",p.SnapshotSerial,0,0,Array.Empty<NetworkBubble>());p.Effects=null;continue;}
      }
      // At most eight 128-item chunks per pump: bounded frames and no unbounded send queue.
