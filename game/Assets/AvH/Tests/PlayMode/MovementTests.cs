@@ -5,6 +5,28 @@ using UnityEngine;
 using UnityEngine.TestTools;
 namespace AvH.Tests {
  public class MovementTests {
+  [UnityTest] public IEnumerator OwnedCharactersStandIdleWithFeetAtControllerGround() {
+   if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null)Assert.Ignore("Owned assets are required for visual integration");
+   var root=new GameObject("owned pose");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;
+   session.StartSolo("pose");session.Step(20.1f);yield return new WaitForSeconds(2);
+   var state=session.Observe();
+   foreach(var faction in new[]{Faction.Human,Faction.Animal}) {
+    int slot=state.Players.First(p=>p.Faction==faction).Slot;var body=session.PlayerTransform(slot);
+    foreach(var animator in body.GetComponentsInChildren<Animator>()) {
+     var clips=animator.GetCurrentAnimatorClipInfo(0);
+     foreach(var clip in clips)Assert.IsFalse(clip.clip.name.ToLowerInvariant().Contains("crouch"),"Standing idle must not use a crouch demo override");
+    }
+    float bottom=float.MaxValue;
+    foreach(var renderer in body.GetComponentsInChildren<SkinnedMeshRenderer>()) {
+     var mesh=new Mesh();renderer.BakeMesh(mesh);
+     foreach(var vertex in mesh.vertices)bottom=Mathf.Min(bottom,renderer.transform.TransformPoint(vertex).y);
+     Object.Destroy(mesh);
+    }
+    Assert.Less(Mathf.Abs(bottom-body.position.y),.15f,faction+" feet must align with controller ground");
+   }
+   Object.Destroy(root);yield return null;
+  }
+
   [UnityTest] public IEnumerator AllRecoveryPointsHaveClearStandingCapsules() {
    var root=new GameObject("recovery clearance");var session=root.AddComponent<UnityPlaytestSession>();
    session.AutomaticStep=false;session.StartSolo("clearance");yield return null;Physics.SyncTransforms();
