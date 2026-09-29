@@ -12,7 +12,7 @@ namespace AvH {
   public static string Create(){var bytes=new byte[16];using(var rng=System.Security.Cryptography.RandomNumberGenerator.Create())rng.GetBytes(bytes);return BitConverter.ToString(bytes).Replace("-","").ToLowerInvariant();}
  }
  public static class RoomProtocol {
-  public const string Version="avh-private-3";
+  public const string Version="avh-private-4";
   public static string SchemaFingerprint()=>BuildVersion();
   static string Schema(Type t){if(t.IsArray)return "[]"+Schema(t.GetElementType());if(Nullable.GetUnderlyingType(t)!=null)return "?"+Schema(Nullable.GetUnderlyingType(t));if(t.IsPrimitive||t==typeof(string)||t.IsEnum)return t.FullName;return t.FullName+"{"+string.Join(";",t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name,StringComparer.Ordinal).Select(f=>f.Name+":"+Schema(f.FieldType)))+"}";}
   static string BuildVersion(){using(var hash=System.Security.Cryptography.SHA256.Create())return Convert.ToBase64String(hash.ComputeHash(Encoding.UTF8.GetBytes(Schema(typeof(SessionState))+Schema(typeof(NetworkInput))+Schema(typeof(NetworkVisualState)))));}
