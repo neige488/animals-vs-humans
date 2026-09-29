@@ -5,7 +5,7 @@ using System.Xml.Serialization;
 namespace AvH {
  public enum SettingsFailure { None, Load, Save }
  [Serializable] public sealed class PlaytestValues {
-  public float PreparationSeconds=20, RoundSeconds=180, InitialAttackGrace=2, TransformAttackGrace=1;
+  public float PreparationSeconds=20, RoundSeconds=180, ResultSeconds=5, InitialAttackGrace=2, TransformAttackGrace=1;
   public int InitialAnimals=2, Magazine=12;
   public float HumanSpeed=5, AnimalSpeed=5.6f, HumanJump=1.5f, AnimalJump=1.5f;
   public float ReloadSeconds=1.5f, BubbleRadius=.35f, BubbleSpeed=18, BubbleRange=25, BubbleLifetime=2, FireInterval=.3f, PushForce=8;
@@ -61,6 +61,7 @@ namespace AvH {
      case "InitialAttackGrace":case "TransformAttackGrace":min=0;max=30;break;
      case "PreparationSeconds":min=1;max=120;break;
      case "RoundSeconds":min=1;max=3600;break;
+     case "ResultSeconds":min=1;max=30;break;
      case "HumanSpeed":case "AnimalSpeed":max=20;break;
      case "HumanJump":case "AnimalJump":max=5;break;
      case "BubbleRadius":max=2;break;

@@ -41,7 +41,7 @@ namespace AvH {
    attacker.FireCooldownRemaining=.5;
    victim.Faction=Faction.Animal;victim.AttackGraceRemaining=settings.Current.TransformAttackGrace;
    victim.ReloadRemaining=0;victim.FireCooldownRemaining=0;PublishBirth(1);
-   if(players.All(p=>p.Faction==Faction.Animal)){phase=RoundPhase.Results;remaining=5;phaseDeadline=hostTime+5;winner=Faction.Animal;}
+   if(players.All(p=>p.Faction==Faction.Animal)){phase=RoundPhase.Results;remaining=settings.Current.ResultSeconds;phaseDeadline=hostTime+remaining;winner=Faction.Animal;}
    return true;
   }
 

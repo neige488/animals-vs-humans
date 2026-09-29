@@ -9,11 +9,11 @@ namespace AvH {
   Vector2 scroll; int tab;
   readonly string[] tabs={"라운드","이동","버블건"};
   readonly string[][] keys={
-   new[]{"PreparationSeconds","RoundSeconds","InitialAnimals","InitialAttackGrace","TransformAttackGrace","FriendlyCollision","EnemyCollision"},
+   new[]{"PreparationSeconds","RoundSeconds","ResultSeconds","InitialAnimals","InitialAttackGrace","TransformAttackGrace","FriendlyCollision","EnemyCollision"},
    new[]{"HumanSpeed","AnimalSpeed","HumanJump","AnimalJump"},
    new[]{"Magazine","ReloadSeconds","BubbleRadius","BubbleSpeed","BubbleRange","BubbleLifetime","FireInterval","PushForce","FriendlyPush"}};
   readonly string[][] names={
-   new[]{"준비 시간 (초)","추격 시간 (초)","최초 동물 수","최초 공격 유예 (초)","변신 공격 유예 (초)","아군 몸 충돌","진영 간 몸 충돌"},
+   new[]{"준비 시간 (초)","추격 시간 (초)","결과 표시 시간 (초)","최초 동물 수","최초 공격 유예 (초)","변신 공격 유예 (초)","아군 몸 충돌","진영 간 몸 충돌"},
    new[]{"인간 속도","동물 속도","인간 점프 높이","동물 점프 높이"},
    new[]{"탄창","재장전 (초)","버블 반지름","버블 속도","버블 사거리","버블 유지 (초)","발사 간격 (초)","밀치는 힘","버블 아군 밀치기"}};
   public void Draw(PlaytestSession session,Action close,int actorSlot=0) {

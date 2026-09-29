@@ -77,7 +77,7 @@ namespace AvH
                     PublishBirth(settings.Current.InitialAnimals);
                     phase = RoundPhase.Chase; remaining = settings.Current.RoundSeconds;
                 } else if (phase == RoundPhase.Chase) {
-                    phase = RoundPhase.Results; remaining = 5; winner = Faction.Human;
+                    phase = RoundPhase.Results; remaining = settings.Current.ResultSeconds; winner = Faction.Human;
                 } else BeginRound();
                 phaseDeadline=hostTime+remaining;
             }
