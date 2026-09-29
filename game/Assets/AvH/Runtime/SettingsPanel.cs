@@ -26,27 +26,36 @@ namespace AvH {
    tab=GUILayout.Toolbar(tab,tabs);
    scroll=GUILayout.BeginScrollView(scroll);
    var values=state.Edit;bool parseValid=true;
+   var invalidText=new HashSet<string>();
    for(int i=0;i<keys[tab].Length;i++) {
     var key=keys[tab][i];var field=typeof(PlaytestValues).GetField(key);
     GUILayout.BeginHorizontal();GUILayout.Label(names[tab][i],GUILayout.Width(230));
     if(field.FieldType==typeof(bool))field.SetValue(values,GUILayout.Toggle((bool)field.GetValue(values),"켜기"));
     else {if(!text.ContainsKey(key))text[key]=Convert.ToString(field.GetValue(values),CultureInfo.InvariantCulture);text[key]=GUILayout.TextField(text[key]);}
     GUILayout.EndHorizontal();
+    string rowError=state.Errors.ContainsKey(key)?"⚠ "+state.Errors[key]:" ";
     if(field.FieldType!=typeof(bool)) {
      float number;int whole;
      bool valid=field.FieldType==typeof(int)?int.TryParse(text[key],out whole):float.TryParse(text[key],NumberStyles.Float,CultureInfo.InvariantCulture,out number);
-     if(!valid)GUILayout.Label("⚠ "+names[tab][i]+"에 숫자를 입력하세요.");
+     if(!valid)rowError="⚠ "+names[tab][i]+"에 숫자를 입력하세요.";
     }
-    if(state.Errors.ContainsKey(key))GUILayout.Label("⚠ "+state.Errors[key]);
+    GUILayout.Label(rowError,GUILayout.Height(22));
    }
    // Parse every tab, including any invalid text in a hidden tab.
    foreach(var pair in text) {
     var field=typeof(PlaytestValues).GetField(pair.Key);
-    if(field.FieldType==typeof(int)){int v;if(int.TryParse(pair.Value,out v))field.SetValue(values,v);else parseValid=false;}
-    else {float v;if(float.TryParse(pair.Value,NumberStyles.Float,CultureInfo.InvariantCulture,out v))field.SetValue(values,v);else parseValid=false;}
+    if(field.FieldType==typeof(int)){int v;if(int.TryParse(pair.Value,out v))field.SetValue(values,v);else {parseValid=false;invalidText.Add(pair.Key);}}
+    else {float v;if(float.TryParse(pair.Value,NumberStyles.Float,CultureInfo.InvariantCulture,out v))field.SetValue(values,v);else {parseValid=false;invalidText.Add(pair.Key);}}
    }
    session.UpdateSettingsEdit(actorSlot,values);
-   if(!parseValid)GUILayout.Label("숫자가 아닌 입력이 있습니다. 각 탭의 값을 확인하세요.");
+   var errors=session.ObserveSettings().Errors;
+   var summaries=new List<string>();
+   for(int t=0;t<tabs.Length;t++)for(int i=0;i<keys[t].Length;i++) {
+    string key=keys[t][i];
+    if(invalidText.Contains(key))summaries.Add(tabs[t]+" · "+names[t][i]+": 숫자를 입력하세요.");
+    else if(t!=tab&&errors.ContainsKey(key))summaries.Add(tabs[t]+" · "+names[t][i]+": "+errors[key]);
+   }
+   GUILayout.Label(summaries.Count==0?" ":string.Join("\n",summaries),new GUIStyle(GUI.skin.label){wordWrap=true},GUILayout.MinHeight(44));
    GUILayout.EndScrollView();
    if(GUILayout.Button("기본값으로 복원")){session.RestoreSettingsDefaults(actorSlot);text.Clear();}
    GUI.enabled=parseValid&&session.ObserveSettings().Errors.Count==0;

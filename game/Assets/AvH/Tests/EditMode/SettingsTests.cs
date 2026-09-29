@@ -81,4 +81,18 @@ public class SettingsTests {
   s.Advance(5+200);Assert.AreEqual(RoundPhase.Results,s.Observe().Phase);Assert.AreEqual(9,s.Observe().SecondsRemaining);
   s.Advance(8);Assert.AreEqual(2,s.Observe().Round);s.Advance(1);Assert.AreEqual(3,s.Observe().Round);
  }
+ [Test] public void SavingAfterCorruptLoadPreservesTheOriginalInASeparateCopy() {
+  var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString("N"));
+  System.IO.Directory.CreateDirectory(dir);var path=System.IO.Path.Combine(dir,"settings.xml");
+  const string damaged="<PlaytestValues>손상된 XML";
+  try {
+   System.IO.File.WriteAllText(path,damaged);var s=new PlaytestSession(1,path);s.StartSolo("host");
+   Assert.AreEqual(SettingsFailure.Load,s.ObserveSettings().Failure);
+   s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.RoundSeconds=90;s.UpdateSettingsEdit(0,v);
+   Assert.IsTrue(s.ApplySettings(0));Assert.AreEqual(SettingsFailure.None,s.ObserveSettings().Failure);
+   var preserved=System.IO.Directory.GetFiles(dir,"settings.xml.corrupt-*");Assert.AreEqual(1,preserved.Length);
+   Assert.AreEqual(damaged,System.IO.File.ReadAllText(preserved[0]));
+   Assert.AreEqual(90,new PlaytestSession(2,path).ObserveSettings().Current.RoundSeconds);
+  } finally {System.IO.Directory.Delete(dir,true);}
+ }
 }}
