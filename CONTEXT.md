@@ -1,6 +1,6 @@
 # Animals vs Humans
 
-인간이 동물의 공격에 한 번 맞으면 동물로 전환되는 변신 추격 게임을 정렬하는 컨텍스트다. 첫 프로토타입 범위의 Grill을 완료했다. 아래는 합의된 요구사항이며 core-playtest PRD와 GitHub Milestone #1을 작성했다. 실제 Unity 프로젝트·게임 구현은 아직 시작하지 않았다.
+인간이 동물의 공격에 한 번 맞으면 동물로 전환되는 변신 추격 게임을 정렬하는 컨텍스트다. 첫 프로토타입 범위의 Grill을 완료했다. 아래는 합의된 요구사항이며 core-playtest PRD와 GitHub Milestone #1을 작성했다. Unity 프로젝트와 첫 Slice 구현을 시작했으며, 실제 제품 검증은 아직 완료하지 않았다.
 
 ## Language
 
@@ -472,3 +472,15 @@ R             → 인간: 재장전
 - 별도로 사용자 확인을 받은 테스트 경계: 실제 세션의 공개 진입점에서 명령을 실행하고 공개 상태·이벤트를 검증한다. Unity Play Mode의 물리·봇 검증과 Windows·macOS 실제 빌드의 제품 검증을 구분한다.
 - Product DoD와 PA-1~PA-16을 정의했다. 시나리오는 향후 검수 계약이며 게임을 실행해 통과한 결과가 아니다.
 - Issue 생성, 코드 구현, 커밋·푸시는 수행하지 않았다.
+
+
+## Autopilot 실행 현황 — 2026-09-29
+
+- 현재 작업이 `animals-vs-humans` Product HQ임을 registry에서 검증했다.
+- Run: `avh-core-playtest-20260929`. 통합 브랜치: `autopilot/core-playtest`. main은 사용자 승인으로 문서 초기 커밋 `7bcf018`을 최초 1회 게시했다. 이후 main 병합은 별도 승인 대상이다.
+- 사용자 승인한 5개 Slice를 Milestone #1의 Issue #1~#5로 게시했다. PRD frontmatter에 실제 Issue와 PA 배정을 연결했다. 첫 Slice만 실행 중이며 후속 Slice는 선행 검증 대기다.
+- `pepe:setup`의 누락 폴더와 고정 상태 라벨 8개를 준비했다. 라벨·상태 전환은 보강된 GitHub wrapper를 사용한다. wrapper 회귀 테스트 18개가 통과했다.
+- Unity CLI로 첫 Slice의 `game/` 프로젝트 뼈대를 생성했다. Editor 라이선스 비활성으로 초기 Editor 실행은 실패했다. 약관 동의가 필요한 Personal 활성화는 사용자 응답 대기다.
+- Unity 6000.6.3f1의 Windows Mono Build Support 설치를 완료했다. Windows에서 게임을 실행한 것은 아니다.
+- 초기 공개 세션 경계의 12슬롯과 준비→최초 변신→시간 종료→다음 라운드 테스트는 Unity 내장 Mono/NUnit에서 진행한다. 이 결과는 Unity Play Mode 물리·렌더링·양 OS 실제 플레이 검증을 대체하지 않는다.
+- Polyperfect Animals·People, Synty Adventure의 보유 목록을 확인했다. 실제 프로젝트 임포트는 아직 하지 않았다. 구매 원본은 공개 저장소에서 제외한다.
