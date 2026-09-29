@@ -125,5 +125,15 @@ namespace AvH.Tests {
     Assert.That(client.Status,Is.EqualTo(ConnectionStatus.Playing));Assert.That(client.Visuals.Bubbles[1499].Id,Is.EqualTo(1499));
    }
   }
+  [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-3"));
+   foreach(var t in new[]{typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice)}) {
+    Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
+    Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);
+   }
+   var path=System.IO.File.Exists("Assets/AvH/link.xml")?"Assets/AvH/link.xml":"game/Assets/AvH/link.xml";
+   Assert.That(System.IO.File.Exists(path),Is.True,"Standalone linker must preserve AvH.Core DTOs");
+   StringAssert.Contains("fullname=\"AvH.Core\" preserve=\"all\"",System.IO.File.ReadAllText(path));
+  }
  }
 }
