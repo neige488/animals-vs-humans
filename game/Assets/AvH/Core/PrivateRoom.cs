@@ -84,6 +84,7 @@ namespace AvH {
     if(!peers.Contains(p))continue;
     if(p.Socket.Client.Poll(0,SelectMode.SelectRead)&&p.Socket.Available==0){Remove(p);continue;}
     if((DateTime.UtcNow-p.Seen).TotalSeconds>10){Remove(p);continue;}
+    if(p.Ready&&p.Slot<0&&!world.Observe().Players.Any(x=>x.IsBot)){p.Send("error","방이 가득 찼습니다");Remove(p);continue;}
     if(p.Ready&&p.Slot<0&&world.Observe().Phase!=RoundPhase.Results){var state=world.Observe();Tuple<int,int> old;PlayerState chosen=null;
      if(previous.TryGetValue(p.Identity,out old)&&old.Item2==state.Round)chosen=state.Players.FirstOrDefault(x=>x.Slot==old.Item1&&x.IsBot);
      chosen=chosen??state.Players.Where(x=>x.IsBot).OrderBy(x=>x.Faction).ThenBy(x=>x.Slot).FirstOrDefault();
@@ -123,8 +124,8 @@ namespace AvH {
    foreach(var r in peer.Receive())using(r){string kind=r.ReadString();if(kind=="state"){snapshotSerial=r.ReadInt32();snapshotStarted=DateTime.UtcNow;pendingBubbles=null;receivedBubbles=0;Slot=r.ReadInt32();Snapshot=RoomWire.Read<SessionState>(r);var previousBubbles=Visuals?.Bubbles??Array.Empty<NetworkBubble>();Visuals=RoomWire.Read<NetworkVisualState>(r);Visuals.Bubbles=previousBubbles;if(ready)Status=Slot>=0?ConnectionStatus.Playing:ConnectionStatus.Waiting;}else if(kind=="bubbles"){
      int serial=r.ReadInt32(),offset=r.ReadInt32(),total=r.ReadInt32();var chunk=RoomWire.Read<NetworkBubble[]>(r);
      if(serial!=snapshotSerial)continue;
-     if(total<0||total>16384||chunk.Length>128||offset!=receivedBubbles||offset+chunk.Length>total)throw new IOException("잘못된 표현 조각");
      if((DateTime.UtcNow-snapshotStarted).TotalSeconds>2){pendingBubbles=null;continue;}
+     if(total<0||total>16384||chunk.Length>128||offset!=receivedBubbles||offset+chunk.Length>total)throw new IOException("잘못된 표현 조각");
      if(pendingBubbles==null)pendingBubbles=new NetworkBubble[total];if(pendingBubbles.Length!=total)throw new IOException("표현 크기 불일치");
      Array.Copy(chunk,0,pendingBubbles,offset,chunk.Length);receivedBubbles+=chunk.Length;
      if(receivedBubbles==total){Visuals.Bubbles=pendingBubbles;pendingBubbles=null;}
