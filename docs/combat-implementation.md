@@ -14,13 +14,31 @@
 
 ## 검증
 
+실행 호스트는 macOS arm64, Editor는 Unity 6000.6.3f1이다. Windows 빌드 성공은 Windows 실제 플레이 확인을 대신하지 않는다.
+
+| 기준 commit | 검증 | 결과 및 근거 |
+|---|---|---|
+| f81edc5 + 이후 af081d0에 저장한 테스트 변경 | 이전 Unity PlayMode | 10/10 PASS, `/private/tmp/avh-s2-combat-full.xml`, 같은 이름 `.log`. 정확히 clean commit에서 실행한 결과가 아니므로 최신 head 증거로 사용하지 않는다. |
+| c688f95 | standalone core / 엔진 어셈블리 컴파일 | 13/13 PASS / PASS, `/private/tmp/avh-s2-current-core.log`, `/private/tmp/avh-s2-current-compile.log` |
+| 09abfd4 | 실제 Unity EditMode / PlayMode | 13/13 PASS / 11/11 PASS, `/private/tmp/avh-s2-final-edit.xml`, `/private/tmp/avh-s2-final-play.xml` 및 각각 `.log` |
+| 09abfd4 | macOS Development 빌드 | 성공, `/private/tmp/avh-s2-final-mac-build.log` |
+| 이 문서와 함께 수정한 HUD 문구 변경 | 최신 head | 위 결과 이후 변경이며 아직 이 문서 작성 시점에 엔진 재검증·양 OS 빌드 전이다. 완료 후 commit·명령·결과를 `/private/tmp/avh-s2-final-evidence.md`에 별도 고정한다. |
+
+실제 실행 명령(각 검증은 별도 Editor 프로세스로 직렬 실행):
+
+```sh
+EDITOR=/Applications/Unity/Hub/Editor/6000.6.3f1/Unity.app/Contents/MacOS/Unity
+PROJECT=/private/tmp/wt-avh-core-playtest-s2/game
+"$EDITOR" -batchmode -projectPath "$PROJECT" -runTests -testPlatform EditMode -testResults /private/tmp/avh-s2-final-edit.xml -logFile /private/tmp/avh-s2-final-edit.log
+"$EDITOR" -batchmode -projectPath "$PROJECT" -runTests -testPlatform PlayMode -testResults /private/tmp/avh-s2-final-play.xml -logFile /private/tmp/avh-s2-final-play.log
+"$EDITOR" -batchmode -quit -projectPath "$PROJECT" -executeMethod AvH.Editor.BuildPlaytest.Mac -logFile /private/tmp/avh-s2-final-mac-build.log
+```
+
 - TDD RED/GREEN: ee31384→eeb9322 탄창, 222b8bd→121a075 근접/유예, c2c91f1→5bb15ed 종료경계(±1e-10), ffd3964→132091a 엔진 버블 명중·밀치기.
-- 현재 standalone core NUnit10개 PASS: 기존세션3+설정3+전투4. 공개 세션 동작을 실행하며 Unity 물리 테스트 대체는 아니다.
-- 실제 Unity PlayMode10개 PASS: 기존표현/이동5+설정이동1+전투4. `/private/tmp/avh-s2-combat-full.xml` 및 같은 이름 .log.
+- 현재 core 13개는 기존 세션4+설정5+전투4다. 실제 PlayMode 11개는 기존 표현/이동6+설정이동1+전투4다.
 - 전투 PlayMode는 명중·밀치기, 아군통과와 몸충돌 독립, 유예중 이동·접촉무변신·근접변신, 지형·거리·수명 종료를 확인한다. 임시 설정 파일을 격리하고 정리한다.
-- Core 마지막 추가 그룹탄생/0유예 테스트는 standalone 실행 완료이며 전체 Unity EditMode 재실행은 공유 Editor 큐 순서에 따라 후속 수행한다.
-- Runtime은 설치된 Unity 엔진 어셈블리 대상 컴파일 PASS. actual 새 양OS build·실제 다중클라이언트 전투·사람 재미 PA는 아직 검증하지 않았다.
+- Windows 실제 실행·다중 클라이언트 전투·사람 재미 PA는 미검증이다. HUD 문구는 CONTEXT 승인안으로 맞췄으며 표현을 그대로 복제하는 테스트는 추가하지 않았다.
 
 ## 후속 통합
 
-S3 봇은 동일 SubmitInput을 사용하고 S5 네트워크는 host 입력만 제출한다. 공개 ObserveBubbles의 위치/방향/수명과 플레이어 Ammo/ReloadRemaining/AttackGraceRemaining을 원격 표현에 사용할 수 있다. S4의 이후 리뷰 수정은 별도 cherry-pick이 필요하다. 구매 원본은 Assets/ThirdParty Git 제외 경로에만 존재한다.
+S3 봇은 동일 SubmitInput을 사용하고 S5 네트워크는 host 입력만 제출한다. 공개 ObserveBubbles의 위치/방향/수명과 플레이어 Ammo/ReloadRemaining/AttackGraceRemaining을 원격 표현에 사용할 수 있다. S4 Discovery 수정 0436ece까지 포함했다. 구매 원본은 Assets/ThirdParty Git 제외 경로에만 존재한다.
