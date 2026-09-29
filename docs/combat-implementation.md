@@ -1,6 +1,6 @@
 # S2 전투 구현 — 검수 전
 
-현재 S2는 S1 ca6c754 위의 stacked 작업이며 S4 b48aa63까지의 설정 계약을 재사용했다. S1 제품 검증이나 integration gate 통과를 뜻하지 않는다.
+현재 S2는 S1 ca6c754 위의 stacked 작업이며 S4 0436ece까지의 설정 계약·리뷰 수정을 재사용했다. S1 제품 검증이나 integration gate 통과를 뜻하지 않는다.
 
 ## 동작
 
@@ -22,16 +22,18 @@
 | c688f95 | standalone core / 엔진 어셈블리 컴파일 | 13/13 PASS / PASS, `/private/tmp/avh-s2-current-core.log`, `/private/tmp/avh-s2-current-compile.log` |
 | 09abfd4 | 실제 Unity EditMode / PlayMode | 13/13 PASS / 11/11 PASS, `/private/tmp/avh-s2-final-edit.xml`, `/private/tmp/avh-s2-final-play.xml` 및 각각 `.log` |
 | 09abfd4 | macOS Development 빌드 | 성공, `/private/tmp/avh-s2-final-mac-build.log` |
-| 이 문서와 함께 수정한 HUD 문구 변경 | 최신 head | 위 결과 이후 변경이며 아직 이 문서 작성 시점에 엔진 재검증·양 OS 빌드 전이다. 완료 후 commit·명령·결과를 `/private/tmp/avh-s2-final-evidence.md`에 별도 고정한다. |
+| dcebef4de6ecab4c8a2b53edf114ad4a87626f33 | HUD 수정 후 실제 Unity EditMode / PlayMode | 13/13 PASS / 11/11 PASS, `/private/tmp/avh-s2-reviewfix-edit.xml`, `/private/tmp/avh-s2-reviewfix-play.xml` 및 각각 `.log`; 두 Editor exit 0 |
+| dcebef4 | macOS / Windows64 Development 빌드 | 모두 Build Finished, Result: Success 및 exit 0, `/private/tmp/avh-s2-reviewfix-mac-build.log`, `/private/tmp/avh-s2-reviewfix-windows-build.log` |
 
-실제 실행 명령(각 검증은 별도 Editor 프로세스로 직렬 실행):
+2026-09-29 dcebef4 clean worktree에서 아래 명령을 직렬 실행했다. 이후 이 문서만 갱신했으며 게임 코드·테스트·빌드 입력은 동일하다. 따라서 문서 갱신 때문에 테스트를 반복하지 않았다. 실제 실행 명령:
 
 ```sh
 EDITOR=/Applications/Unity/Hub/Editor/6000.6.3f1/Unity.app/Contents/MacOS/Unity
 PROJECT=/private/tmp/wt-avh-core-playtest-s2/game
-"$EDITOR" -batchmode -projectPath "$PROJECT" -runTests -testPlatform EditMode -testResults /private/tmp/avh-s2-final-edit.xml -logFile /private/tmp/avh-s2-final-edit.log
-"$EDITOR" -batchmode -projectPath "$PROJECT" -runTests -testPlatform PlayMode -testResults /private/tmp/avh-s2-final-play.xml -logFile /private/tmp/avh-s2-final-play.log
-"$EDITOR" -batchmode -quit -projectPath "$PROJECT" -executeMethod AvH.Editor.BuildPlaytest.Mac -logFile /private/tmp/avh-s2-final-mac-build.log
+"$EDITOR" -batchmode -projectPath "$PROJECT" -runTests -testPlatform EditMode -testResults /private/tmp/avh-s2-reviewfix-edit.xml -logFile /private/tmp/avh-s2-reviewfix-edit.log
+"$EDITOR" -batchmode -projectPath "$PROJECT" -runTests -testPlatform PlayMode -testResults /private/tmp/avh-s2-reviewfix-play.xml -logFile /private/tmp/avh-s2-reviewfix-play.log
+"$EDITOR" -batchmode -quit -projectPath "$PROJECT" -executeMethod AvH.Editor.BuildPlaytest.Mac -logFile /private/tmp/avh-s2-reviewfix-mac-build.log
+"$EDITOR" -batchmode -quit -projectPath "$PROJECT" -executeMethod AvH.Editor.BuildPlaytest.Windows -logFile /private/tmp/avh-s2-reviewfix-windows-build.log
 ```
 
 - TDD RED/GREEN: ee31384→eeb9322 탄창, 222b8bd→121a075 근접/유예, c2c91f1→5bb15ed 종료경계(±1e-10), ffd3964→132091a 엔진 버블 명중·밀치기.
