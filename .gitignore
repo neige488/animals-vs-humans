@@ -18,3 +18,7 @@ Assets/ThirdParty.meta
 
 # Local verification output may contain room codes or participant identities.
 LocalEvidence/
+
+# Nested Unity project purchased assets
+**/Assets/ThirdParty/
+**/Assets/ThirdParty.meta
