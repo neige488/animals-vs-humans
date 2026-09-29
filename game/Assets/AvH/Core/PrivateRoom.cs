@@ -53,11 +53,27 @@ namespace AvH {
  }
  sealed class RoomPeer : IDisposable {
   public readonly TcpClient Socket; readonly List<byte> pending=new List<byte>(); public DateTime Seen=DateTime.UtcNow; public string Identity,Nickname; public int Slot=-1; public bool Ready;public int SnapshotSerial,EffectsOffset;public NetworkBubble[] Effects;
-  public RoomPeer(TcpClient socket){Socket=socket;Socket.NoDelay=true;Socket.SendTimeout=100;}
-  public void Send(params object[] values){var bytes=RoomWire.Encode(values);if(bytes.Length>65536)throw new IOException("패킷 상한");var stream=Socket.GetStream();var size=BitConverter.GetBytes(IPAddress.HostToNetworkOrder(bytes.Length));stream.Write(size,0,4);stream.Write(bytes,0,bytes.Length);}
+  readonly Queue<byte[]> outgoing=new Queue<byte[]>();int outgoingBytes,sendOffset;
+  public RoomPeer(TcpClient socket){Socket=socket;Socket.NoDelay=true;Socket.Client.Blocking=false;}
+  public bool Send(params object[] values){
+   Flush();var bytes=RoomWire.Encode(values);if(bytes.Length>65536)throw new IOException("패킷 상한");
+   if(outgoingBytes+bytes.Length+4>131080)return false;
+   var frame=new byte[bytes.Length+4];Array.Copy(BitConverter.GetBytes(IPAddress.HostToNetworkOrder(bytes.Length)),frame,4);Array.Copy(bytes,0,frame,4,bytes.Length);
+   outgoing.Enqueue(frame);outgoingBytes+=frame.Length;Flush();return true;
+  }
+  void Flush(){
+   int budget=65540;
+   while(outgoing.Count>0&&budget>0){var frame=outgoing.Peek();int sent;
+    try{sent=Socket.Client.Send(frame,sendOffset,Math.Min(budget,frame.Length-sendOffset),SocketFlags.None);}
+    catch(SocketException e)when(e.SocketErrorCode==SocketError.WouldBlock||e.SocketErrorCode==SocketError.IOPending||e.SocketErrorCode==SocketError.NoBufferSpaceAvailable){return;}
+    if(sent==0)throw new IOException("연결 종료");sendOffset+=sent;budget-=sent;
+    if(sendOffset==frame.Length){outgoing.Dequeue();outgoingBytes-=frame.Length;sendOffset=0;}
+   }
+  }
   public IEnumerable<BinaryReader> Receive(){
+   Flush();
    if(Socket.Client.Poll(0,SelectMode.SelectRead)&&Socket.Available==0)throw new IOException("연결 종료");
-   int available=Socket.Available;if(available>0){var b=new byte[Math.Min(available,65540)];int n=Socket.GetStream().Read(b,0,b.Length);pending.AddRange(b.Take(n));Seen=DateTime.UtcNow;}
+   int available=Socket.Available;if(available>0){var b=new byte[Math.Min(available,65540)];int n=Socket.Client.Receive(b,0,b.Length,SocketFlags.None);pending.AddRange(b.Take(n));Seen=DateTime.UtcNow;}
    int count=0;while(pending.Count>=4&&count++<32){int n=IPAddress.NetworkToHostOrder(BitConverter.ToInt32(pending.GetRange(0,4).ToArray(),0));if(n<1||n>65536)throw new IOException("잘못된 패킷");if(pending.Count<4+n)break;var frame=pending.GetRange(4,n).ToArray();pending.RemoveRange(0,4+n);yield return new BinaryReader(new MemoryStream(frame));}
    if(pending.Count>131080)throw new IOException("버퍼 상한");
   }
@@ -103,12 +119,12 @@ namespace AvH {
       }
       p.Effects=sharedEffects;p.EffectsOffset=0;
       if(p.Effects.Length>16384){p.Send("error","버블 표현 상한을 초과했습니다. 호스트 설정을 낮춘 뒤 재시도하세요.");Remove(p);continue;}
-      p.Send("state",++p.SnapshotSerial,p.Slot,sharedState,sharedVisual);
-      if(p.Effects.Length==0){p.Send("bubbles",p.SnapshotSerial,0,0,Array.Empty<NetworkBubble>());p.Effects=null;continue;}
+      if(!p.Send("state",++p.SnapshotSerial,p.Slot,sharedState,sharedVisual)){p.Effects=null;continue;}
      }
+     if(p.Effects.Length==0){if(p.Send("bubbles",p.SnapshotSerial,0,0,Array.Empty<NetworkBubble>()))p.Effects=null;continue;}
      // At most eight 128-item chunks per pump: bounded frames and no unbounded send queue.
      for(int sent=0;sent<8&&p.EffectsOffset<p.Effects.Length;sent++){
-      var chunk=p.Effects.Skip(p.EffectsOffset).Take(128).ToArray();p.Send("bubbles",p.SnapshotSerial,p.EffectsOffset,p.Effects.Length,chunk);p.EffectsOffset+=chunk.Length;
+      var chunk=p.Effects.Skip(p.EffectsOffset).Take(128).ToArray();if(!p.Send("bubbles",p.SnapshotSerial,p.EffectsOffset,p.Effects.Length,chunk))break;p.EffectsOffset+=chunk.Length;
      }
      if(p.EffectsOffset==p.Effects.Length)p.Effects=null;
     }
