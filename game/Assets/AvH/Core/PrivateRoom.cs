@@ -19,6 +19,7 @@ namespace AvH {
  [Serializable] public sealed class NetworkVisualState {
   public NetworkBurst[] Bursts=Array.Empty<NetworkBurst>();public float[] Yaws=new float[12];public NetworkBubble[] Bubbles=Array.Empty<NetworkBubble>();
   public PlaytestValues CurrentRules=new PlaytestValues(),PendingRules=new PlaytestValues();public bool HasPending;public int SettingsVersion;
+  public NetworkVisualState WithBubbles(NetworkBubble[] bubbles){var copy=(NetworkVisualState)MemberwiseClone();copy.Bubbles=bubbles;return copy;}
  }
  public enum ConnectionStatus { Idle, Connecting, Loading, Waiting, Playing, Failed, Interrupted }
  [Serializable] public struct NetworkInput { public float Right,Forward,Yaw,Pitch; public bool Jump,Attack,Reload; public int RoundId; }
@@ -134,7 +135,7 @@ namespace AvH {
      if(total<0||total>16384||chunk.Length>128||offset!=receivedBubbles||offset+chunk.Length>total)throw new IOException("잘못된 표현 조각");
      if(pendingBubbles==null)pendingBubbles=new NetworkBubble[total];if(pendingBubbles.Length!=total)throw new IOException("표현 크기 불일치");
      Array.Copy(chunk,0,pendingBubbles,offset,chunk.Length);receivedBubbles+=chunk.Length;
-     if(receivedBubbles==total){Visuals.Bubbles=pendingBubbles;pendingBubbles=null;}
+     if(receivedBubbles==total){Visuals=Visuals.WithBubbles(pendingBubbles);pendingBubbles=null;}
     }else if(kind=="error"){Fail(r.ReadString());return;}else if(kind=="closed"){Interrupt();return;}else if(kind!="loading")throw new IOException("프로토콜 불일치");}
    if((DateTime.UtcNow-peer.Seen).TotalSeconds>10){Interrupt();return;}
    if((DateTime.UtcNow-lastPing).TotalSeconds>1){peer.Send("ping");lastPing=DateTime.UtcNow;}

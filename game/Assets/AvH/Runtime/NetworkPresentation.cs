@@ -7,6 +7,7 @@ using UnityEngine;
 namespace AvH {
  /// <summary>Unity bridge: only hosts execute physics; peers render snapshots and submit inputs.</summary>
  [DefaultExecutionOrder(-100)] public sealed class NetworkPresentation : MonoBehaviour {
+  SessionState lastAppliedState;NetworkVisualState lastAppliedVisual;
   UnityPlaytestSession world;PrivateRoomHost host;readonly PrivateRoomClient client=new PrivateRoomClient();
   readonly NetworkInput[] buffered=new NetworkInput[12];readonly bool[] hasInput=new bool[12];
   string code="",address,lastNickname="",message="";bool clientStarted;float nextPump;
@@ -23,11 +24,14 @@ namespace AvH {
   void Update(){
    if(host!=null&&Time.unscaledTime>=nextPump){host.Pump();for(int slot=1;slot<12;slot++)if(hasInput[slot]){var input=buffered[slot];world.SubmitInput(slot,new PlayerInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,RoundId=input.RoundId});hasInput[slot]=false;buffered[slot]=default(NetworkInput);}nextPump=Time.unscaledTime+.05f;}
    if(!clientStarted)return;client.Pump();
-   if(client.Snapshot!=null){if(world.Session==null){world.StartRemote(client.Snapshot);client.Ready();}else world.ApplyRemoteSnapshot(client.Snapshot);world.ApplyRemoteVisuals(client.Visuals);}
+   if(client.Snapshot!=null){
+    if(!ReferenceEquals(lastAppliedState,client.Snapshot)){if(world.Session==null){world.StartRemote(client.Snapshot);client.Ready();}else world.ApplyRemoteSnapshot(client.Snapshot);lastAppliedState=client.Snapshot;}
+    if(!ReferenceEquals(lastAppliedVisual,client.Visuals)){world.ApplyRemoteVisuals(client.Visuals);lastAppliedVisual=client.Visuals;}
+   }
    if(client.Status==ConnectionStatus.Interrupted||client.Status==ConnectionStatus.Failed){if(world.Session!=null)world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
   }
   public void SubmitInput(PlayerInput input){if(!CanPlay)return;if(!IsClient){world.SubmitInput(0,input);return;}input.RoundId=client.Snapshot.Round;client.SubmitInput(new NetworkInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,RoundId=input.RoundId});}
-  public void Leave(){host?.Dispose();host=null;client.Cancel();clientStarted=false;world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
+  public void Leave(){host?.Dispose();host=null;client.Cancel();clientStarted=false;lastAppliedState=null;lastAppliedVisual=null;world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
   public void DrawStart(string nickname,GUIStyle label){
    var w=Screen.width;var h=Screen.height;
    if(clientStarted){
