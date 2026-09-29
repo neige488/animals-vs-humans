@@ -70,7 +70,11 @@ namespace AvH {
      case "BubbleSpeed":case "BubbleRange":max=100;break;
      case "PushForce":max=30;break;
     }
-    if(double.IsNaN(value)||double.IsInfinity(value)||value<min||value>max)errors[f.Name]=$"{min}~{max} 범위의 값을 입력하세요.";
+    // UI and stored float fields use the nearest representable float boundary.
+    // Keep integer/double comparisons unchanged and reject even the adjacent outside float.
+    double lower=f.FieldType==typeof(float)?(double)(float)min:min;
+    double upper=f.FieldType==typeof(float)?(double)(float)max:max;
+    if(double.IsNaN(value)||double.IsInfinity(value)||value<lower||value>upper)errors[f.Name]=$"{min}~{max} 범위의 값을 입력하세요.";
    }
    return errors;
   }
