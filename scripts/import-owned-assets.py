@@ -3,7 +3,8 @@
 import argparse, pathlib, tarfile, re, subprocess
 parser=argparse.ArgumentParser();parser.add_argument('packages',nargs='+');args=parser.parse_args()
 root=pathlib.Path(__file__).resolve().parents[1];dest=root/'game/Assets/ThirdParty'
-assert subprocess.run(['git','check-ignore','-q',str(dest/'probe')],cwd=root).returncode==0,'ThirdParty must be ignored'
+if subprocess.run(['git','check-ignore','-q',str(dest/'probe')],cwd=root).returncode!=0:
+ raise RuntimeError('ThirdParty must be ignored')
 records={};archives=[]
 for name in args.packages:
  archive=tarfile.open(name,'r:gz');archives.append(archive);members={m.name:m for m in archive.getmembers()}

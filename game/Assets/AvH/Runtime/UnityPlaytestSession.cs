@@ -10,7 +10,7 @@ namespace AvH {
   readonly List<CharacterController> bodies = new List<CharacterController>();
   readonly PlayerInput[] inputs = new PlayerInput[12];
   readonly float[] vertical = new float[12];
-  readonly Vector3[] returns = { new Vector3(-12,1,0), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
+  readonly Vector3[] returns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
   public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
   public void StartSolo(string nickname, int? randomSeed = null) {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");

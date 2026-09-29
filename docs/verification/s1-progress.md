@@ -53,3 +53,13 @@
 - 구매 에셋이 로드된 Unity PlayMode **2/2 PASS**: 실제 이동/점프와 공개 이동 입력으로 옥상 접근→일반 낙하→맵 밖 복귀·진영 유지. `/private/tmp/avh-s1-owned-playmode.xml`.
 - 폰트는 OS 동적 fallback Apple SD Gothic Neo / Malgun Gothic / Arial을 사용한다. 실제 Mac/Win 한글 표시는 사람 확인 대상이다.
 - 실제 양 OS 플레이·모든 역할/경로·렌더·재미 PA 완료는 별도 검증한다.
+
+## Discovery 수정 — S1-DISC-001/002
+
+- RED `9dbf864`: 실제 Unity `Physics.CheckCapsule`이 서쪽 복귀 후보 `(-12,1,0)`의 계단 관통을 재현했다. PlayMode 4개 중 해당 1개 실패, 3개 통과 (`/private/tmp/avh-s1-discovery-red.xml`).
+- 복귀 후보를 계단/쉘터 밖의 빈 지상 `(-12,1,-6)`으로 변경했다. 네 후보 모두 실제 capsule clearance를 검사한다.
+- 공개 시작 경계에서 randomness seed를 제어해 slot0이 동물로 선정되는 경우를 준비하고, 실제 `Step`으로 20초를 지나 Chase 진입 후 동물의 맵 밖 낙하/복귀를 재현했다. 진영·슬롯 보존을 단정한다.
+- GREEN: 실제 PlayMode **4/4 PASS** (`/private/tmp/avh-s1-discovery-green.xml`). 인간의 옥상/낙하 경로와 동물 복귀 경로를 구분한다.
+- S1-DISC-007: 사용 내역에서 미배치 stall을 빼고 tree를 추가했다.
+- S1-DISC-015: Gitignore 보호를 최적화 실행에서 제거되는 assert 대신 명시적 예외로 바꿨다. 격리된 비ignored Git 저장소에서 일반 Python과 `python -O` 모두 쓰기 전 거부함을 확인했다.
+- 나머지 frozen Minor 항목은 이 수정에서 범위를 넓히지 않았다. 실제 PA 판단은 별도다.
