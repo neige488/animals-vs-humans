@@ -68,26 +68,34 @@ namespace AvH {
     int seconds=Mathf.Max(0,Mathf.CeilToInt((float)state.SecondsRemaining));
     GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
    } else {
-   GUI.Box(new Rect(w/2-300,12,600,90),"");
-   GUI.Label(new Rect(w/2-295,15,590,40),$"인간 {state.Players.Length-animals}   |   {phase} {Mathf.CeilToInt((float)state.SecondsRemaining)}초   |   동물 {animals}",label);
+   GUI.Box(new Rect(w/2-340,12,680,125),"");
+   int seconds=Mathf.Max(0,Mathf.CeilToInt((float)state.SecondsRemaining));
+   GUI.Label(new Rect(w/2-295,15,590,40),$"인간 {state.Players.Length-animals}명   |   {phase} {seconds/60:00}:{seconds%60:00}   |   동물 {animals}명",label);
    }
    if(state.Phase!=RoundPhase.Results && state.BirthSecondsRemaining>0) {
     var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
     GUI.color=catalog==null?Color.white:catalog.RarityColor;
-    GUI.Label(new Rect(w/2-290,55,580,35),"새로운 동물이 탄생했습니다! " + string.Join(" / ",state.Births.Select(b=>$"[{b.Rarity}] {b.Kind} ×{b.Count}")),label);GUI.color=Color.white;
+    if(state.Births.Sum(b=>b.Count)==1) {
+     var birth=state.Births[0];
+     GUI.Label(new Rect(w/2-330,55,660,35),$"[{birth.Rarity}] {birth.Kind}가 탄생했습니다!",label);
+    } else {
+     GUI.Label(new Rect(w/2-330,55,660,35),"새로운 동물들이 탄생했습니다!",label);
+     GUI.Label(new Rect(w/2-330,90,660,35),string.Join(" · ",state.Births.Select(b=>$"[{b.Rarity}] {b.Kind} ×{b.Count}")),label);
+    }
+    GUI.color=Color.white;
    }
    if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
-   GUI.Label(new Rect(w/2-275,h-85,550,35),$"{(state.Players[0].Faction==Faction.Human?"인간":"동물")} · {WeaponLabel(state.Players[0])} · 라운드 {state.Round}",label);
-   GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전",new GUIStyle(label){fontSize=15});
+   GUI.Label(new Rect(w/2-275,h-85,550,35),$"내 진영: {(state.Players[0].Faction==Faction.Human?"인간":"동물")} · {WeaponLabel(state.Players[0],session.Session.ObserveSettings().Current.Magazine)} · 라운드 {state.Round}",label);
+   GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전 · Esc 메뉴",new GUIStyle(label){fontSize=15});
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
    if(menu) settingsPanel.Draw(session.Session,()=>{menu=false;SetCursor();});
    if(!string.IsNullOrEmpty(session.Session.ObserveSettings().Error)){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;settingsPanel.DrawError(session.Session);if(string.IsNullOrEmpty(session.Session.ObserveSettings().Error))SetCursor();}
 
   }
-  static string WeaponLabel(PlayerState player) {
+  static string WeaponLabel(PlayerState player,int magazine) {
    if(player.Faction==Faction.Animal)return player.AttackGraceRemaining>0?$"공격 대기 {player.AttackGraceRemaining:F1}초":"근접 공격";
-   return player.ReloadRemaining>0?$"재장전 {player.ReloadRemaining:F1}초":$"버블 {player.Ammo} / ∞";
+   return player.ReloadRemaining>0?$"재장전 중 ({player.ReloadRemaining:F1}초)":$"버블 {player.Ammo} / {magazine} (예비 ∞)";
   }
   void OnDestroy(){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
  }
