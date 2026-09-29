@@ -11,6 +11,8 @@ public class SettingsTests {
    var restarted=new PlaytestSession(2,path);restarted.StartSolo("host");
    Assert.AreEqual(180,restarted.ObserveSettings().Current.RoundSeconds);
    Assert.IsNotEmpty(restarted.ObserveSettings().Error);
+   Assert.AreEqual(SettingsFailure.Load,restarted.ObserveSettings().Failure);
+   Assert.IsFalse(restarted.RetrySettingsSave(0));
    Assert.AreEqual(corrupt,System.IO.File.ReadAllText(path));
   } finally {System.IO.Directory.Delete(dir,true);}
  }
@@ -63,7 +65,7 @@ public class SettingsTests {
    System.IO.Directory.CreateDirectory(path+".tmp");
    s.BeginSettingsEdit(0);v.RoundSeconds=90;s.UpdateSettingsEdit(0,v);Assert.IsTrue(s.ApplySettings(0));
    Assert.AreEqual(90,s.ObserveSettings().Pending.RoundSeconds);Assert.AreEqual(60,s.ObserveSettings().Saved.RoundSeconds);
-   Assert.IsNotEmpty(s.ObserveSettings().Error);Assert.AreEqual(old,System.IO.File.ReadAllText(path));
+   Assert.IsNotEmpty(s.ObserveSettings().Error);Assert.AreEqual(SettingsFailure.Save,s.ObserveSettings().Failure);Assert.AreEqual(old,System.IO.File.ReadAllText(path));
    System.IO.Directory.Delete(path+".tmp");Assert.IsTrue(s.RetrySettingsSave(0));
    var restarted=new PlaytestSession(2,path);restarted.StartSolo("host");restarted.Advance(20);
    Assert.AreEqual(90,restarted.Observe().SecondsRemaining);
