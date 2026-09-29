@@ -29,6 +29,7 @@ namespace AvH
         public int Round;
         public Faction? Winner;
         public BirthNotice[] Births;
+        public double BirthSecondsRemaining;
     }
     public sealed partial class PlaytestSession
     {
@@ -70,8 +71,9 @@ namespace AvH
                         int selected = random.Next(i, slots.Length);
                         int swap = slots[i]; slots[i] = slots[selected]; slots[selected] = swap;
                         players[slots[i]].Faction = Faction.Animal;
+                        players[slots[i]].AttackGraceRemaining = settings.Current.InitialAttackGrace;
                     }
-                    births = new[] { new BirthNotice { Kind = animalKind, Rarity = animalRarity, Count = settings.Current.InitialAnimals } };
+                    PublishBirth(settings.Current.InitialAnimals);
                     phase = RoundPhase.Chase; remaining = settings.Current.RoundSeconds;
                 } else if (phase == RoundPhase.Chase) {
                     phase = RoundPhase.Results; remaining = 5; winner = Faction.Human;
@@ -88,6 +90,7 @@ namespace AvH
         private static WorldPosition Spawn(int slot) => new WorldPosition((slot % 4 - 1.5f) * 3, 1, (slot / 4 - 1) * 3);
         public SessionState Observe() => new SessionState {
             Players = players.Select(p => p.Copy()).ToArray(), Phase = phase, SecondsRemaining = remaining, Round = round, Winner = winner,
+            BirthSecondsRemaining = birthSecondsRemaining,
             Births = births.Select(b => new BirthNotice { Kind = b.Kind, Rarity = b.Rarity, Count = b.Count }).ToArray()
         };
     }
