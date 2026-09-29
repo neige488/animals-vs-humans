@@ -11,9 +11,10 @@ namespace AvH.Tests {
    session.StartSolo("tester");
    yield return null;
    var before = session.Observe().Players[0].Position;
-   for(int i=0;i<50;i++) { session.SubmitInput(0, new PlayerInput { Forward=1 }); session.Step(0.02f); }
+   for(int i=0;i<50;i++) { session.SubmitInput(0, new PlayerInput { Right=-1 }); session.Step(0.02f); }
    var after = session.Observe().Players[0].Position;
-   Assert.Greater(after.Z, before.Z + 3);
+   // Move into clear plaza space; forward runs into another starting slot.
+   Assert.Less(after.X, before.X - 3);
    session.SubmitInput(0, new PlayerInput { Jump=true });
    session.Step(0.1f);
    Assert.Greater(session.Observe().Players[0].Position.Y, after.Y + 0.1f);

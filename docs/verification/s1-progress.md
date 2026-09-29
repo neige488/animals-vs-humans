@@ -27,3 +27,17 @@
 - 첫 데스크톱 WASD/mouse/Space는 legacy input 사용. 새로운 입력 패키지 설정 의존성을 줄이며 향후 gamepad는 후속 범위다.
 - 결과5초·인간5m/s·동물5.6m/s·점프1.5m·중력22·카메라5.5m/65°는 제작 초안, 사용자 확정 수치가 아니다.
 - Assets/ThirdParty는 중첩 프로젝트에서도 ignore. 실제 자산 catalog까지 private 로컬 경로에 두고 public repo에서 원본을 추적하지 않는다.
+
+
+## 라이선스 복구 이후 실제 Unity 검증 (2026-09-29)
+
+라이선스 IPC의 기존 프로세스 충돌을 root가 정리하고 GUI Editor 약관 수락 후 정상 진입했다. CLI 템플릿의 구버전 미사용 collab-proxy/inputsystem/visualscripting이 최신 Editor API와 충돌하여 제거했다(b08ba92). 아래 실행으로 앞선 테스트·빌드 차단은 해소됐다.
+
+- Unity EditMode: 3/3 PASS, exit0. `/private/tmp/avh-s1-editmode.xml`.
+- Unity PlayMode: 1/1 PASS, exit0. 실제 CharacterController에 공개 입력을 전달하여 이동·점프를 검증. `/private/tmp/avh-s1-playmode.xml`.
+- 첫 PlayMode의 앞으로 이동은 앞줄 봇의 정상 몸 충돌에 막혔다. 장애물 없는 경로를 검증하려던 테스트 전제를 바로잡아 왼쪽 빈 광장으로 이동하도록 수정했다. 제품 충돌을 끄지 않았다.
+- macOS Development 빌드 PASS, exit0, BuildReport success=true. `game/Builds/macOS/AnimalsVsHumans.app`.
+- Windows x64 Development 빌드 PASS, exit0, BuildReport success=true. `game/Builds/Windows/AnimalsVsHumans.exe`.
+- 빌드 로그: `/private/tmp/avh-s1-mac-build.log`, `/private/tmp/avh-s1-windows-build.log`.
+
+위 결과는 실제 엔진 테스트와 빌드 생성이다. **구매 에셋 미적용, 실제 Windows 실행/양 OS 플레이, 모든 쉘터 접근, 낙하·복귀, 카메라/한글 UI·재미 검증은 여전히 미완이다.** 어떤 PA도 live VERIFIED로 바꾸지 않는다. Editor가 생성한 GUID/meta 및 프로젝트 버전·설정 migration 파일을 함께 보존한다.

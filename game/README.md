@@ -29,4 +29,4 @@ Create → Animals vs Humans → Owned asset catalog로 `Assets/ThirdParty/Resou
 
 사용자 합의 기본값은 준비20초·추격180초·초기 동물2명·12슬롯입니다. 제작 중 선택한 값은 결과5초, 인간5m/s·동물5.6m/s, 점프1.5m·중력22m/s², 카메라5.5m·65°입니다. 아트·기본 충돌 맵과 수치는 가역적인 초안입니다. 입력은 첫 데스크톱 범위의 Unity legacy input을 사용합니다.
 
-현재 실제 로컬 Unity 실행은 라이선스 미활성으로 차단됐습니다. EditMode·PlayMode·Windows/macOS 빌드·물리·렌더·양쪽 쉘터 접근과 제품 PA는 미검증입니다. 보유 자산 적용, UI 한글 폰트 표시 및 실제 카메라 조작도 확인해야 합니다.
+라이선스 복구 후 실제 Unity EditMode 3개·PlayMode 이동/점프 1개와 Windows/macOS Development 빌드 생성은 통과했습니다. 실제 Windows 실행·렌더·양쪽 쉘터 접근·낙하복귀와 제품 PA는 미검증입니다. 보유 자산 적용, UI 한글 폰트 표시 및 실제 카메라 조작도 확인해야 합니다.
