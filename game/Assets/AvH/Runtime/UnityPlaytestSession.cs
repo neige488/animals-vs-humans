@@ -30,7 +30,7 @@ namespace AvH {
     RefreshVisual(p.Slot,p.Faction);
    }
   }
-  public SessionState Observe() => Session.Observe();
+  public SessionState Observe() => remoteSnapshot ?? Session.Observe();
   public void SubmitInput(int slot, PlayerInput input) {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
    if(float.IsNaN(input.Right) || float.IsInfinity(input.Right) || float.IsNaN(input.Forward) || float.IsInfinity(input.Forward) || float.IsNaN(input.Yaw) || float.IsInfinity(input.Yaw)) return;
@@ -40,7 +40,7 @@ namespace AvH {
    if(input.RoundId==0)input.RoundId=Session.Observe().Round;
    inputs[slot]=input;
   }
-  void Update() { if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
+  void Update() { if(remoteSnapshot!=null){InterpolateRemote();return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
   public void Step(float seconds) {
    if(seconds<=0 || float.IsNaN(seconds) || float.IsInfinity(seconds)) return;
    var before=Session.Observe();
