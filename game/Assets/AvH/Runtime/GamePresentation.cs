@@ -12,6 +12,11 @@ namespace AvH {
   bool menu;
   readonly SettingsPanel settingsPanel=new SettingsPanel();
   GUIStyle label, title;
+  // Override the fullscreen preference saved by older playtest builds on every desktop launch.
+  [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
+  static void ConfigureWindow() {
+   if(!Application.isEditor&&!Application.isBatchMode)Screen.SetResolution(1280,720,FullScreenMode.Windowed);
+  }
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
   static void Launch() {
    if(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name=="SampleScene" && Object.FindAnyObjectByType<GamePresentation>()==null && !Application.isBatchMode)
@@ -53,6 +58,10 @@ namespace AvH {
   void OnGUI() {
    if(label==null){GUI.skin.font=Font.CreateDynamicFontFromOSFont(new[]{"Apple SD Gothic Neo","Malgun Gothic","Arial"},20);label=new GUIStyle(GUI.skin.label){fontSize=20,alignment=TextAnchor.MiddleCenter};label.normal.textColor=Color.white;title=new GUIStyle(label){fontSize=30};}
    var w=Screen.width;var h=Screen.height;
+   if(session.Session==null||!network.CanPlay||menu) {
+    GUI.enabled=true;
+    if(GUI.Button(new Rect(w-160,16,140,36),"게임 종료")){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;Application.Quit();return;}
+   }
    if(session.Session==null||!network.CanPlay) {
     GUI.Box(new Rect(w/2-220,h/2-145,440,290),"");
     GUI.Label(new Rect(w/2-210,h/2-125,420,45),"Animals vs Humans",title);
