@@ -67,7 +67,7 @@ namespace AvH {
   void FireBubble(int slot,PlayerInput input) {
    var rules=Session.ObserveSettings().Current;
    var direction=Quaternion.Euler(input.Pitch,input.Yaw,0)*Vector3.forward;
-   var position=bodies[slot].transform.position+Vector3.up*.9f;
+   var position=bodies[slot].transform.position+Vector3.up*1.3f+Quaternion.Euler(0,input.Yaw,0)*Vector3.right*.1f;
    var visual=Effects.Bubble(transform,rules.BubbleRadius);visual.name="Bubble";visual.transform.position=position;
    Effects.Emit(position+direction*.6f,new Color(.63f,.93f,1,.7f),4,.65f,false);
    Effects.Sound(position,true);
