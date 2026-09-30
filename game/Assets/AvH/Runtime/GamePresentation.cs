@@ -10,6 +10,7 @@ namespace AvH {
   string nickname="플레이어";
   float yaw, pitch=20;
   bool menu;
+  Vector3 cameraOffset=new Vector3(.6f,.3f,-5.5f);
   readonly SettingsPanel settingsPanel=new SettingsPanel();
   GUIStyle label, title;
   // Override the fullscreen preference saved by older playtest builds on every desktop launch.
@@ -35,7 +36,10 @@ namespace AvH {
    if(session.Session==null||!network.CanPlay){wasPlaying=false;return;}
    if(!wasPlaying){menu=false;SetCursor();wasPlaying=true;}
    if(Input.GetKeyDown(KeyCode.Escape)) {menu=!menu;if(!menu&&!network.IsClient)session.Session.CancelSettingsEdit(0);SetCursor();}
-   if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {yaw+=Input.GetAxisRaw("Mouse X")*2;pitch=Mathf.Clamp(pitch-Input.GetAxisRaw("Mouse Y")*2,-20,65);}
+   if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {
+    if(Cursor.lockState!=CursorLockMode.Locked && Input.GetMouseButtonDown(0))SetCursor();
+    SetLookAngles(yaw+Input.GetAxisRaw("Mouse X")*2,pitch-Input.GetAxisRaw("Mouse Y")*2);
+   }
    var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
    if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
    network.SubmitInput(input);
@@ -44,16 +48,37 @@ namespace AvH {
    if(session.Session==null||!network.CanPlay)return;
    var target=session.PlayerTransform(network.LocalSlot).position+Vector3.up*1.35f;
    var rotation=Quaternion.Euler(pitch,yaw,0);
-   var offset=rotation*new Vector3(.6f,.3f,-5.5f);
-   float distance=offset.magnitude;
-   // Ignore player colliders so the camera does not collapse into its own character.
-   foreach(var hit in Physics.SphereCastAll(target,.18f,offset.normalized,distance)) {
-    if(hit.collider.GetComponentInParent<CharacterController>()!=null)continue;
-    distance=Mathf.Min(distance,Mathf.Max(.5f,hit.distance-.15f));
-   }
+   var preferred=new Vector3(.6f,.3f,-5.5f);
+   var offset=rotation*preferred;
+   float distance=ClearDistance(target,offset);
+   // Keep the normal shoulder unless it is severely blocked. Test the retained shoulder
+   // first to avoid alternating sides while passing a pillar or another narrow obstacle.
+   if(distance<2.5f) {
+    var candidates=new[]{cameraOffset,new Vector3(-3.2f,.3f,-5.5f),new Vector3(3.2f,.3f,-5.5f),new Vector3(.6f,2.5f,-5.5f)};
+    foreach(var candidate in candidates) {
+     var boom=rotation*candidate;float clear=ClearDistance(target,boom);
+     if(clear>distance+.25f){offset=boom;distance=clear;cameraOffset=candidate;}
+     if(distance>=4f)break;
+    }
+   } else cameraOffset=preferred;
    view.transform.position=target+offset.normalized*distance;
    view.transform.rotation=Quaternion.LookRotation(target+rotation*Vector3.forward*8-view.transform.position);
   }
+  static float ClearDistance(Vector3 target,Vector3 offset) {
+   float distance=offset.magnitude;
+   foreach(var hit in Physics.SphereCastAll(target,.18f,offset.normalized,distance,~0,QueryTriggerInteraction.Ignore)) {
+    if(hit.collider.GetComponentInParent<CharacterController>()!=null)continue;
+    distance=Mathf.Min(distance,Mathf.Max(0,hit.distance-.15f));
+   }
+   // In a fully enclosed space there may be no third person angle; never put the camera
+   // through a wall merely to preserve distance.
+   return distance;
+  }
+  public void SetLookAngles(float horizontal,float vertical){yaw=horizontal;pitch=Mathf.Clamp(vertical,-20,65);}
+  void OnApplicationFocus(bool focused) {
+   if(focused&&wasPlaying&&!menu&&session!=null&&session.Session!=null&&network.CanPlay)SetCursor();
+  }
+
   void SetCursor(){Cursor.lockState=menu?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=menu;}
   void OnGUI() {
    if(label==null){GUI.skin.font=Font.CreateDynamicFontFromOSFont(new[]{"Apple SD Gothic Neo","Malgun Gothic","Arial"},20);label=new GUIStyle(GUI.skin.label){fontSize=20,alignment=TextAnchor.MiddleCenter};label.normal.textColor=Color.white;title=new GUIStyle(label){fontSize=30};}
