@@ -30,10 +30,12 @@ namespace AvH.Editor {
    effects.Emit(new Vector3(0,1.4f,3),new Color(.66f,.92f,1,.9f),12,1.9f);effects.Advance(.12f);
    Shot(camera,new Vector3(2,2.6f,-7),new Vector3(0,1.6f,1),"bubble-effects");root.SetActive(false);
    var floor=GameObject.CreatePrimitive(PrimitiveType.Cube);floor.transform.position=new Vector3(0,-.025f,0);floor.transform.localScale=new Vector3(12,.05f,12);
-   foreach(var prefab in new[]{catalog.Human,catalog.Animal}) {
+   foreach(var character in catalog.Humans.Concat(catalog.Animals)) {
+    var prefab=character.Prefab;
     var model=Pose(prefab,null,Vector3.zero);
     foreach(var r in model.GetComponentsInChildren<Renderer>())Debug.Log("AUDIT "+prefab.name+" bounds "+r.bounds+" scale "+r.transform.lossyScale);
-    Shot(camera,new Vector3(3,2,4),Vector3.up*.7f,prefab.name);Object.DestroyImmediate(model);
+    if(character.Id.StartsWith("human-")){var gun=effects.Gun(model.transform);gun.GetComponent<BubbleGunPose>().Bind(model.transform);gun.GetComponent<BubbleGunPose>().SetAim(0,-10);gun.GetComponent<BubbleGunPose>().ApplyPose();}
+    Shot(camera,new Vector3(3,2,4),Vector3.up*.7f,character.Id);Object.DestroyImmediate(model);
    }
    Object.DestroyImmediate(floor);Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
   }

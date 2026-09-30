@@ -24,28 +24,36 @@ namespace AvH.Editor {
     if(converted==null){converted=new Material(Shader.Find("Standard"));AssetDatabase.CreateAsset(converted,convertedPath);}
     converted.mainTexture=tex;converted.color=Color.white;converted.SetFloat("_Glossiness",.15f);EditorUtility.SetDirty(converted);Converted[mat]=converted;
    }
-   var human=Character("polyperfect/Low Poly Animated People/- Prefabs/man_casual.prefab","Human",1.8f);
-   var animal=Character("polyperfect/Low Poly Animated Animals/Prefabs/Animals/Fox.prefab","Fox",null);
+   var humanFiles=new[]{"man_casual","woman_casual","man_fire","woman_police","man_construction_worker","woman_explorer"};
+   var humanNames=new[]{"산책객","여행객","소방관","경찰관","건설 작업자","탐험가"};
+   var animalFiles=new[]{"Fox","Wolf","Bear_Grizzly","Boar","Rabbit_Brown","Penguin"};
+   var animalNames=new[]{"여우","늑대","불곰","멧돼지","토끼","펭귄"};
+   var humans=humanFiles.Select((file,i)=>Owned(file,humanNames[i],true)).ToArray();
+   var animals=animalFiles.Select((file,i)=>Owned(file,animalNames[i],false)).ToArray();
    var map=BuildVillage();
    var village=PrefabUtility.SaveAsPrefabAsset(map,Generated+"Village.prefab");UnityEngine.Object.DestroyImmediate(map);
    var path=Root+"Resources/OwnedAssetCatalog.asset";
    var catalog=AssetDatabase.LoadAssetAtPath<OwnedAssetCatalog>(path);
    if(catalog==null){catalog=ScriptableObject.CreateInstance<OwnedAssetCatalog>();AssetDatabase.CreateAsset(catalog,path);}
    catalog.ShelterPoints=PrototypeVillage.DefaultShelters.ToArray();
-   catalog.Human=human;catalog.Animal=animal;catalog.Village=village;
+   catalog.Humans=humans;catalog.Animals=animals;catalog.Human=humans[0].Prefab;catalog.Animal=animals[0].Prefab;catalog.Village=village;
    catalog.AnimalDisplayName="여우";catalog.Rarity="일반";catalog.RarityColor=new Color(.85f,.95f,1);
    catalog.HumanSource="Polyperfect Low Poly Animated People 3.02 / man_casual";
    catalog.AnimalSource="Polyperfect Low Poly Animated Animals 4.1.1 / Fox";
    catalog.VillageSource="Synty POLYGON Adventure 1.8.2 / village 01/02, wall 01, tree 05 + Generic base floor 01";
-   EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();Debug.Log("Owned assets configured: human, fox and Synty village; source assets remain Git ignored.");
+   EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();Debug.Log("Owned assets configured: six humans, six animals and Synty village; source assets remain Git ignored.");
+  }
+  static OwnedCharacter Owned(string file,string display,bool human) {
+   var source=human?"polyperfect/Low Poly Animated People/- Prefabs/":"polyperfect/Low Poly Animated Animals/Prefabs/Animals/";
+   return new OwnedCharacter{Id=(human?"human-":"animal-")+file.ToLowerInvariant(),DisplayName=display,Source=source+file,Prefab=Character(source+file+".prefab",(human?"Human_":"Animal_")+file,human?1.8f:file=="Rabbit_Brown"?.65f:(float?)null)};
   }
   static GameObject Load(string path) {var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(Root+path);if(prefab==null)throw new InvalidOperationException("Missing owned prefab: "+path);return prefab;}
   static GameObject Character(string path,string name,float? height) {
    var instance=UnityEngine.Object.Instantiate(Load(path));Clean(instance);
    foreach(var animator in instance.GetComponentsInChildren<Animator>()) {
-    if(name=="Human" && animator.runtimeAnimatorController is AnimatorOverrideController demo)
+    if(name.StartsWith("Human_") && animator.runtimeAnimatorController is AnimatorOverrideController demo)
      animator.runtimeAnimatorController=demo.runtimeAnimatorController;
-    animator.applyRootMotion=false;animator.Rebind();animator.Update(0);animator.Play("Idle",0,0);animator.Update(.1f);
+    animator.fireEvents=false;animator.applyRootMotion=false;animator.Rebind();animator.Update(0);animator.Play("Idle",0,0);animator.Update(.1f);
    }
    var bounds=PoseBounds(instance);
    var holder=new GameObject(name);
@@ -54,12 +62,14 @@ namespace AvH.Editor {
    // Preserve the fox rig's authored metre scale; its skinned node already has a 100x import conversion.
    // Normalize humans outside the Animator hierarchy.
    holder.transform.localScale=Vector3.one*(height.HasValue?height.Value/bounds.size.y:1f);
-   foreach(var animator in holder.GetComponentsInChildren<Animator>()){animator.applyRootMotion=false;animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;}
+   foreach(var animator in holder.GetComponentsInChildren<Animator>()){animator.fireEvents=false;animator.applyRootMotion=false;animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;}
    foreach(var collider in holder.GetComponentsInChildren<Collider>())UnityEngine.Object.DestroyImmediate(collider);
    foreach(var body in holder.GetComponentsInChildren<Rigidbody>())UnityEngine.Object.DestroyImmediate(body);
    var result=PrefabUtility.SaveAsPrefabAsset(holder,Generated+name+".prefab");UnityEngine.Object.DestroyImmediate(holder);return result;
   }
   static void Clean(GameObject go){
+   // Some vendor rigs nest an unused Animator below the actual controller.
+   foreach(var animator in go.GetComponentsInChildren<Animator>(true))if(animator.runtimeAnimatorController==null)UnityEngine.Object.DestroyImmediate(animator);
    foreach(var component in go.GetComponentsInChildren<Component>(true))
     if(component!=null && component.GetType().FullName=="UnityEngine.AI.NavMeshAgent")UnityEngine.Object.DestroyImmediate(component);
    foreach(var renderer in go.GetComponentsInChildren<Renderer>(true)) renderer.sharedMaterials=renderer.sharedMaterials.Select(m=>m!=null && Converted.TryGetValue(m,out var converted)?converted:m).ToArray();

@@ -18,7 +18,12 @@ seeds=[g for g,(_,_,p,_) in records.items() if str(p).endswith(('/Fox.prefab','/
 town_prefabs=['SM_Prop_Pot_01.prefab','SM_Item_Lantern_01.prefab','SM_Env_Bush_02.prefab','SM_Env_Grass_01.prefab','SM_Env_Rock_03.prefab','SM_Env_Rock_07.prefab']
 # Importing the Adventure package always includes the village generator's required props.
 has_adventure=any(p.name=='SM_Bld_Village_01.prefab' for _,_,p,_ in records.values())
-for name in args.extra_prefab+(town_prefabs if has_adventure else []):
+human_prefabs=['woman_casual.prefab','man_fire.prefab','woman_police.prefab','man_construction_worker.prefab','woman_explorer.prefab']
+animal_prefabs=['Wolf.prefab','Bear_Grizzly.prefab','Boar.prefab','Rabbit_Brown.prefab','Penguin.prefab']
+required=town_prefabs if has_adventure else []
+if any(p.name=='man_casual.prefab' for _,_,p,_ in records.values()):required+=human_prefabs
+if any(p.name=='Fox.prefab' for _,_,p,_ in records.values()):required+=animal_prefabs
+for name in args.extra_prefab+required:
  matches=[g for g,(_,_,p,_) in records.items() if p.name==name]
  if not matches:raise ValueError('Requested owned prefab not found: '+name)
  seeds.extend(matches)

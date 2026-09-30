@@ -8,11 +8,12 @@ namespace AvH.Tests {
    for(int i=0;i<300&&!done();i++){host.Pump();client.Pump();Thread.Sleep(2);} Assert.That(done(),Is.True,client.Error);
   }
   [Test] public void RealSocketReadyTakesLatestBotAndDisconnectPreservesWorld() {
-   var world=new PlaytestSession(1);world.StartSolo("host");
+   var world=new PlaytestSession(1);world.StartSolo("host",humans:RosterTests.Definitions("human"),animals:RosterTests.Definitions("animal"));
    using(var host=new PrivateRoomHost(world,"127.0.0.1")) using(var client=new PrivateRoomClient()) {
     client.Connect(host.RoomCode,"guest"); Until(host,client,()=>client.Status==ConnectionStatus.Loading);
     Assert.That(world.Observe().Players.Count(p=>!p.IsBot),Is.EqualTo(1));
     world.RecordWorldPosition(1,new WorldPosition(9,1,8));world.TryFire(1,1);world.TryReload(1,1);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    Assert.AreEqual("human1",client.Snapshot.Players[1].CharacterId);Assert.AreEqual("human 이름 1",client.Snapshot.Players[1].CharacterName);Assert.AreEqual("일반",client.Snapshot.Players[1].CharacterRarity);
     Assert.That(client.Snapshot.Players[1].Ammo,Is.EqualTo(11));Assert.That(client.Snapshot.Players[1].ReloadRemaining,Is.EqualTo(1.5));
     Assert.That(client.Slot,Is.EqualTo(1));Assert.That(client.Snapshot.Players[1].Position.X,Is.EqualTo(9));
     client.Cancel();for(int i=0;i<20;i++){host.Pump();Thread.Sleep(2);}
@@ -30,6 +31,19 @@ namespace AvH.Tests {
     impostor.Connect(host.RoomCode,"renamed");Until(host,impostor,()=>impostor.Status==ConnectionStatus.Loading);impostor.Ready();Until(host,impostor,()=>impostor.Status==ConnectionStatus.Playing);
     Assert.That(impostor.Slot,Is.Not.EqualTo(original));
     host.Dispose();Until(host,client,()=>client.Status==ConnectionStatus.Interrupted);Assert.That(client.Status,Is.EqualTo(ConnectionStatus.Interrupted));Assert.That(client.Snapshot,Is.Null);
+   }
+  }
+  [Test] public void RosterIdentitySurvivesTransformationDisconnectAndReconnect() {
+   var world=new PlaytestSession(2);world.StartSolo("host",humans:RosterTests.Definitions("human"),animals:RosterTests.Definitions("animal"));world.Advance(22);
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    int slot=client.Slot;Assert.AreEqual(Faction.Human,client.Snapshot.Players[slot].Faction);
+    var attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal);world.RecordWorldPosition(slot,attacker.Position);Assert.IsTrue(world.TryMeleeHit(attacker.Slot,slot,world.Observe().Round));
+    var changed=world.Observe().Players[slot];Until(host,client,()=>client.Snapshot.Players[slot].Faction==Faction.Animal);
+    Assert.AreEqual(changed.CharacterId,client.Snapshot.Players[slot].CharacterId);Assert.AreEqual(changed.CharacterName,client.Snapshot.Players[slot].CharacterName);
+    client.Cancel();for(int i=0;i<20;i++){host.Pump();Thread.Sleep(2);}
+    client.Connect(host.RoomCode,"returned");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    Assert.AreEqual(slot,client.Slot);Assert.AreEqual(changed.CharacterId,client.Snapshot.Players[slot].CharacterId);Assert.AreEqual(changed.CharacterRarity,client.Snapshot.Players[slot].CharacterRarity);
    }
   }
   [Test] public void WireRejectsMismatchedBuildBeforeReadiness() {
@@ -126,8 +140,8 @@ namespace AvH.Tests {
    }
   }
   [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
-   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-4"));
-   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("6fRUIGW+2OLg30SvrXGRYClRxWxH/7g2O66Jspv9bJo="),"Schema changes require explicit protocol version and guard update");
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-5"));
+   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("TBqmQTaNIEg1ypV50CiSpY+I6tuNwwhs9mL+O+VHqw8="),"Schema changes require explicit protocol version and guard update");
    foreach(var t in new[]{typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice)}) {
     Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
     Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);
