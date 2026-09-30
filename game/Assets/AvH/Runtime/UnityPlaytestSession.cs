@@ -13,6 +13,7 @@ namespace AvH {
   readonly List<CharacterController> bodies = new List<CharacterController>();
   readonly PlayerInput[] inputs = new PlayerInput[12];
   readonly float[] vertical = new float[12];
+  readonly Transform[] guns=new Transform[12];
   readonly Vector3[] returns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
   public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
   public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null) {
@@ -55,14 +56,17 @@ namespace AvH {
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; }
-    if(p.Faction!=before.Players[i].Faction) RefreshVisual(i,p.Faction);
+    if(p.Faction!=before.Players[i].Faction){Effects.Emit(body.transform.position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);RefreshVisual(i,p.Faction);}
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
+     if(guns[i]!=null)guns[i].rotation=Quaternion.Euler(input.Pitch,input.Yaw,0);
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
-     if(body.isGrounded && input.Jump) vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump));
+     if(body.isGrounded && input.Jump){vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
+     bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];
      body.Move((direction*(p.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed)+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
+     if(!wasGrounded&&body.isGrounded&&fallingSpeed< -4)Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
      foreach(var animator in body.GetComponentsInChildren<Animator>()) {
       animator.applyRootMotion=false;
@@ -94,6 +98,7 @@ namespace AvH {
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   void RefreshVisual(int slot,Faction faction) {
    var parent=bodies[slot].transform;
+   if(guns[slot]!=null)Destroy(guns[slot].gameObject);guns[slot]=faction==Faction.Human?Effects.Gun(parent):null;
    var old=parent.Find("Visual"); if(old!=null) Destroy(old.gameObject);
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    var prefab=catalog==null?null:(faction==Faction.Human?catalog.Human:catalog.Animal);

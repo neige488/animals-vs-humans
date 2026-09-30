@@ -20,7 +20,8 @@ namespace AvH {
   // Actual authoritative physics hits, for combat feedback and session diagnostics.
   public int[] ObserveBubbleHits()=>(int[])bubbleHits.Clone();
   int nextBubbleId;
-  Material bubbleMaterial;
+  PrimitiveEffects effects;
+  public PrimitiveEffects Effects {get {if(effects==null){var root=new GameObject("Primitive effects");root.transform.SetParent(transform,false);effects=root.AddComponent<PrimitiveEffects>();effects.Initialize();}return effects;}}
   public BubbleState[] ObserveBubbles()=>remoteVisuals!=null?remoteVisuals.Bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray():bubbles.Select(b=>new BubbleState{Id=b.Id,OwnerSlot=b.Owner,Round=b.Round,Position=ToPosition(b.Position),Direction=ToPosition(b.Direction),RemainingLife=b.Life,Travelled=b.Travelled}).ToArray();
   public NetworkBurst[] ObserveBursts()=>bursts.Select(b=>new NetworkBurst{Id=b.id,Position=ToPosition(b.visual.transform.position),Remaining=b.remaining}).ToArray();
   static WorldPosition ToPosition(Vector3 v)=>new WorldPosition(v.x,v.y,v.z);
@@ -33,7 +34,7 @@ namespace AvH {
    }
   }
   void StepCombatWorld(float seconds,SessionState beforeCombat) {
-   for(int i=bursts.Count-1;i>=0;i--){var burst=bursts[i];burst.remaining-=seconds;if(burst.remaining<=0){Destroy(burst.visual);bursts.RemoveAt(i);}else{burst.visual.transform.localScale*=1+seconds*5;bursts[i]=burst;}}
+   for(int i=bursts.Count-1;i>=0;i--){var burst=bursts[i];burst.remaining-=seconds;if(burst.remaining<=0){Destroy(burst.visual);bursts.RemoveAt(i);}else bursts[i]=burst;}
    for(int i=bubbles.Count-1;i>=0;i--) {
     var bubble=bubbles[i];float distance=Mathf.Min(bubble.Speed*seconds,bubble.Range-bubble.Travelled,bubble.Speed*bubble.Life);
     bool popped=false;
@@ -61,19 +62,18 @@ namespace AvH {
     inputs[slot].Reload=false;
    }
    var after=Session.Observe();
-   for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction)RefreshVisual(slot,after.Players[slot].Faction);
+   for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction){Effects.Emit(bodies[slot].transform.position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);RefreshVisual(slot,after.Players[slot].Faction);}
   }
   void FireBubble(int slot,PlayerInput input) {
    var rules=Session.ObserveSettings().Current;
    var direction=Quaternion.Euler(input.Pitch,input.Yaw,0)*Vector3.forward;
    var position=bodies[slot].transform.position+Vector3.up*.9f;
-   var visual=GameObject.CreatePrimitive(PrimitiveType.Sphere);visual.name="Bubble";visual.transform.SetParent(transform);visual.transform.position=position;visual.transform.localScale=Vector3.one*rules.BubbleRadius*2;
-   visual.GetComponent<Collider>().enabled=false;Destroy(visual.GetComponent<Collider>());
-   if(bubbleMaterial==null){bubbleMaterial=PrototypeVillage.Material(new Color(.25f,.8f,1,.55f));bubbleMaterial.SetFloat("_Mode",3);bubbleMaterial.SetInt("_SrcBlend",5);bubbleMaterial.SetInt("_DstBlend",10);bubbleMaterial.SetInt("_ZWrite",0);bubbleMaterial.EnableKeyword("_ALPHAPREMULTIPLY_ON");bubbleMaterial.renderQueue=3000;}
-   visual.GetComponent<Renderer>().sharedMaterial=bubbleMaterial;
+   var visual=Effects.Bubble(transform,rules.BubbleRadius);visual.name="Bubble";visual.transform.position=position;
+   Effects.Emit(position+direction*.6f,new Color(.63f,.93f,1,.7f),4,.65f,false);
+   Effects.Sound(position,true);
    bubbles.Add(new Bubble{Id=++nextBubbleId,Owner=slot,Round=input.RoundId,Position=position,Direction=direction,Life=rules.BubbleLifetime,Radius=rules.BubbleRadius,Speed=rules.BubbleSpeed,Range=rules.BubbleRange,PushForce=rules.PushForce,FriendlyPush=rules.FriendlyPush,Visual=visual});
   }
-  void Pop(Bubble bubble){bubble.Visual.transform.position=bubble.Position;bursts.Add((bubble.Visual,.15f,bubble.Id));}
+  void Pop(Bubble bubble){Destroy(bubble.Visual);var marker=new GameObject("Bubble impact");marker.transform.SetParent(transform,false);marker.transform.position=bubble.Position;bursts.Add((marker,.15f,bubble.Id));Effects.Emit(bubble.Position,new Color(.66f,.92f,1,.9f),12,1.9f);Effects.Sound(bubble.Position,false);}
   void Melee(int slot,PlayerInput input) {
    var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.forward;
    var origin=bodies[slot].transform.position+Vector3.up*.9f;
@@ -85,6 +85,5 @@ namespace AvH {
     if(Session.TryMeleeHit(slot,victim,input.RoundId))break;
    }
   }
-  void OnDestroy(){if(bubbleMaterial!=null)Destroy(bubbleMaterial);}
  }
 }

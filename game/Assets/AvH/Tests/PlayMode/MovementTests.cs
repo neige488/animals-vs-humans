@@ -87,7 +87,8 @@ namespace AvH.Tests {
    var animal=session.Observe().Players.First(p=>p.Slot==0);
    Assert.AreEqual(Faction.Animal,animal.Faction);
    bool recovered=false;
-   for(int i=0;i<350;i++) {
+   for(int i=0;i<45;i++){session.SubmitInput(animal.Slot,new PlayerInput{Forward=1});session.Step(.02f);}
+   for(int i=0;i<650;i++) {
     var before=session.Observe().Players[animal.Slot].Position;
     session.SubmitInput(animal.Slot,new PlayerInput{Right=-1});session.Step(.02f);
     var after=session.Observe().Players[animal.Slot];
@@ -100,13 +101,14 @@ namespace AvH.Tests {
   [UnityTest] public IEnumerator BasicInputsReachRooftopAndRecoverFromMapEdge() {
    var root=new GameObject("route session");var session=root.AddComponent<UnityPlaytestSession>();
    session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("route tester");yield return null;
-   MoveTo(session,-12,-3,130);MoveTo(session,-12,10,250);
+   MoveTo(session,TownLayout.RoofApproach.x,0,220);MoveTo(session,TownLayout.RoofApproach.x,TownLayout.RoofApproach.z,180);MoveTo(session,TownLayout.Roof.x,TownLayout.Roof.z,250);
    Assert.Greater(session.Observe().Players[0].Position.Y,3.7f,"Rooftop must be reachable by basic movement");
    // Walk off the rooftop toward the map edge; ordinary falling must continue before recovery.
-   MoveTo(session,-20,10,150);
+   MoveTo(session,TownLayout.Roof.x-8,TownLayout.Roof.z,180);
    Assert.Less(session.Observe().Players[0].Position.Y,1f,"Ordinary rooftop fall returns to ground without teleport");
+   MoveTo(session,TownLayout.Roof.x-8,0,350);
    var faction=session.Observe().Players[0].Faction;bool recovered=false;
-   for(int i=0;i<250;i++) {
+   for(int i=0;i<500;i++) {
     var before=session.Observe().Players[0].Position;
     session.SubmitInput(0,new PlayerInput{Right=-1});session.Step(.02f);
     var after=session.Observe().Players[0].Position;

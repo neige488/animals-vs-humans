@@ -81,7 +81,7 @@ namespace AvH {
  }
  // A small terrain-derived grid supports the roof staircase and both ground shelters.
  sealed class VillageRoutes {
-  const int Size=89;const float Cell=.5f,Origin=-22;
+  const int Size=121;const float Cell=.75f,Origin=-45;
   readonly Vector3[] points=new Vector3[Size*Size];readonly bool[] walkable=new bool[Size*Size];
   bool built,rebuildRequested,rebuiltThisStep;float sinceBuild=1;int builds,thisStep,maxPerStep;
   public BotNavigationDiagnostics Observe()=>new BotNavigationDiagnostics{GridBuilds=builds,MaxGridBuildsPerStep=maxPerStep};
@@ -98,6 +98,9 @@ namespace AvH {
     var hits=Physics.RaycastAll(top,Vector3.down,15,~0,QueryTriggerInteraction.Ignore).Where(h=>Terrain(h.collider)&&h.normal.y>.7f).OrderByDescending(h=>h.distance).ToArray();
     foreach(var hit in hits) {
      var p=hit.point;
+     // Reject a floor hidden under a low stair. The standing capsule alone leaves
+     // foot clearance and can otherwise connect ground directly to a .5m step.
+     if(Physics.OverlapSphere(p+Vector3.up*.05f,.015f,~0,QueryTriggerInteraction.Ignore).Any(Terrain))continue;
      if(Physics.OverlapCapsule(p+Vector3.up*.75f,p+Vector3.up*1.47f,.32f,~0,QueryTriggerInteraction.Ignore).Any(Terrain))continue;
      points[id]=p;walkable[id]=true;break;
     }

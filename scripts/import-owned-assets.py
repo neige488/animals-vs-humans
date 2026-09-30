@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Import selected owned prefab dependency closure into ignored Assets/ThirdParty only."""
 import argparse, pathlib, tarfile, re, subprocess
-parser=argparse.ArgumentParser();parser.add_argument('packages',nargs='+');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('packages',nargs='+');parser.add_argument('--extra-prefab',action='append',default=[]);args=parser.parse_args()
 root=pathlib.Path(__file__).resolve().parents[1];dest=root/'game/Assets/ThirdParty'
 if subprocess.run(['git','check-ignore','-q',str(dest/'probe')],cwd=root).returncode!=0:
  raise RuntimeError('ThirdParty must be ignored')
@@ -15,6 +15,10 @@ for name in args.packages:
   if any(x not in ('00','') for x in parts[1:]):raise ValueError('Unexpected pathname suffix')
   guid=member.name.split('/')[0];records[guid]=(archive,members,path,guid)
 seeds=[g for g,(_,_,p,_) in records.items() if str(p).endswith(('/Fox.prefab','/man_casual.prefab','/SM_Bld_Village_01.prefab','/SM_Bld_Village_02.prefab','/SM_Bld_Wall_01.prefab','/SM_Bld_Stall_01.prefab','/SM_Bld_Base_Floor_01.prefab','/SM_Bld_Base_Stairs_02.prefab','/SM_Env_Tree_05.prefab','/SM_Bld_Village_03.prefab','/SM_Bld_Village_04.prefab','/SM_Bld_Village_Top_01.prefab','/SM_Bld_Stall_Cover_01.prefab','/SM_Prop_Crate_01.prefab','/SM_Prop_Barrel_01.prefab','/SM_Prop_Cart_01.prefab','/SM_Bld_Well_01.prefab','/SM_Bld_Fence_01.prefab'))]
+for name in args.extra_prefab:
+ matches=[g for g,(_,_,p,_) in records.items() if p.name==name]
+ if not matches:raise ValueError('Requested owned prefab not found: '+name)
+ seeds.extend(matches)
 if len(seeds)<5:raise ValueError('Required owned prefabs not found')
 seen=set();pending=list(seeds);files=0;total=0
 # Game behavior uses our own C#. Vendor demos/scripts are never compiled.
