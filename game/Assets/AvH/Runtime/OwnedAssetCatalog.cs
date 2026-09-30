@@ -3,6 +3,7 @@ namespace AvH {
  [System.Serializable] public sealed class OwnedCharacter {
   public string Id,DisplayName,Rarity="일반",Source;
   public GameObject Prefab;
+  public Texture2D Portrait;
   public CharacterDefinition Definition()=>new CharacterDefinition(Id,DisplayName,Rarity);
  }
  [CreateAssetMenu(menuName="Animals vs Humans/Owned asset catalog")]

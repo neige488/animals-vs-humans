@@ -5,6 +5,10 @@ namespace AvH {
  public sealed class GamePresentation : MonoBehaviour {
   UnityPlaytestSession session;
   Camera view;
+  bool ownsView;Light ownedSun;
+  float cameraDistance=5.54f;
+  readonly System.Collections.Generic.Dictionary<Renderer,UnityEngine.Rendering.ShadowCastingMode> hiddenLocal=new System.Collections.Generic.Dictionary<Renderer,UnityEngine.Rendering.ShadowCastingMode>();
+  RosterHud rosterHud;
   NetworkPresentation network;
   bool wasPlaying;
   string nickname="플레이어";
@@ -27,13 +31,15 @@ namespace AvH {
    session=gameObject.AddComponent<UnityPlaytestSession>();
    network=gameObject.AddComponent<NetworkPresentation>();network.Initialize(session);
    view=Camera.main;
-   if(view==null) {var cameraObject=new GameObject("Main Camera");view=cameraObject.AddComponent<Camera>();cameraObject.AddComponent<AudioListener>();}
+   if(view==null) {var cameraObject=new GameObject("Main Camera");cameraObject.tag="MainCamera";view=cameraObject.AddComponent<Camera>();ownsView=true;cameraObject.AddComponent<AudioListener>();}
+   rosterHud=new GameObject("Match roster HUD").AddComponent<RosterHud>();rosterHud.Initialize(view);rosterHud.Present(null,0);
    view.fieldOfView=65;view.farClipPlane=180;view.backgroundColor=new Color(.45f,.7f,.85f);view.clearFlags=CameraClearFlags.Skybox;
-   if(Object.FindAnyObjectByType<Light>()==null) {var light=new GameObject("Sun").AddComponent<Light>();light.type=LightType.Directional;light.intensity=1.3f;light.transform.rotation=Quaternion.Euler(45,-35,0);}
+   if(Object.FindAnyObjectByType<Light>()==null) {var light=new GameObject("Sun").AddComponent<Light>();ownedSun=light;light.type=LightType.Directional;light.intensity=1.3f;light.transform.rotation=Quaternion.Euler(45,-35,0);}
    TownLighting.Apply(view,Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l=>l.type==LightType.Directional));
   }
   void Update() {
-   if(session.Session==null||!network.CanPlay){wasPlaying=false;return;}
+   if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;return;}
+   rosterHud.Present(session.Observe(),network.LocalSlot);
    if(!wasPlaying){menu=false;SetCursor();wasPlaying=true;}
    if(Input.GetKeyDown(KeyCode.Escape)) {menu=!menu;if(!menu&&!network.IsClient)session.Session.CancelSettingsEdit(0);SetCursor();}
    if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {
@@ -48,25 +54,30 @@ namespace AvH {
    if(session.Session==null||!network.CanPlay)return;
    var target=session.PlayerTransform(network.LocalSlot).position+Vector3.up*1.35f;
    var rotation=Quaternion.Euler(pitch,yaw,0);
-   var preferred=new Vector3(.6f,.3f,-5.5f);
-   var offset=rotation*preferred;
-   float distance=ClearDistance(target,offset);
-   // Keep the normal shoulder unless it is severely blocked. Test the retained shoulder
-   // first to avoid alternating sides while passing a pillar or another narrow obstacle.
-   if(distance<2.5f) {
-    var candidates=new[]{cameraOffset,new Vector3(-3.2f,.3f,-5.5f),new Vector3(3.2f,.3f,-5.5f),new Vector3(.6f,2.5f,-5.5f)};
-    foreach(var candidate in candidates) {
-     var boom=rotation*candidate;float clear=ClearDistance(target,boom);
-     if(clear>distance+.25f){offset=boom;distance=clear;cameraOffset=candidate;}
-     if(distance>=4f)break;
+   var preferred=new Vector3(.6f,.3f,-5.5f);float length=preferred.magnitude;
+   var chosen=preferred;float preferredClear=ClearDistance(target,rotation*preferred);
+   if(preferredClear/length<.85f) {
+    float retained=ClearDistance(target,rotation*cameraOffset)/length;
+    if(retained>=.6f)chosen=cameraOffset;
+    else {
+     var candidates=new[]{new Vector3(-3.2f,.3f,-5.5f),new Vector3(3.2f,.3f,-5.5f),new Vector3(.6f,2.5f,-5.5f)};
+     float best=preferredClear/length;
+     foreach(var candidate in candidates){var normalized=candidate.normalized*length;float ratio=ClearDistance(target,rotation*normalized)/length;if(ratio>best+.15f){chosen=normalized;best=ratio;}if(best>=.8f)break;}
     }
-   } else cameraOffset=preferred;
-   view.transform.position=target+offset.normalized*distance;
+   }
+   cameraOffset=Vector3.Lerp(cameraOffset,chosen,1-Mathf.Exp(-12*Time.unscaledDeltaTime)).normalized*length;
+   var offset=rotation*cameraOffset;float clear=ClearDistance(target,offset);
+   // Collision compression is immediate; recovery and shoulder changes are gradual.
+   cameraDistance=Mathf.Min(clear,Mathf.Lerp(cameraDistance,clear,1-Mathf.Exp(-12*Time.unscaledDeltaTime)));
+   view.transform.position=target+offset.normalized*cameraDistance;
+   bool hide=cameraDistance<1.2f;
+   if(hide){foreach(var renderer in session.PlayerTransform(network.LocalSlot).GetComponentsInChildren<Renderer>()){if(!hiddenLocal.ContainsKey(renderer))hiddenLocal[renderer]=renderer.shadowCastingMode;renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;}}
+   else RestoreLocalRenderers();
    view.transform.rotation=Quaternion.LookRotation(target+rotation*Vector3.forward*8-view.transform.position);
   }
   static float ClearDistance(Vector3 target,Vector3 offset) {
    float distance=offset.magnitude;
-   foreach(var hit in Physics.SphereCastAll(target,.18f,offset.normalized,distance,~0,QueryTriggerInteraction.Ignore)) {
+   foreach(var hit in Physics.SphereCastAll(target,.18f,offset.normalized,distance,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore)) {
     if(hit.collider.GetComponentInParent<CharacterController>()!=null)continue;
     distance=Mathf.Min(distance,Mathf.Max(0,hit.distance-.15f));
    }
@@ -74,6 +85,7 @@ namespace AvH {
    // through a wall merely to preserve distance.
    return distance;
   }
+  void RestoreLocalRenderers(){foreach(var pair in hiddenLocal)if(pair.Key!=null)pair.Key.shadowCastingMode=pair.Value;hiddenLocal.Clear();}
   public void SetLookAngles(float horizontal,float vertical){yaw=horizontal;pitch=Mathf.Clamp(vertical,-20,65);}
   void OnApplicationFocus(bool focused) {
    if(focused&&wasPlaying&&!menu&&session!=null&&session.Session!=null&&network.CanPlay)SetCursor();
@@ -95,8 +107,7 @@ namespace AvH {
     if(string.IsNullOrWhiteSpace(nickname))GUI.Label(new Rect(w/2-210,h/2+15,420,30),"닉네임을 입력해주세요.",label);
     GUI.enabled=true;network.DrawStart(nickname,label);return;
    }
-   var state=session.Observe();var animals=state.Players.Count(p=>p.Faction==Faction.Animal);
-   string phase=state.Phase==RoundPhase.Preparation?"준비":"추격";
+   var state=session.Observe();
    if(state.Phase==RoundPhase.Results) {
     GUI.Box(new Rect(w/2-260,h/2-120,520,240),"");
     bool humansWon=state.Winner==Faction.Human;
@@ -105,22 +116,6 @@ namespace AvH {
     GUI.Label(new Rect(w/2-250,h/2-35,500,45),state.Winner.HasValue?(humansWon?"마지막까지 살아남았습니다":"모두 동물로 변신했습니다!"):"",label);
     int seconds=Mathf.Max(0,Mathf.CeilToInt((float)state.SecondsRemaining));
     GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
-   } else {
-   GUI.Box(new Rect(w/2-340,12,680,150),"");
-   int seconds=Mathf.Max(0,Mathf.CeilToInt((float)state.SecondsRemaining));
-   GUI.Label(new Rect(w/2-295,15,590,40),$"인간 {state.Players.Length-animals}명   |   {phase} {seconds/60:00}:{seconds%60:00}   |   동물 {animals}명",label);
-   }
-   if(state.Phase!=RoundPhase.Results && state.BirthSecondsRemaining>0) {
-    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
-    GUI.color=catalog==null?Color.white:catalog.RarityColor;
-    if(state.Births.Sum(b=>b.Count)==1) {
-     var birth=state.Births[0];
-     GUI.Label(new Rect(w/2-330,55,660,35),$"[{birth.Rarity}] {birth.Kind} 탄생!",label);
-    } else {
-     GUI.Label(new Rect(w/2-330,55,660,35),"새로운 동물들이 탄생했습니다!",label);
-     GUI.Label(new Rect(w/2-330,90,660,65),string.Join(" · ",state.Births.Select(b=>$"[{b.Rarity}] {b.Kind} ×{b.Count}")),new GUIStyle(label){fontSize=18,wordWrap=true});
-    }
-    GUI.color=Color.white;
    }
    if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
@@ -141,6 +136,6 @@ namespace AvH {
    if(player.Faction==Faction.Animal)return player.AttackGraceRemaining>0?$"공격 대기 {player.AttackGraceRemaining:F1}초":"근접 공격";
    return player.ReloadRemaining>0?$"재장전 중 ({player.ReloadRemaining:F1}초)":$"버블 {player.Ammo} / {magazine} (예비 ∞)";
   }
-  void OnDestroy(){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
+  void OnDestroy(){RestoreLocalRenderers();if(ownsView&&view!=null)Destroy(view.gameObject);if(ownedSun!=null)Destroy(ownedSun.gameObject);if(rosterHud!=null)Destroy(rosterHud.gameObject);Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
  }
 }

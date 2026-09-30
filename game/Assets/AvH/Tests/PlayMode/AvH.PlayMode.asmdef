@@ -1,1 +1,1 @@
-{"name":"AvH.PlayMode","references":["AvH.Core","AvH.Runtime"],"optionalUnityReferences":["TestAssemblies"]}
+{"name":"AvH.PlayMode","references":["AvH.Core","AvH.Runtime","Unity.ugui"],"optionalUnityReferences":["TestAssemblies"]}
