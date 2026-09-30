@@ -56,7 +56,7 @@ namespace AvH {
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; }
-    if(p.Faction!=before.Players[i].Faction){Effects.Emit(body.transform.position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);RefreshVisual(i,p.Faction);}
+    if(p.Faction!=before.Players[i].Faction){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
      if(guns[i]!=null)guns[i].rotation=Quaternion.Euler(input.Pitch,input.Yaw,0);
@@ -92,6 +92,10 @@ namespace AvH {
   internal void ResolveKnockbackContact(int slot,Vector3 normal) {
    float inward=Vector3.Dot(pushVelocity[slot],normal);
    if(inward<0)pushVelocity[slot]-=normal*inward;
+  }
+  void PresentAnimalBirth(SessionState before,SessionState after,int slot,Vector3 position) {
+   if(before!=null&&before.Round==after.Round&&before.Players[slot].Faction==Faction.Human&&after.Players[slot].Faction==Faction.Animal)
+    Effects.Emit(position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}

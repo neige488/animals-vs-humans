@@ -62,7 +62,7 @@ namespace AvH {
     inputs[slot].Reload=false;
    }
    var after=Session.Observe();
-   for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction){Effects.Emit(bodies[slot].transform.position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);RefreshVisual(slot,after.Players[slot].Faction);}
+   for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction){PresentAnimalBirth(beforeCombat,after,slot,bodies[slot].transform.position);RefreshVisual(slot,after.Players[slot].Faction);}
   }
   void FireBubble(int slot,PlayerInput input) {
    var rules=Session.ObserveSettings().Current;

@@ -4,6 +4,17 @@ using UnityEngine;
 using UnityEngine.TestTools;
 namespace AvH.Tests {
  public class EffectsTests {
+  [UnityTest] public IEnumerator RoundResetDoesNotReplayAnimalBirthEffects() {
+   var root=new GameObject("birth effect boundary");var game=root.AddComponent<UnityPlaytestSession>();
+   game.AutomaticStep=false;game.BotAutomationEnabled=false;game.StartSolo("birth",123);game.Effects.AutomaticUpdate=false;
+   try {
+    while(game.Observe().Phase!=RoundPhase.Results){game.Step(.02f);game.Effects.Advance(2);}
+    int round=game.Observe().Round;
+    while(game.Observe().Round==round)game.Step(.02f);
+    Assert.AreEqual(0,game.Effects.ActiveCount,"Animal-to-human round reset is not an animal birth");
+   } finally {Object.Destroy(root);}
+   yield return null;
+  }
   [UnityTest] public IEnumerator RemoteImpactsDoNotReplayOnInitialStateOrDuplicatePackets() {
    var source=new PlaytestSession(123);source.StartSolo("source");var root=new GameObject("remote effects");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(source.Observe());
    remote.Effects.AutomaticUpdate=false;
