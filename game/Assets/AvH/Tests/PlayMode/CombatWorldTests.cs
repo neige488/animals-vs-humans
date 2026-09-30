@@ -10,7 +10,7 @@ namespace AvH.Tests {
   string Profile(){var path=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid()+".xml");profiles.Add(path);return path;}
   [TearDown] public void CleanupProfiles(){foreach(var p in profiles){if(File.Exists(p))File.Delete(p);if(File.Exists(p+".bak"))File.Delete(p+".bak");}profiles.Clear();}
   [UnityTest] public IEnumerator BubbleAimUsesInputWhileBodyIsStillTurning() {
-   var root=new GameObject("aim during turn");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;session.BotAutomationEnabled=false;session.StartSolo("aim",123,Profile());yield return null;
+   var root=new GameObject("aim during turn");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false;session.BotAutomationEnabled=false;session.StartSolo("aim",123,Profile());yield return new WaitForFixedUpdate();
    session.SubmitInput(0,new PlayerInput{Forward=1,Yaw=123,Attack=true});session.Step(.02f);
    Assert.Greater(Mathf.Abs(Mathf.DeltaAngle(session.PlayerTransform(0).eulerAngles.y,123)),90);
    var direction=session.ObserveBubbles().Single().Direction;var expected=Quaternion.Euler(0,123,0)*Vector3.forward;
@@ -19,7 +19,7 @@ namespace AvH.Tests {
   }
   [UnityTest] public IEnumerator BubblesBurstOnTerrainAndExpireByRangeOrLifetime() {
    for(int mode=0;mode<3;mode++) {
-    var root=new GameObject("bubble limits");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("tester",123,Profile());yield return null;
+    var root=new GameObject("bubble limits");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("tester",123,Profile());yield return new WaitForFixedUpdate();
     if(mode>0){session.Session.BeginSettingsEdit(0);var rules=session.Session.ObserveSettings().Edit;if(mode==1)rules.BubbleRange=1;else rules.BubbleLifetime=.05f;session.Session.UpdateSettingsEdit(0,rules);session.Session.ApplySettings(0);for(int step=0;step<10260;step++)session.Step(.02f);}
     else {var wall=GameObject.CreatePrimitive(PrimitiveType.Cube);wall.transform.SetParent(root.transform);wall.transform.position=session.PlayerTransform(0).position+new Vector3(0,1,-4);wall.transform.localScale=new Vector3(4,3,.2f);Physics.SyncTransforms();}
     session.SubmitInput(0,new PlayerInput{Attack=true,Yaw=mode==0?180:270});session.Step(.02f);Assert.AreEqual(1,session.ObserveBubbles().Length);session.SubmitInput(0,new PlayerInput());
@@ -31,7 +31,7 @@ namespace AvH.Tests {
 
   [UnityTest] public IEnumerator FriendlyBubblePassesThroughWhileBodyCollisionRemainsEnabled() {
    var root=new GameObject("friendly pass");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;
-   session.StartSolo("tester",123,Profile());yield return null;
+   session.StartSolo("tester",123,Profile());yield return new WaitForFixedUpdate();
    session.Session.BeginSettingsEdit(0);var rules=session.Session.ObserveSettings().Edit;rules.FriendlyPush=false;
    session.Session.UpdateSettingsEdit(0,rules);session.Session.ApplySettings(0);for(int step=0;step<10260;step++)session.Step(.02f);
    var before=session.Observe().Players[4].Position;
@@ -47,7 +47,7 @@ namespace AvH.Tests {
    int seed=0;
    for(;seed<1000;seed++){var probe=new PlaytestSession(seed);probe.StartSolo("seed");probe.Advance(20);var s=probe.Observe();if(s.Players[0].Faction==Faction.Animal&&s.Players[4].Faction==Faction.Human)break;}
    var root=new GameObject("melee");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;
-   session.StartSolo("tester",seed,Profile());yield return null;
+   session.StartSolo("tester",seed,Profile());yield return new WaitForFixedUpdate();
    for(int i=0;i<1001;i++)session.Step(.02f);
    for(int i=0;i<40;i++){session.SubmitInput(0,new PlayerInput{Forward=1,Attack=true});session.Step(.02f);}
    Assert.AreEqual(Faction.Human,session.Observe().Players[4].Faction,"Initial grace prevents attacks even while moving into contact");
@@ -63,7 +63,7 @@ namespace AvH.Tests {
 
   [UnityTest] public IEnumerator BubbleConsumesAmmoTravelsHitsAndPushesWithoutChangingFaction() {
    var root=new GameObject("combat");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("tester",123,Profile());
-   yield return null;
+   yield return new WaitForFixedUpdate();
    var before=session.Observe().Players[4];
    session.SubmitInput(0,new PlayerInput{Attack=true,Yaw=0});session.Step(.02f);
    Assert.AreEqual(11,session.Observe().Players[0].Ammo);Assert.AreEqual(1,session.ObserveBubbles().Length);

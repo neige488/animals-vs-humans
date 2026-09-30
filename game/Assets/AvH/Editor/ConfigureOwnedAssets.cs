@@ -41,7 +41,7 @@ namespace AvH.Editor {
    catalog.HumanSource="Polyperfect Low Poly Animated People 3.02 / man_casual";
    catalog.AnimalSource="Polyperfect Low Poly Animated Animals 4.1.1 / Fox";
    catalog.VillageSource="Synty POLYGON Adventure 1.8.2 / village 01/02, wall 01, tree 05 + Generic base floor 01";
-   EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();Debug.Log("Owned assets configured: six humans, six animals and Synty village; source assets remain Git ignored.");
+   EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();BuildPortraits.Generate();Debug.Log("Owned assets configured: six humans, six animals and Synty village; source assets remain Git ignored.");
   }
   static OwnedCharacter Owned(string file,string display,bool human) {
    var source=human?"polyperfect/Low Poly Animated People/- Prefabs/":"polyperfect/Low Poly Animated Animals/Prefabs/Animals/";

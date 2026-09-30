@@ -1,1 +1,1 @@
-{"name":"AvH.Runtime","references":["AvH.Core"]}
+{"name":"AvH.Runtime","references":["AvH.Core","Unity.ugui"]}
