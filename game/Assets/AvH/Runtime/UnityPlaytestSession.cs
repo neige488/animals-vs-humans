@@ -116,6 +116,7 @@ namespace AvH {
     visual.GetComponent<Renderer>().sharedMaterial=PrototypeVillage.Material(faction==Faction.Human?new Color(.15f,.7f,.95f):new Color(1,.48f,.16f));
    }
    visual.name="Visual";
+   if(guns[slot]!=null)guns[slot].GetComponent<BubbleGunPose>().Bind(visual.transform);
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;
   }
  }

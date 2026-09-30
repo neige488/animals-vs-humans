@@ -38,7 +38,7 @@ namespace AvH {
    foreach(int id in remoteBubbles.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBubbles[id]);remoteBubbles.Remove(id);}
    foreach(var bubble in visual.Bubbles){GameObject obj;if(!remoteBubbles.TryGetValue(bubble.Id,out obj)){
     obj=Effects.Bubble(transform,visual.CurrentRules.BubbleRadius);obj.name="Remote Bubble";remoteBubbles[bubble.Id]=obj;
-    if(liveEffects&&bubble.OwnerSlot>=0&&bubble.OwnerSlot<bodies.Count){var muzzle=bodies[bubble.OwnerSlot].transform.position+Vector3.up*.9f;Effects.Emit(muzzle,new Color(.63f,.93f,1,.7f),4,.65f,false);Effects.Sound(muzzle,true);}
+    if(liveEffects&&bubble.OwnerSlot>=0&&bubble.OwnerSlot<bodies.Count){var muzzle=bodies[bubble.OwnerSlot].transform.position+Vector3.up*1.3f+ToVector(bubble.Direction)*.6f;Effects.Emit(muzzle,new Color(.63f,.93f,1,.7f),4,.65f,false);Effects.Sound(muzzle,true);}
     if(bubble.OwnerSlot>=0&&bubble.OwnerSlot<guns.Length&&guns[bubble.OwnerSlot]!=null&&ToVector(bubble.Direction).sqrMagnitude>.001f)guns[bubble.OwnerSlot].rotation=Quaternion.LookRotation(ToVector(bubble.Direction));
    }obj.transform.position=ToVector(bubble.Position);obj.transform.localScale=Vector3.one*visual.CurrentRules.BubbleRadius*2;}
    ApplyRemoteBursts(visual,liveEffects);

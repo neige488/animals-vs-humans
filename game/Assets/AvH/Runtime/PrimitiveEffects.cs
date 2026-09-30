@@ -15,10 +15,12 @@ namespace AvH {
   Material gunBody,gunTrim;
   public Transform Gun(Transform owner) {
    if(gunBody==null){gunBody=PrototypeVillage.Material(new Color(.08f,.38f,.43f));gunTrim=PrototypeVillage.Material(new Color(.92f,.66f,.23f));}
-   var gun=new GameObject("Bubble emitter").transform;gun.SetParent(owner,false);gun.localPosition=new Vector3(.32f,.92f,.18f);
+   var gun=new GameObject("Bubble emitter").transform;gun.SetParent(owner,false);gun.localPosition=new Vector3(.1f,1.3f,.3f);
    GunPart(gun,PrimitiveType.Capsule,new Vector3(0,0,.15f),new Vector3(.18f,.25f,.18f),Quaternion.Euler(90,0,0),gunBody);
    GunPart(gun,PrimitiveType.Cylinder,new Vector3(0,0,.4f),new Vector3(.24f,.07f,.24f),Quaternion.Euler(90,0,0),gunTrim);
    GunPart(gun,PrimitiveType.Sphere,new Vector3(0,-.15f,.04f),new Vector3(.25f,.3f,.25f),Quaternion.identity,gunBody);
+   GunPart(gun,PrimitiveType.Cube,new Vector3(0,-.12f,-.055f),new Vector3(.11f,.22f,.12f),Quaternion.Euler(-12,0,0),gunTrim);
+   gun.gameObject.AddComponent<BubbleGunPose>();
    return gun;
   }
   static void GunPart(Transform parent,PrimitiveType type,Vector3 p,Vector3 size,Quaternion rotation,Material mat) {var go=GameObject.CreatePrimitive(type);var c=go.GetComponent<Collider>();c.enabled=false;Dispose(c);go.transform.SetParent(parent,false);go.transform.localPosition=p;go.transform.localRotation=rotation;go.transform.localScale=size;go.GetComponent<Renderer>().sharedMaterial=mat;}
