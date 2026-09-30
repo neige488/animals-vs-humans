@@ -20,7 +20,8 @@ namespace AvH.Tests {
   [UnityTest] public IEnumerator BubblesBurstOnTerrainAndExpireByRangeOrLifetime() {
    for(int mode=0;mode<3;mode++) {
     var root=new GameObject("bubble limits");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;session.StartSolo("tester",123,Profile());yield return null;
-    if(mode>0){session.Session.BeginSettingsEdit(0);var rules=session.Session.ObserveSettings().Edit;if(mode==1)rules.BubbleRange=1;else rules.BubbleLifetime=.05f;session.Session.UpdateSettingsEdit(0,rules);session.Session.ApplySettings(0);session.Step(205);}
+    if(mode>0){session.Session.BeginSettingsEdit(0);var rules=session.Session.ObserveSettings().Edit;if(mode==1)rules.BubbleRange=1;else rules.BubbleLifetime=.05f;session.Session.UpdateSettingsEdit(0,rules);session.Session.ApplySettings(0);for(int step=0;step<10260;step++)session.Step(.02f);}
+    else {var wall=GameObject.CreatePrimitive(PrimitiveType.Cube);wall.transform.SetParent(root.transform);wall.transform.position=session.PlayerTransform(0).position+new Vector3(0,1,-4);wall.transform.localScale=new Vector3(4,3,.2f);Physics.SyncTransforms();}
     session.SubmitInput(0,new PlayerInput{Attack=true,Yaw=mode==0?180:270});session.Step(.02f);Assert.AreEqual(1,session.ObserveBubbles().Length);session.SubmitInput(0,new PlayerInput());
     for(int i=0;i<(mode==0?25:5);i++)session.Step(.02f);
     Assert.AreEqual(0,session.ObserveBubbles().Length,"Terrain, range and life each retire the projectile");
@@ -32,7 +33,7 @@ namespace AvH.Tests {
    var root=new GameObject("friendly pass");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;
    session.StartSolo("tester",123,Profile());yield return null;
    session.Session.BeginSettingsEdit(0);var rules=session.Session.ObserveSettings().Edit;rules.FriendlyPush=false;
-   session.Session.UpdateSettingsEdit(0,rules);session.Session.ApplySettings(0);session.Step(205);
+   session.Session.UpdateSettingsEdit(0,rules);session.Session.ApplySettings(0);for(int step=0;step<10260;step++)session.Step(.02f);
    var before=session.Observe().Players[4].Position;
    session.SubmitInput(0,new PlayerInput{Attack=true});session.Step(.02f);session.SubmitInput(0,new PlayerInput());
    for(int i=0;i<15;i++)session.Step(.02f);

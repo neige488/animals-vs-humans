@@ -4,7 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 namespace AvH {
  public static class PrototypeVillage {
-  public static IReadOnlyList<Vector3> DefaultShelters {get;}=Array.AsReadOnly(new[]{new Vector3(-12,4,10),new Vector3(14,0,15),new Vector3(9,0,-14)});
+  public static IReadOnlyList<Vector3> DefaultShelters {get;}=Array.AsReadOnly(new[]{TownLayout.Roof,TownLayout.Courtyard,TownLayout.Workshop});
   public static Material Material(Color color) {
    var shader=Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
    var material=new Material(shader);material.color=color;return material;
@@ -17,7 +17,7 @@ namespace AvH {
     return Array.AsReadOnly((Vector3[])catalog.ShelterPoints.Clone());}
    var roof=DefaultShelters[0];var corner=DefaultShelters[1];var warehouse=DefaultShelters[2];
    // Traversable collision blockout retained until owned village layout is verified.
-   Box(map.transform,"Ground",new Vector3(0,-.5f,0),new Vector3(46,1,46),new Color(.32f,.44f,.35f));
+   Box(map.transform,"Ground",new Vector3(0,-.5f,0),new Vector3(TownLayout.HalfExtent*2,1,TownLayout.HalfExtent*2),new Color(.32f,.44f,.35f));
    Box(map.transform,"Rooftop shelter",new Vector3(roof.x,roof.y/2,roof.z),new Vector3(7,roof.y,6),new Color(.5f,.35f,.23f));
    // 24 shallow steps give both factions access without abilities.
    for(int i=0;i<24;i++) Box(map.transform,"Roof stair "+i,new Vector3(roof.x,(i+1)*roof.y/48,roof.z-12+i*.4f),new Vector3(2,(i+1)*roof.y/24,.42f),new Color(.6f,.49f,.37f));

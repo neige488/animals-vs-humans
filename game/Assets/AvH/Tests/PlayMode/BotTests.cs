@@ -91,7 +91,7 @@ namespace AvH.Tests {
     double beforeMs=0,afterMs=0;
     for(int i=0;i<75;i++){var clock=System.Diagnostics.Stopwatch.StartNew();game.Step(.02f);beforeMs=System.Math.Max(beforeMs,clock.Elapsed.TotalMilliseconds);}
     var blocker=GameObject.CreatePrimitive(PrimitiveType.Cube);blocker.transform.SetParent(root.transform);
-    blocker.name="Representative blocked corner entrance";blocker.transform.position=new Vector3(13,1.5f,12);blocker.transform.localScale=new Vector3(8,3,.5f);Physics.SyncTransforms();
+    blocker.name="Representative blocked corner entrance";blocker.transform.position=TownLayout.Courtyard+new Vector3(0,1.5f,-3.5f);blocker.transform.localScale=new Vector3(10,3,.5f);Physics.SyncTransforms();
     for(int i=0;i<800;i++){var clock=System.Diagnostics.Stopwatch.StartNew();game.Step(.02f);afterMs=System.Math.Max(afterMs,clock.Elapsed.TotalMilliseconds);if(i%50==0)yield return null;}
     var navigation=game.ObserveBotNavigation();Assert.LessOrEqual(navigation.MaxGridBuildsPerStep,1);
     Debug.Log($"NAV_CPU_STEP_MS beforeMax={beforeMs:F3} afterMax={afterMs:F3} builds={navigation.GridBuilds} maxBuildsPerStep={navigation.MaxGridBuildsPerStep} platform={Application.platform}");
@@ -106,8 +106,8 @@ namespace AvH.Tests {
    try {
     var game=root.AddComponent<UnityPlaytestSession>();game.AutomaticStep=false;
     game.StartSolo("observer",123,System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml"));yield return null;
-    Barrier(root,new Vector3(13.5f,2,12),new Vector3(8,4,1));
-    Barrier(root,new Vector3(10,2,15),new Vector3(1,4,7));Physics.SyncTransforms();
+    Barrier(root,TownLayout.Courtyard+new Vector3(0,2,-3.5f),new Vector3(11,4,1));
+    Barrier(root,TownLayout.Courtyard+new Vector3(-5.5f,2,0),new Vector3(1,4,9));Physics.SyncTransforms();
     var initial=game.Observe();
     for(int i=0;i<150;i++){game.Step(.02f);if(i%50==0)yield return null;}
     foreach(var bot in game.Observe().Players.Where(p=>p.IsBot))
