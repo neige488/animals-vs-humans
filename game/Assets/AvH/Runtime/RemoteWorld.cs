@@ -34,12 +34,13 @@ namespace AvH {
    if(ReferenceEquals(remoteVisuals,visual))return;
    bool liveEffects=remoteVisuals!=null;remoteVisuals=visual;if(visual==null)return;
    for(int i=0;i<bodies.Count&&i<visual.Yaws.Length;i++)if(snapRemoteFacing[i]){bodies[i].transform.rotation=Quaternion.Euler(0,visual.Yaws[i],0);snapRemoteFacing[i]=false;}
+   for(int i=0;i<guns.Length&&i<visual.Yaws.Length;i++)if(guns[i]!=null){var pose=guns[i].GetComponent<BubbleGunPose>();pose.SetAim(visual.Yaws[i],pose.AimPitch);}
    var incoming=new HashSet<int>(visual.Bubbles.Select(b=>b.Id));
    foreach(int id in remoteBubbles.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBubbles[id]);remoteBubbles.Remove(id);}
    foreach(var bubble in visual.Bubbles){GameObject obj;if(!remoteBubbles.TryGetValue(bubble.Id,out obj)){
     obj=Effects.Bubble(transform,visual.CurrentRules.BubbleRadius);obj.name="Remote Bubble";remoteBubbles[bubble.Id]=obj;
-    if(liveEffects&&bubble.OwnerSlot>=0&&bubble.OwnerSlot<bodies.Count){var muzzle=bodies[bubble.OwnerSlot].transform.position+Vector3.up*1.3f+ToVector(bubble.Direction)*.6f;Effects.Emit(muzzle,new Color(.63f,.93f,1,.7f),4,.65f,false);Effects.Sound(muzzle,true);}
-    if(bubble.OwnerSlot>=0&&bubble.OwnerSlot<guns.Length&&guns[bubble.OwnerSlot]!=null&&ToVector(bubble.Direction).sqrMagnitude>.001f)guns[bubble.OwnerSlot].rotation=Quaternion.LookRotation(ToVector(bubble.Direction));
+    if(liveEffects&&bubble.OwnerSlot>=0&&bubble.OwnerSlot<bodies.Count){var direction=ToVector(bubble.Direction);var muzzle=bodies[bubble.OwnerSlot].transform.position+Vector3.up*1.3f+Vector3.Cross(Vector3.up,direction).normalized*.1f+direction*.6f;Effects.Emit(muzzle,new Color(.63f,.93f,1,.7f),4,.65f,false);Effects.Sound(muzzle,true);}
+    if(bubble.OwnerSlot>=0&&bubble.OwnerSlot<guns.Length&&guns[bubble.OwnerSlot]!=null&&ToVector(bubble.Direction).sqrMagnitude>.001f){var direction=ToVector(bubble.Direction);guns[bubble.OwnerSlot].GetComponent<BubbleGunPose>().SetAim(Mathf.Atan2(direction.x,direction.z)*Mathf.Rad2Deg,-Mathf.Atan2(direction.y,new Vector2(direction.x,direction.z).magnitude)*Mathf.Rad2Deg);}
    }obj.transform.position=ToVector(bubble.Position);obj.transform.localScale=Vector3.one*visual.CurrentRules.BubbleRadius*2;}
    ApplyRemoteBursts(visual,liveEffects);
   }

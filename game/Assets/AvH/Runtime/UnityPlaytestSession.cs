@@ -59,7 +59,7 @@ namespace AvH {
     if(p.Faction!=before.Players[i].Faction){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
-     if(guns[i]!=null)guns[i].rotation=Quaternion.Euler(input.Pitch,input.Yaw,0);
+     if(guns[i]!=null&&input.RoundId==state.Round)guns[i].GetComponent<BubbleGunPose>().SetAim(input.Yaw,input.Pitch);
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
      if(body.isGrounded && input.Jump){vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
      vertical[i]-=22*seconds;
@@ -98,6 +98,7 @@ namespace AvH {
     Effects.Emit(position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
+  internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   void RefreshVisual(int slot,Faction faction) {

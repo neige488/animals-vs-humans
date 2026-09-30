@@ -5,6 +5,19 @@ using UnityEngine;
 using UnityEngine.TestTools;
 namespace AvH.Tests {
  public class GunPoseTests {
+  [UnityTest] public IEnumerator RemoteAimDoesNotKeepAnOldShotRotationOffset() {
+   var source=new PlaytestSession(123);source.StartSolo("remote pose");var root=new GameObject("remote gun");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(source.Observe());
+   try {
+    remote.ApplyRemoteVisuals(new NetworkVisualState());
+    var shot=new NetworkVisualState();var direction=Quaternion.Euler(-15,100,0)*Vector3.forward;
+    shot.Bubbles=new[]{new NetworkBubble{Id=99,OwnerSlot=0,Direction=new WorldPosition(direction.x,direction.y,direction.z),Position=new WorldPosition(0,1,0)}};remote.ApplyRemoteVisuals(shot);
+    yield return null;
+    var turn=new NetworkVisualState();turn.Yaws[0]=270;remote.ApplyRemoteVisuals(turn);
+    for(int f=0;f<40;f++)yield return null;
+    Assert.Less(Mathf.Abs(Mathf.DeltaAngle(270,remote.PlayerTransform(0).Find("Bubble emitter").eulerAngles.y)),5,"A prior shot must not offset subsequent remote facing");
+   } finally {Object.Destroy(root);}
+   yield return null;
+  }
   [UnityTest] public IEnumerator OwnedHumanHoldsEmitterWithBothHandsWhileAiming() {
    Assert.IsNotNull(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog"));
    var root=new GameObject("gun pose test");var game=root.AddComponent<UnityPlaytestSession>();
