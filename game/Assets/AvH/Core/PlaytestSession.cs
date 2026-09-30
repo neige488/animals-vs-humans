@@ -13,6 +13,7 @@ namespace AvH
     {
         public int Slot;
         public string Nickname;
+        public string CharacterId, CharacterName, CharacterRarity;
         public bool IsBot;
         public int Ammo;
         public double ReloadRemaining, AttackGraceRemaining, FireCooldownRemaining;
@@ -39,13 +40,15 @@ namespace AvH
         private double remaining, hostTime, phaseDeadline;
         private int round;
         private Faction? winner;
-        private string animalKind, animalRarity;
+        private CharacterDefinition[] humanRoster,animalRoster;
+        private int nextAnimal;
         private BirthNotice[] births = Array.Empty<BirthNotice>();
         public PlaytestSession(int randomSeed, string settingsPath = null) { random = new Random(randomSeed); settings.Load(settingsPath); }
-        public void StartSolo(string nickname, string animalKind = "임시 동물", string animalRarity = "일반")
+        public void StartSolo(string nickname, string animalKind = "임시 동물", string animalRarity = "일반", CharacterDefinition[] humans=null, CharacterDefinition[] animals=null)
         {
             if (string.IsNullOrWhiteSpace(nickname) || nickname.Trim().Length > 20) throw new ArgumentException("닉네임은 1~20자입니다.");
-            this.animalKind = animalKind; this.animalRarity = animalRarity;
+            humanRoster=Roster(humans,new CharacterDefinition("human-default","인간"));
+            animalRoster=Roster(animals,new CharacterDefinition("animal-default",animalKind,animalRarity));
             ResetParticipants();
             round = 0; hostTime = 0;
             players = Enumerable.Range(0, 12).Select(i => new PlayerState {
@@ -57,7 +60,8 @@ namespace AvH
         private void BeginRound() {
             settings.BeginRound(); round++; phase = RoundPhase.Preparation; remaining = settings.Current.PreparationSeconds; winner = null;
             births = Array.Empty<BirthNotice>();
-            foreach (var player in players) { player.Faction = Faction.Human; player.Position = Spawn(player.Slot); }
+            nextAnimal=(round-1)*settings.Current.InitialAnimals;
+            foreach (var player in players) { player.Faction = Faction.Human; AssignCharacter(player,humanRoster[player.Slot%humanRoster.Length]);player.Position = Spawn(player.Slot); }
             ResetCombat(); phaseDeadline=hostTime+remaining;
         }
         public void Advance(double elapsed) {
@@ -73,9 +77,10 @@ namespace AvH
                         int selected = random.Next(i, slots.Length);
                         int swap = slots[i]; slots[i] = slots[selected]; slots[selected] = swap;
                         players[slots[i]].Faction = Faction.Animal;
+                        AssignCharacter(players[slots[i]],animalRoster[nextAnimal++%animalRoster.Length]);
                         players[slots[i]].AttackGraceRemaining = settings.Current.InitialAttackGrace;
                     }
-                    PublishBirth(settings.Current.InitialAnimals);
+                    PublishBirth(players.Where(p=>p.Faction==Faction.Animal).ToArray());
                     phase = RoundPhase.Chase; remaining = settings.Current.RoundSeconds;
                 } else if (phase == RoundPhase.Chase) {
                     phase = RoundPhase.Results; remaining = settings.Current.ResultSeconds; winner = Faction.Human;
@@ -87,6 +92,12 @@ namespace AvH
             remaining=phaseDeadline-hostTime;
         }
         // Called only by the authoritative physics adapter, never by remote participant messages.
+        static CharacterDefinition[] Roster(CharacterDefinition[] source,CharacterDefinition fallback) {
+            var roster=source==null?new[]{fallback}:source.ToArray();
+            if(roster.Length==0||roster.Length>64||roster.Any(c=>c==null)||roster.Select(c=>c.Id).Distinct(StringComparer.Ordinal).Count()!=roster.Length)throw new ArgumentException("캐릭터 목록이 올바르지 않습니다.");
+            return roster;
+        }
+        static void AssignCharacter(PlayerState player,CharacterDefinition character){player.CharacterId=character.Id;player.CharacterName=character.Name;player.CharacterRarity=character.Rarity;}
         public void RecordWorldPosition(int slot, WorldPosition position) {
             if (slot < 0 || slot >= players.Length) throw new ArgumentOutOfRangeException(nameof(slot));
             players[slot].Position = position;

@@ -27,9 +27,10 @@ namespace AvH {
    if(p.Faction!=Faction.Human || p.Ammo==settings.Current.Magazine || p.ReloadRemaining>0)return false;
    p.ReloadRemaining=settings.Current.ReloadSeconds;return true;
   }
-  void PublishBirth(int count) {
-   if(birthBatchAge<=.5 && births.Length==1)births[0].Count+=count;
-   else births=new[]{new BirthNotice{Kind=animalKind,Rarity=animalRarity,Count=count}};
+  void PublishBirth(PlayerState[] changed) {
+   var grouped=(birthBatchAge<=.5?births:new BirthNotice[0]).ToList();
+   foreach(var player in changed){var notice=grouped.FirstOrDefault(b=>b.Kind==player.CharacterName&&b.Rarity==player.CharacterRarity);if(notice==null){notice=new BirthNotice{Kind=player.CharacterName,Rarity=player.CharacterRarity};grouped.Add(notice);}notice.Count++;}
+   births=grouped.ToArray();
    birthSecondsRemaining=4;birthBatchAge=0;
   }
   // Host physics confirms reach and line of sight; clients submit input, never hit claims.
@@ -41,7 +42,8 @@ namespace AvH {
    if(x*x+y*y+z*z>CombatRules.MeleeDistance*CombatRules.MeleeDistance)return false;
    attacker.FireCooldownRemaining=.5;
    victim.Faction=Faction.Animal;victim.AttackGraceRemaining=settings.Current.TransformAttackGrace;
-   victim.ReloadRemaining=0;victim.FireCooldownRemaining=0;PublishBirth(1);
+   AssignCharacter(victim,animalRoster[nextAnimal++%animalRoster.Length]);
+   victim.ReloadRemaining=0;victim.FireCooldownRemaining=0;PublishBirth(new[]{victim});
    if(players.All(p=>p.Faction==Faction.Animal)){phase=RoundPhase.Results;remaining=settings.Current.ResultSeconds;phaseDeadline=hostTime+remaining;winner=Faction.Animal;}
    return true;
   }

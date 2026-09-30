@@ -33,7 +33,8 @@ namespace AvH.Tests {
     var rendered=body.GetComponentsInChildren<SkinnedMeshRenderer>();
     Assert.IsNotEmpty(rendered,"Both factions must have a visible mesh");
     var visibleBounds=rendered[0].bounds;foreach(var renderer in rendered)visibleBounds.Encapsulate(renderer.bounds);
-    Assert.That(visibleBounds.size.y,Is.EqualTo(faction==Faction.Animal?1.74f:1.88f).Within(.2f),"Conservative renderer bounds must stay at the measured authored size");
+    if(faction==Faction.Human)Assert.That(visibleBounds.size.y,Is.EqualTo(1.88f).Within(.2f));
+    else Assert.That(visibleBounds.size.y,Is.InRange(.3f,4f),"Each animal has its own authored bounds; exact mesh grounding is checked below and for all six in RosterWorldTests");
     float bottom=float.MaxValue;
     foreach(var renderer in body.GetComponentsInChildren<SkinnedMeshRenderer>()) {
      var mesh=new Mesh();renderer.BakeMesh(mesh,true);

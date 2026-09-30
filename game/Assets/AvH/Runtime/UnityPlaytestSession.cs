@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 namespace AvH {
  [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload; public int RoundId; }
@@ -20,7 +21,8 @@ namespace AvH {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");
    Session = new PlaytestSession(randomSeed ?? Environment.TickCount, settingsPath ?? System.IO.Path.Combine(Application.persistentDataPath,"playtest-settings.xml"));
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
-   Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity);
+   Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity,
+    catalog!=null&&catalog.Humans.Length>0?catalog.Humans.Select(c=>c.Definition()).ToArray():null,catalog!=null&&catalog.Animals.Length>0?catalog.Animals.Select(c=>c.Definition()).ToArray():null);
    ShelterPoints=PrototypeVillage.Build(transform);
    foreach(var p in Session.Observe().Players) {
     var body = new GameObject("Slot " + p.Slot); body.transform.SetParent(transform);
@@ -56,7 +58,7 @@ namespace AvH {
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; }
-    if(p.Faction!=before.Players[i].Faction){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
+    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
      if(guns[i]!=null&&input.RoundId==state.Round)guns[i].GetComponent<BubbleGunPose>().SetAim(input.Yaw,input.Pitch);
@@ -103,10 +105,10 @@ namespace AvH {
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   void RefreshVisual(int slot,Faction faction) {
    var parent=bodies[slot].transform;
-   if(guns[slot]!=null)Destroy(guns[slot].gameObject);guns[slot]=faction==Faction.Human?Effects.Gun(parent):null;
-   var old=parent.Find("Visual"); if(old!=null) Destroy(old.gameObject);
+   if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Gun(parent):null;
+   var old=parent.Find("Visual"); if(old!=null){old.gameObject.SetActive(false);Destroy(old.gameObject);}
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
-   var prefab=catalog==null?null:(faction==Faction.Human?catalog.Human:catalog.Animal);
+   var prefab=catalog==null?null:catalog.Character(Observe().Players[slot].CharacterId,faction);
    GameObject visual;
    if(prefab!=null) {visual=Instantiate(prefab,parent);visual.transform.localPosition=Vector3.zero;}
    else {
@@ -117,6 +119,7 @@ namespace AvH {
     visual.GetComponent<Renderer>().sharedMaterial=PrototypeVillage.Material(faction==Faction.Human?new Color(.15f,.7f,.95f):new Color(1,.48f,.16f));
    }
    visual.name="Visual";
+   foreach(var animator in visual.GetComponentsInChildren<Animator>()){animator.fireEvents=false;animator.Rebind();animator.Update(0);}
    if(guns[slot]!=null)guns[slot].GetComponent<BubbleGunPose>().Bind(visual.transform);
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;
   }

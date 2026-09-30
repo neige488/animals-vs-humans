@@ -18,7 +18,7 @@ namespace AvH {
    if(!immediate&&ReferenceEquals(remoteSnapshot,state))return;
    var old=remoteSnapshot;remoteSnapshot=state;
    foreach(var p in state.Players){
-    if(old==null||old.Players[p.Slot].Faction!=p.Faction){if(!immediate)PresentAnimalBirth(old,state,p.Slot,ToVector(p.Position));RefreshVisual(p.Slot,p.Faction);}
+    if(old==null||old.Players[p.Slot].Faction!=p.Faction||old.Players[p.Slot].CharacterId!=p.CharacterId){if(!immediate)PresentAnimalBirth(old,state,p.Slot,ToVector(p.Position));RefreshVisual(p.Slot,p.Faction);}
     if(immediate||old==null||state.Round!=old.Round||Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>6){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
     bodies[p.Slot].enabled=false;
    }

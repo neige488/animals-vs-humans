@@ -72,7 +72,7 @@ namespace AvH {
     int seconds=Mathf.Max(0,Mathf.CeilToInt((float)state.SecondsRemaining));
     GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
    } else {
-   GUI.Box(new Rect(w/2-340,12,680,125),"");
+   GUI.Box(new Rect(w/2-340,12,680,150),"");
    int seconds=Mathf.Max(0,Mathf.CeilToInt((float)state.SecondsRemaining));
    GUI.Label(new Rect(w/2-295,15,590,40),$"인간 {state.Players.Length-animals}명   |   {phase} {seconds/60:00}:{seconds%60:00}   |   동물 {animals}명",label);
    }
@@ -84,13 +84,13 @@ namespace AvH {
      GUI.Label(new Rect(w/2-330,55,660,35),$"[{birth.Rarity}] {birth.Kind}가 탄생했습니다!",label);
     } else {
      GUI.Label(new Rect(w/2-330,55,660,35),"새로운 동물들이 탄생했습니다!",label);
-     GUI.Label(new Rect(w/2-330,90,660,35),string.Join(" · ",state.Births.Select(b=>$"[{b.Rarity}] {b.Kind} ×{b.Count}")),label);
+     GUI.Label(new Rect(w/2-330,90,660,65),string.Join(" · ",state.Births.Select(b=>$"[{b.Rarity}] {b.Kind} ×{b.Count}")),new GUIStyle(label){fontSize=18,wordWrap=true});
     }
     GUI.color=Color.white;
    }
    if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
-   GUI.Label(new Rect(w/2-275,h-85,550,35),$"내 진영: {(state.Players[network.LocalSlot].Faction==Faction.Human?"인간":"동물")} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · 라운드 {state.Round}",label);
+   GUI.Label(new Rect(w/2-275,h-85,550,35),$"{state.Players[network.LocalSlot].CharacterName} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · 라운드 {state.Round}",label);
    GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전 · Esc 메뉴",new GUIStyle(label){fontSize=15});
 
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
