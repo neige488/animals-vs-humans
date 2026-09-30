@@ -81,7 +81,7 @@ namespace AvH {
     GUI.color=catalog==null?Color.white:catalog.RarityColor;
     if(state.Births.Sum(b=>b.Count)==1) {
      var birth=state.Births[0];
-     GUI.Label(new Rect(w/2-330,55,660,35),$"[{birth.Rarity}] {birth.Kind}가 탄생했습니다!",label);
+     GUI.Label(new Rect(w/2-330,55,660,35),$"[{birth.Rarity}] {birth.Kind} 탄생!",label);
     } else {
      GUI.Label(new Rect(w/2-330,55,660,35),"새로운 동물들이 탄생했습니다!",label);
      GUI.Label(new Rect(w/2-330,90,660,65),string.Join(" · ",state.Births.Select(b=>$"[{b.Rarity}] {b.Kind} ×{b.Count}")),new GUIStyle(label){fontSize=18,wordWrap=true});
