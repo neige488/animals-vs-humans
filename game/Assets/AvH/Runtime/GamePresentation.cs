@@ -13,7 +13,9 @@ namespace AvH {
   bool wasPlaying;
   string nickname="플레이어";
   float yaw, pitch=20;
-  bool menu;
+  bool menu,debugOpen;
+  public bool DebugPanelOpen=>debugOpen;
+  public void SetDebugPanelOpen(bool open){debugOpen=open;if(open)menu=false;if(!open&&session.Session!=null&&!network.IsClient)session.Session.CancelSettingsEdit(0);SetCursor();}
   Vector3 cameraOffset=new Vector3(.6f,.3f,-5.5f);
   readonly SettingsPanel settingsPanel=new SettingsPanel();
   GUIStyle label, title;
@@ -37,17 +39,39 @@ namespace AvH {
    if(Object.FindAnyObjectByType<Light>()==null) {var light=new GameObject("Sun").AddComponent<Light>();ownedSun=light;light.type=LightType.Directional;light.intensity=1.3f;light.transform.rotation=Quaternion.Euler(45,-35,0);}
    TownLighting.Apply(view,Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l=>l.type==LightType.Directional));
   }
+  // Development-only, isolated startup harness for capturing the real IMGUI overlay.
+  void Start() {
+   if(!Debug.isDebugBuild||Application.isBatchMode)return;
+   var args=System.Environment.GetCommandLineArgs();int capture=System.Array.IndexOf(args,"-avhDebugPreview");
+   if(capture<0||capture+1>=args.Length)return;
+   session.StartSolo("디버그",123,System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml"));
+   SetDebugPanelOpen(true);settingsPanel.SelectTab(1);StartCoroutine(CaptureDebugPreview(args[capture+1]));
+  }
+  System.Collections.IEnumerator CaptureDebugPreview(string folder) {
+   System.IO.Directory.CreateDirectory(folder);
+   for(int frame=0;frame<90;frame++) {
+    if(frame==30||frame==60) {
+     session.Session.BeginSettingsEdit(0);var values=session.Session.ObserveSettings().Edit;values.HumanSpeed=frame==30?8:3;
+     session.Session.UpdateSettingsEdit(0,values);session.Session.ApplySettingsNow(0,false);
+    }
+    yield return new WaitForEndOfFrame();
+    ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(folder,$"frame-{frame:0000}.png"));
+    yield return new WaitForSecondsRealtime(1f/30);
+   }
+  }
   void Update() {
-   if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;return;}
+   if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;debugOpen=false;return;}
    rosterHud.Present(session.Observe(),network.LocalSlot);
    if(!wasPlaying){menu=false;SetCursor();wasPlaying=true;}
-   if(Input.GetKeyDown(KeyCode.Escape)) {menu=!menu;if(!menu&&!network.IsClient)session.Session.CancelSettingsEdit(0);SetCursor();}
-   if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {
+   if(Input.GetKeyDown(KeyCode.F1))SetDebugPanelOpen(!debugOpen);
+   if(Input.GetKeyDown(KeyCode.Escape)&&debugOpen)SetDebugPanelOpen(false);
+   else if(Input.GetKeyDown(KeyCode.Escape)) {menu=!menu;if(!menu&&!network.IsClient)session.Session.CancelSettingsEdit(0);SetCursor();}
+   if(!menu && !debugOpen && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {
     if(Cursor.lockState!=CursorLockMode.Locked && Input.GetMouseButtonDown(0))SetCursor();
     SetLookAngles(yaw+Input.GetAxisRaw("Mouse X")*2,pitch-Input.GetAxisRaw("Mouse Y")*2);
    }
    var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
-   if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
+   if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=!debugOpen&&Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
    network.SubmitInput(input);
   }
   void LateUpdate() {
@@ -88,10 +112,10 @@ namespace AvH {
   void RestoreLocalRenderers(){foreach(var pair in hiddenLocal)if(pair.Key!=null)pair.Key.shadowCastingMode=pair.Value;hiddenLocal.Clear();}
   public void SetLookAngles(float horizontal,float vertical){yaw=horizontal;pitch=Mathf.Clamp(vertical,-20,65);}
   void OnApplicationFocus(bool focused) {
-   if(focused&&wasPlaying&&!menu&&session!=null&&session.Session!=null&&network.CanPlay)SetCursor();
+   if(focused&&wasPlaying&&!menu&&!debugOpen&&session!=null&&session.Session!=null&&network.CanPlay)SetCursor();
   }
 
-  void SetCursor(){Cursor.lockState=menu?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=menu;}
+  void SetCursor(){Cursor.lockState=menu||debugOpen?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=menu||debugOpen;}
   void OnGUI() {
    if(label==null){GUI.skin.font=Font.CreateDynamicFontFromOSFont(new[]{"Apple SD Gothic Neo","Malgun Gothic","Arial"},20);label=new GUIStyle(GUI.skin.label){fontSize=20,alignment=TextAnchor.MiddleCenter};label.normal.textColor=Color.white;title=new GUIStyle(label){fontSize=30};}
    var w=Screen.width;var h=Screen.height;
@@ -120,14 +144,18 @@ namespace AvH {
    if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
    GUI.Label(new Rect(w/2-275,h-85,550,35),$"{state.Players[network.LocalSlot].CharacterName} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · 라운드 {state.Round}",label);
-   GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전 · Esc 메뉴",new GUIStyle(label){fontSize=15});
+   GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전 · Esc 메뉴 · F1 디버그",new GUIStyle(label){fontSize=15});
 
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
    network.DrawRoom(label);
    if(menu) {
-    if(!network.IsClient)settingsPanel.Draw(session.Session,()=>{menu=false;SetCursor();});
+    if(!network.IsClient&&GUI.Button(new Rect(w/2-125,h/2-30,250,40),"테스트 설정 열기")){menu=false;SetDebugPanelOpen(true);return;}
     else if(GUI.Button(new Rect(w/2-125,h/2-30,250,40),"계속하기")){menu=false;SetCursor();}
     if(GUI.Button(new Rect(w-200,h-50,180,35),"방 나가기")){network.Leave();menu=false;return;}
+   }
+   if(!menu){
+    if(debugOpen)settingsPanel.Draw(session.Session,()=>SetDebugPanelOpen(false),network.IsClient?1:0);
+    else if(GUI.Button(new Rect(w-160,205,140,30),"디버그 · F1"))SetDebugPanelOpen(true);
    }
    if(!(network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;settingsPanel.DrawError(session.Session);if((network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error)))SetCursor();}
 

@@ -37,7 +37,7 @@ namespace AvH
         private PlayerState[] players = Array.Empty<PlayerState>();
         private readonly Random random;
         private RoundPhase phase;
-        private double remaining, hostTime, phaseDeadline;
+        private double remaining, hostTime, phaseDeadline, phaseStartedAt;
         private int round;
         private Faction? winner;
         private CharacterDefinition[] humanRoster,animalRoster;
@@ -62,7 +62,7 @@ namespace AvH
             births = Array.Empty<BirthNotice>();
             nextAnimal=(round-1)*settings.Current.InitialAnimals;
             foreach (var player in players) { player.Faction = Faction.Human; AssignCharacter(player,humanRoster[player.Slot%humanRoster.Length]);player.Position = Spawn(player.Slot); }
-            ResetCombat(); phaseDeadline=hostTime+remaining;
+            ResetCombat(); phaseStartedAt=hostTime; phaseDeadline=hostTime+remaining;
         }
         public void Advance(double elapsed) {
             if (double.IsNaN(elapsed) || double.IsInfinity(elapsed) || elapsed < 0) throw new ArgumentOutOfRangeException(nameof(elapsed));
@@ -85,7 +85,7 @@ namespace AvH
                 } else if (phase == RoundPhase.Chase) {
                     phase = RoundPhase.Results; remaining = settings.Current.ResultSeconds; winner = Faction.Human;
                 } else BeginRound();
-                phaseDeadline=hostTime+remaining;
+                phaseStartedAt=hostTime; phaseDeadline=hostTime+remaining;
             }
             AdvanceCombat(targetTime-hostTime);
             hostTime=targetTime;
