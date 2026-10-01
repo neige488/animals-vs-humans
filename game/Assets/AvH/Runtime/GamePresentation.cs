@@ -149,8 +149,8 @@ namespace AvH {
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
    network.DrawRoom(label);
    if(menu) {
-    if(!network.IsClient&&GUI.Button(new Rect(w/2-125,h/2-30,250,40),"테스트 설정 열기")){menu=false;SetDebugPanelOpen(true);return;}
-    else if(GUI.Button(new Rect(w/2-125,h/2-30,250,40),"계속하기")){menu=false;SetCursor();}
+    if(!network.IsClient&&GUI.Button(new Rect(w/2-125,h/2-55,250,40),"테스트 설정 열기")){menu=false;SetDebugPanelOpen(true);return;}
+    if(GUI.Button(new Rect(w/2-125,h/2+(network.IsClient?-30:0),250,40),"계속하기")){menu=false;SetCursor();}
     if(GUI.Button(new Rect(w-200,h-50,180,35),"방 나가기")){network.Leave();menu=false;return;}
    }
    if(!menu){

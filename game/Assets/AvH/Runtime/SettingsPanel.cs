@@ -72,9 +72,9 @@ namespace AvH {
    }
    GUILayout.EndScrollView();
    if(changed){session.UpdateSettingsEdit(0,values);bool applied=session.ApplySettingsNow(0,false);applyError=applied?null:"적용되지 않았습니다. 값의 범위를 확인하거나 기본값으로 복원하세요.";}
-   if(!string.IsNullOrEmpty(applyError))GUILayout.Label(applyError,muted);
+
    GUILayout.Space(8);GUILayout.Label("최초 동물 수·유예: 다음 탄생부터\n버블 속성: 새 발사부터 · 시간: 경과 유지",muted);
-   GUILayout.Label("변경은 이번 실행에 적용됩니다.",muted);
+   GUILayout.Label(applyError??"변경은 이번 실행에 적용됩니다.",muted,GUILayout.Height(32));
    GUILayout.BeginHorizontal();
    if(GUILayout.Button("기본값",GUILayout.Height(28))){session.BeginSettingsEdit(0);session.RestoreSettingsDefaults(0);session.ApplySettingsNow(0,false);applyError=null;}
    if(GUILayout.Button("현재 설정 저장",GUILayout.Height(28)))session.SaveCurrentSettings(0);
