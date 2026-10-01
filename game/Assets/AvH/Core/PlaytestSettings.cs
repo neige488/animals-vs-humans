@@ -9,8 +9,39 @@ namespace AvH {
   public int InitialAnimals=2, Magazine=12;
   public float HumanSpeed=5, AnimalSpeed=5.6f, HumanJump=1.5f, AnimalJump=1.5f;
   public float ReloadSeconds=1.5f, BubbleRadius=.35f, BubbleSpeed=18, BubbleRange=25, BubbleLifetime=2, FireInterval=.3f, PushForce=8;
+  public float FoxSpeedMultiplier=1.1f, FoxJumpMultiplier=1.1f, FoxKnockbackMultiplier=1.15f;
+  public float WolfSpeedMultiplier=1.15f, WolfJumpMultiplier=1.0f, WolfKnockbackMultiplier=1.0f;
+  public float BearSpeedMultiplier=0.8f, BearJumpMultiplier=0.65f, BearKnockbackMultiplier=0.45f;
+  public float BoarSpeedMultiplier=1.05f, BoarJumpMultiplier=0.7f, BoarKnockbackMultiplier=0.65f;
+  public float RabbitSpeedMultiplier=1.05f, RabbitJumpMultiplier=1.55f, RabbitKnockbackMultiplier=1.4f;
+  public float PenguinSpeedMultiplier=0.9f, PenguinJumpMultiplier=0.9f, PenguinKnockbackMultiplier=0.8f;
   public bool FriendlyCollision=true, EnemyCollision=true, FriendlyPush=true;
   public PlaytestValues Copy() => (PlaytestValues)MemberwiseClone();
+ }
+ public struct AnimalModifiers {
+  public float Speed,Jump,Knockback;
+  public AnimalModifiers(float speed,float jump,float knockback){Speed=speed;Jump=jump;Knockback=knockback;}
+ }
+ public static class AnimalBalance {
+  public const int Count=6;
+  static readonly string[] ids={"animal-fox","animal-wolf","animal-bear_grizzly","animal-boar","animal-rabbit_brown","animal-penguin"};
+  static readonly string[] names={"여우","늑대","불곰","멧돼지","토끼","펭귄"};
+  static readonly string[] prefixes={"Fox","Wolf","Bear","Boar","Rabbit","Penguin"};
+  public static string Id(int i)=>ids[i];
+  public static string Name(int i)=>names[i];
+  public static string[] Keys(int i)=>new[]{prefixes[i]+"SpeedMultiplier",prefixes[i]+"JumpMultiplier",prefixes[i]+"KnockbackMultiplier"};
+  public static AnimalModifiers For(PlaytestValues rules,PlayerState player) {
+   if(player.Faction!=Faction.Animal)return new AnimalModifiers(1,1,1);
+   switch(player.CharacterId) {
+    case "animal-fox":return new AnimalModifiers(rules.FoxSpeedMultiplier,rules.FoxJumpMultiplier,rules.FoxKnockbackMultiplier);
+    case "animal-wolf":return new AnimalModifiers(rules.WolfSpeedMultiplier,rules.WolfJumpMultiplier,rules.WolfKnockbackMultiplier);
+    case "animal-bear_grizzly":return new AnimalModifiers(rules.BearSpeedMultiplier,rules.BearJumpMultiplier,rules.BearKnockbackMultiplier);
+    case "animal-boar":return new AnimalModifiers(rules.BoarSpeedMultiplier,rules.BoarJumpMultiplier,rules.BoarKnockbackMultiplier);
+    case "animal-rabbit_brown":return new AnimalModifiers(rules.RabbitSpeedMultiplier,rules.RabbitJumpMultiplier,rules.RabbitKnockbackMultiplier);
+    case "animal-penguin":return new AnimalModifiers(rules.PenguinSpeedMultiplier,rules.PenguinJumpMultiplier,rules.PenguinKnockbackMultiplier);
+    default:return new AnimalModifiers(1,1,1);
+   }
+  }
  }
  [Serializable] public sealed class SettingsState {
   public PlaytestValues Current, Edit, Pending, Saved;
@@ -55,6 +86,7 @@ namespace AvH {
    foreach(var f in typeof(PlaytestValues).GetFields()) {
     if(f.FieldType==typeof(bool))continue;
     double value=Convert.ToDouble(f.GetValue(v));double min=.01,max=1000;
+    if(f.Name.EndsWith("Multiplier",StringComparison.Ordinal)){min=f.Name.EndsWith("KnockbackMultiplier",StringComparison.Ordinal)?0:.05;max=3;}
     switch(f.Name) {
      case "InitialAnimals":min=1;max=11;break;
      case "Magazine":min=1;max=100;break;
@@ -87,6 +119,10 @@ namespace AvH {
   public bool BeginSettingsEdit(int actorSlot) { if(actorSlot!=0)return false;settings.Edit=(settings.Pending??settings.Current).Copy();return true; }
   public bool UpdateSettingsEdit(int actorSlot,PlaytestValues values) { if(actorSlot!=0||settings.Edit==null||values==null)return false;settings.Edit=values.Copy();return true; }
   public bool RestoreSettingsDefaults(int actorSlot) {if(actorSlot!=0||settings.Edit==null)return false;settings.Edit=new PlaytestValues();return true;}
+  public bool RestoreAnimalDefaults(int actorSlot,int species) {
+   if(actorSlot!=0||settings.Edit==null||species<0||species>=AnimalBalance.Count)return false;
+   var defaults=new PlaytestValues();foreach(var key in AnimalBalance.Keys(species)){var field=typeof(PlaytestValues).GetField(key);field.SetValue(settings.Edit,field.GetValue(defaults));}return true;
+  }
   public bool CancelSettingsEdit(int actorSlot) {if(actorSlot!=0)return false;settings.Edit=null;return true;}
   public bool RetrySettingsSave(int actorSlot)=>actorSlot==0&&settings.Retry();
   public void DismissSettingsError()=>settings.Dismiss();

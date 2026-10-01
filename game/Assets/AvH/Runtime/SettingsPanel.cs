@@ -5,8 +5,8 @@ using UnityEngine;
 namespace AvH {
  // UI edits are copies; the world keeps stepping while this panel is visible.
  public sealed class SettingsPanel {
-  Vector2 scroll; int tab;
-  readonly string[] tabs={"라운드","이동","버블건"};
+  Vector2 scroll; int tab,species;
+  readonly string[] tabs={"라운드","이동","버블건","동물"};
   readonly string[][] keys={
    new[]{"PreparationSeconds","RoundSeconds","ResultSeconds","InitialAnimals","InitialAttackGrace","TransformAttackGrace","FriendlyCollision","EnemyCollision"},
    new[]{"HumanSpeed","AnimalSpeed","HumanJump","AnimalJump"},
@@ -27,6 +27,7 @@ namespace AvH {
    valueLabel=new GUIStyle(row){alignment=TextAnchor.MiddleRight};
   }
   static Vector3 Range(string key) {
+   if(key.EndsWith("Multiplier",StringComparison.Ordinal))return new Vector3(key.EndsWith("KnockbackMultiplier",StringComparison.Ordinal)?0:.05f,3,.05f);
    switch(key) {
     case "PreparationSeconds":return new Vector3(1,120,1);
     case "RoundSeconds":return new Vector3(1,3600,1);
@@ -44,6 +45,7 @@ namespace AvH {
   }
   public void Draw(PlaytestSession session,Action close,int actorSlot=0) {
    Styles();var state=session.ObserveSettings();var area=PanelRect(Screen.width,Screen.height);
+   if(tab==3){float top=Mathf.Min(135,Screen.height*.19f);area.y=top;area.height=Mathf.Max(180,Screen.height-top-100);}
    var oldColor=GUI.color;GUI.color=new Color(.06f,.1f,.13f,.97f);GUI.DrawTexture(area,Texture2D.whiteTexture);GUI.color=oldColor;
    GUILayout.BeginArea(new Rect(area.x+14,area.y+12,area.width-28,area.height-24));
    GUILayout.BeginHorizontal();GUILayout.Label("플레이 디버그",heading);if(GUILayout.Button("접기",GUILayout.Width(52),GUILayout.Height(26))){close();GUILayout.EndHorizontal();GUILayout.EndArea();return;}GUILayout.EndHorizontal();
@@ -51,32 +53,43 @@ namespace AvH {
    GUILayout.Label("실시간 적용 · 설정 v"+state.Version+" · F1 접기",muted);
    if(state.Edit==null){session.BeginSettingsEdit(0);state=session.ObserveSettings();}
    GUILayout.Space(10);tab=GUILayout.Toolbar(tab,tabs,GUILayout.Height(28));GUILayout.Space(8);
+   if(tab==3) {
+    int selected=GUILayout.SelectionGrid(species,new[]{"여우","늑대","불곰","멧돼지","토끼","펭귄"},3,GUILayout.Height(50));
+    if(selected!=species){species=selected;scroll=Vector2.zero;}
+   }
    scroll=GUILayout.BeginScrollView(scroll);
    var values=state.Edit;bool changed=false;
-   for(int i=0;i<keys[tab].Length;i++) {
-    var key=keys[tab][i];var field=typeof(PlaytestValues).GetField(key);
+   var activeKeys=tab==3?AnimalBalance.Keys(species):keys[tab];
+   var activeNames=tab==3?new[]{"속도 배율","점프 높이 배율","밀림 배율 (낮을수록 버팀)"}:names[tab];
+   for(int i=0;i<activeKeys.Length;i++) {
+    var key=activeKeys[i];var field=typeof(PlaytestValues).GetField(key);
     if(field.FieldType==typeof(bool)) {
-     bool previous=(bool)field.GetValue(values);bool next=GUILayout.Toggle(previous,names[tab][i],GUILayout.Height(30));
+     bool previous=(bool)field.GetValue(values);bool next=GUILayout.Toggle(previous,activeNames[i],GUILayout.Height(30));
      if(previous!=next){field.SetValue(values,next);changed=true;}
     } else {
      float previous=Convert.ToSingle(field.GetValue(values));var range=Range(key);
-     GUILayout.BeginHorizontal();GUILayout.Label(names[tab][i],row);GUILayout.Label(previous.ToString(field.FieldType==typeof(int)?"0":"0.##",CultureInfo.InvariantCulture),valueLabel,GUILayout.Width(58));GUILayout.EndHorizontal();
+     GUILayout.BeginHorizontal();GUILayout.Label(activeNames[i],row);GUILayout.Label(previous.ToString(field.FieldType==typeof(int)?"0":"0.##",CultureInfo.InvariantCulture),valueLabel,GUILayout.Width(58));GUILayout.EndHorizontal();
      GUILayout.BeginHorizontal();
      float next=GUILayout.HorizontalSlider(previous,range.x,range.y,GUILayout.Height(20));
      if(GUILayout.Button("−",GUILayout.Width(26)))next=previous-range.z;
      if(GUILayout.Button("+",GUILayout.Width(26)))next=previous+range.z;
      GUILayout.EndHorizontal();
      if(next!=previous){next=Mathf.Clamp(Mathf.Round(next/range.z)*range.z,range.x,range.y);if(next!=previous){if(field.FieldType==typeof(int))field.SetValue(values,Mathf.RoundToInt(next));else field.SetValue(values,next);changed=true;}}
-     GUILayout.Space(10);
+     GUILayout.Space(tab==3?3:10);
     }
+   }
+   if(tab==3) {
+    var modifiers=AnimalBalance.For(values,new PlayerState{Faction=Faction.Animal,CharacterId=AnimalBalance.Id(species)});
+    GUILayout.Label($"실제 속도 {values.AnimalSpeed*modifiers.Speed:0.##} m/s · 점프 {values.AnimalJump*modifiers.Jump:0.##} m",muted);
+    if(GUILayout.Button("이 동물만 기본값")){session.UpdateSettingsEdit(0,values);session.RestoreAnimalDefaults(0,species);values=session.ObserveSettings().Edit;changed=true;}
    }
    GUILayout.EndScrollView();
    if(changed){session.UpdateSettingsEdit(0,values);bool applied=session.ApplySettingsNow(0,false);applyError=applied?null:"적용되지 않았습니다. 값의 범위를 확인하거나 기본값으로 복원하세요.";}
 
-   GUILayout.Space(8);GUILayout.Label("최초 동물 수·유예: 다음 탄생부터\n버블 속성: 새 발사부터 · 시간: 경과 유지",muted);
+   GUILayout.Space(8);GUILayout.Label(tab==3?"속도: 즉시 · 점프: 다음 점프부터\n밀림: 다음 피격부터 · 공통값 × 종별 배율":"최초 동물 수·유예: 다음 탄생부터\n버블 속성: 새 발사부터 · 시간: 경과 유지",muted);
    GUILayout.Label(applyError??"변경은 이번 실행에 적용됩니다.",muted,GUILayout.Height(32));
    GUILayout.BeginHorizontal();
-   if(GUILayout.Button("기본값",GUILayout.Height(28))){session.BeginSettingsEdit(0);session.RestoreSettingsDefaults(0);session.ApplySettingsNow(0,false);applyError=null;}
+   if(GUILayout.Button("전체 기본값",GUILayout.Height(28))){session.BeginSettingsEdit(0);session.RestoreSettingsDefaults(0);session.ApplySettingsNow(0,false);applyError=null;}
    if(GUILayout.Button("현재 설정 저장",GUILayout.Height(28)))session.SaveCurrentSettings(0);
    GUILayout.EndHorizontal();GUILayout.EndArea();
   }

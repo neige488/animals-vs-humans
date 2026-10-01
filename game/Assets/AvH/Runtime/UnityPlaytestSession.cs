@@ -56,18 +56,18 @@ namespace AvH {
    if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
-    var body=bodies[i]; var p=state.Players[i];
+    var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; }
     if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
      if(guns[i]!=null&&input.RoundId==state.Round)guns[i].GetComponent<BubbleGunPose>().SetAim(input.Yaw,input.Pitch);
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
-     if(body.isGrounded && input.Jump){vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
+     if(body.isGrounded && input.Jump){vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];
-     body.Move((direction*(p.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed)+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
+     body.Move((direction*(p.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed*modifiers.Speed)+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
      if(!wasGrounded&&body.isGrounded&&fallingSpeed< -4)Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
      foreach(var animator in body.GetComponentsInChildren<Animator>()) {
