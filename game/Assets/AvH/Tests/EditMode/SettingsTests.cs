@@ -124,6 +124,51 @@ public class SettingsTests {
    }
   }
  }
+ [Test] public void LiveSettingsRetainElapsedTimeAndClearOldReservation() {
+  var s=new PlaytestSession(1);s.StartSolo("host");s.Advance(8);
+  s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.HumanSpeed=2;s.UpdateSettingsEdit(0,v);s.ApplySettings(0);
+  s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.PreparationSeconds=12;v.InitialAnimals=3;
+  s.UpdateSettingsEdit(0,v);Assert.IsFalse(s.ApplySettingsNow(1));Assert.IsTrue(s.ApplySettingsNow(0));
+  Assert.IsNull(s.ObserveSettings().Pending);Assert.AreEqual(2,s.ObserveSettings().Version);
+  Assert.AreEqual(4,s.Observe().SecondsRemaining);Assert.AreEqual(1,s.Observe().Round);
+  s.Advance(4);Assert.AreEqual(RoundPhase.Chase,s.Observe().Phase);
+  Assert.AreEqual(3,System.Linq.Enumerable.Count(s.Observe().Players,p=>p.Faction==Faction.Animal));
+  s.Advance(10);s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.RoundSeconds=5;
+  s.UpdateSettingsEdit(0,v);Assert.IsTrue(s.ApplySettingsNow(0));Assert.AreEqual(0,s.Observe().SecondsRemaining);
+  s.Advance(0);Assert.AreEqual(RoundPhase.Results,s.Observe().Phase);Assert.AreEqual(1,s.Observe().Round);
+  s.Advance(2);s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.ResultSeconds=9;
+  s.UpdateSettingsEdit(0,v);s.ApplySettingsNow(0);Assert.AreEqual(7,s.Observe().SecondsRemaining);
+ }
+ [Test] public void LiveSettingsDoNotRefillAmmoAndCanFinishAnActiveReload() {
+  var s=new PlaytestSession(1);s.StartSolo("host");Assert.IsTrue(s.TryFire(0,1));
+  s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.Magazine=4;v.FireInterval=.1f;
+  s.UpdateSettingsEdit(0,v);s.ApplySettingsNow(0);Assert.AreEqual(4,s.Observe().Players[0].Ammo);
+  s.Advance(.11);Assert.IsTrue(s.TryFire(0,1));Assert.IsTrue(s.TryReload(0,1));s.Advance(.5);
+  s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.Magazine=20;v.ReloadSeconds=.25f;
+  s.UpdateSettingsEdit(0,v);s.ApplySettingsNow(0);Assert.AreEqual(0,s.Observe().Players[0].ReloadRemaining);Assert.AreEqual(20,s.Observe().Players[0].Ammo);
+  s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.HumanSpeed=float.NaN;
+  s.UpdateSettingsEdit(0,v);Assert.IsFalse(s.ApplySettingsNow(0));Assert.AreEqual(20,s.ObserveSettings().Current.Magazine);
+ }
+ [Test] public void LiveDragDoesNotWriteUntilExplicitSaveAndRestartUsesSavedSettings() {
+  var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString());
+  var path=System.IO.Path.Combine(dir,"settings.xml");
+  try {
+   var s=new PlaytestSession(1,path);s.StartSolo("host");
+   s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.HumanSpeed=3;s.UpdateSettingsEdit(0,v);s.ApplySettingsNow(0,false);
+   Assert.AreEqual(3,s.ObserveSettings().Current.HumanSpeed);Assert.IsFalse(System.IO.File.Exists(path));
+   Assert.IsFalse(s.SaveCurrentSettings(1));Assert.IsTrue(s.SaveCurrentSettings(0));
+   s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.HumanSpeed=7;s.UpdateSettingsEdit(0,v);s.ApplySettingsNow(0,false);
+   Assert.AreEqual(3,new PlaytestSession(2,path).ObserveSettings().Current.HumanSpeed);
+   Assert.IsTrue(s.SaveCurrentSettings(0));Assert.AreEqual(7,new PlaytestSession(3,path).ObserveSettings().Current.HumanSpeed);
+  }finally{if(System.IO.Directory.Exists(dir))System.IO.Directory.Delete(dir,true);}
+ }
+ [Test] public void LiveTimerKeepsElapsedTimeAcrossZeroThenExtensionBeforeNextTick() {
+  var s=new PlaytestSession(1);s.StartSolo("host");s.Advance(8);
+  s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.PreparationSeconds=5;s.UpdateSettingsEdit(0,v);s.ApplySettingsNow(0,false);
+  Assert.AreEqual(0,s.Observe().SecondsRemaining);
+  s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.PreparationSeconds=20;s.UpdateSettingsEdit(0,v);s.ApplySettingsNow(0,false);
+  Assert.AreEqual(12,s.Observe().SecondsRemaining);
+ }
  static float AdjacentPositiveFloat(float value,int step) {
   int bits=System.BitConverter.ToInt32(System.BitConverter.GetBytes(value),0);
   return System.BitConverter.ToSingle(System.BitConverter.GetBytes(bits+step),0);

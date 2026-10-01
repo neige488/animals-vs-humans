@@ -90,6 +90,28 @@ namespace AvH {
   public bool CancelSettingsEdit(int actorSlot) {if(actorSlot!=0)return false;settings.Edit=null;return true;}
   public bool RetrySettingsSave(int actorSlot)=>actorSlot==0&&settings.Retry();
   public void DismissSettingsError()=>settings.Dismiss();
+  // Test-only live tuning. Existing births/projectiles retain their identity;
+  // active phase time is recalculated from elapsed time, without resetting the round.
+  public bool ApplySettingsNow(int actorSlot,bool persist=false) {
+   if(actorSlot!=0||settings.Edit==null||PlaytestSettings.Validate(settings.Edit).Count>0)return false;
+   var old=settings.Current;var value=settings.Edit.Copy();
+   if(players.Length>0) {
+    double duration=phase==RoundPhase.Preparation?value.PreparationSeconds:phase==RoundPhase.Chase?value.RoundSeconds:value.ResultSeconds;
+    double elapsed=hostTime-phaseStartedAt;
+    remaining=Math.Max(0,duration-elapsed);phaseDeadline=hostTime+remaining;
+    foreach(var p in players) {
+     p.Ammo=Math.Min(p.Ammo,value.Magazine);
+     if(p.ReloadRemaining>0) {
+      p.ReloadRemaining=Math.Max(0,value.ReloadSeconds-(old.ReloadSeconds-p.ReloadRemaining));
+      if(p.ReloadRemaining==0)p.Ammo=value.Magazine;
+     }
+     if(p.Faction==Faction.Human&&p.FireCooldownRemaining>0)
+      p.FireCooldownRemaining=Math.Max(0,value.FireInterval-(old.FireInterval-p.FireCooldownRemaining));
+    }
+   }
+   settings.Current=value;settings.Pending=null;settings.Edit=null;settings.Version++;if(persist)settings.Save(value);return true;
+  }
+  public bool SaveCurrentSettings(int actorSlot)=>actorSlot==0&&settings.Save(settings.Current);
   public bool ApplySettings(int actorSlot) { if(actorSlot!=0||settings.Edit==null||PlaytestSettings.Validate(settings.Edit).Count>0)return false;settings.Pending=settings.Edit.Copy();settings.Edit=null;settings.Save(settings.Pending);return true; }
  }
 }
