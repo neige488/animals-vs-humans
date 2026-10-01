@@ -109,6 +109,19 @@ namespace AvH.Tests {
     world.Advance(205);Until(host,client,()=>client.Visuals.SettingsVersion==2);Assert.That(client.Visuals.CurrentRules.HumanSpeed,Is.EqualTo(8));Assert.That(client.Visuals.HasPending,Is.False);
    }
   }
+  [Test] public void SpeciesTuningIsSentLiveAndPreviousProtocolIsRejected() {
+   var world=new PlaytestSession(2);world.StartSolo("host");
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient())using(var old=new PrivateRoomClient(protocolVersion:"avh-private-5")) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.RabbitSpeedMultiplier=2.2f;rules.BearKnockbackMultiplier=.2f;
+    world.UpdateSettingsEdit(0,rules);Assert.IsTrue(world.ApplySettingsNow(0));
+    Until(host,client,()=>client.Visuals.SettingsVersion==2);
+    Assert.AreEqual(2.2f,client.Visuals.CurrentRules.RabbitSpeedMultiplier);Assert.AreEqual(.2f,client.Visuals.CurrentRules.BearKnockbackMultiplier);
+    Assert.IsFalse(client.Visuals.HasPending);Assert.AreEqual(1,world.Observe().Round);
+    old.Connect(host.RoomCode,"old");for(int i=0;i<1500&&old.Status!=ConnectionStatus.Failed;i++){host.Pump();old.Pump();System.Threading.Thread.Sleep(2);}
+    Assert.AreEqual(ConnectionStatus.Failed,old.Status);
+   }
+  }
   [Test] public void AnimalBotFallbackKeepsFactionPositionAndAttackGrace() {
    int seed=Enumerable.Range(0,100).First(n=>{var w=new PlaytestSession(n);w.StartSolo("host");w.Advance(20);return w.Observe().Players[0].Faction==Faction.Human;});
    var world=new PlaytestSession(seed);world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.TransformAttackGrace=30;world.UpdateSettingsEdit(0,rules);world.ApplySettings(0);world.StartSolo("host");
@@ -140,8 +153,8 @@ namespace AvH.Tests {
    }
   }
   [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
-   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-5"));
-   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("TBqmQTaNIEg1ypV50CiSpY+I6tuNwwhs9mL+O+VHqw8="),"Schema changes require explicit protocol version and guard update");
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-6"));
+   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("USsN17jbv0kvSL7pIlx5ANrbON/eqZoIjsBFeQrOAjI="),"Schema changes require explicit protocol version and guard update");
    foreach(var t in new[]{typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice)}) {
     Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
     Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);

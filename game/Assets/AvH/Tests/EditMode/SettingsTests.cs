@@ -169,6 +169,29 @@ public class SettingsTests {
   s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.PreparationSeconds=20;s.UpdateSettingsEdit(0,v);s.ApplySettingsNow(0,false);
   Assert.AreEqual(12,s.Observe().SecondsRemaining);
  }
+ [Test] public void SpeciesTuningCopiesValidatesAndLoadsOlderXmlWithNewDefaults() {
+  var file=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml");
+  try {
+   var s=new PlaytestSession(1,file);s.StartSolo("host");s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;
+   Assert.AreEqual(.45f,v.BearKnockbackMultiplier);v.FoxSpeedMultiplier=2;s.UpdateSettingsEdit(0,v);Assert.AreEqual(1.1f,s.ObserveSettings().Current.FoxSpeedMultiplier);
+   Assert.IsFalse(s.ApplySettingsNow(1));Assert.IsTrue(s.ApplySettingsNow(0));Assert.IsTrue(s.SaveCurrentSettings(0));
+   s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;v.BearJumpMultiplier=2;s.UpdateSettingsEdit(0,v);
+   Assert.IsFalse(s.RestoreAnimalDefaults(1,0));Assert.IsFalse(s.RestoreAnimalDefaults(0,-1));Assert.IsTrue(s.RestoreAnimalDefaults(0,0));
+   Assert.AreEqual(1.1f,s.ObserveSettings().Edit.FoxSpeedMultiplier);Assert.AreEqual(2,s.ObserveSettings().Edit.BearJumpMultiplier);s.CancelSettingsEdit(0);
+   Assert.AreEqual(2,new PlaytestSession(2,file).ObserveSettings().Current.FoxSpeedMultiplier);
+   foreach(int i in new[]{0,1,2,3,4,5})foreach(string key in AnimalBalance.Keys(i)) {
+    var field=typeof(PlaytestValues).GetField(key);
+    foreach(float bad in new[]{float.NaN,float.PositiveInfinity,-.01f,3.01f}) {
+     s.BeginSettingsEdit(0);v=s.ObserveSettings().Edit;field.SetValue(v,bad);s.UpdateSettingsEdit(0,v);Assert.IsFalse(s.ApplySettingsNow(0),key);
+    }
+   }
+   var xml=new System.Xml.XmlDocument();xml.Load(file);
+   foreach(var field in typeof(PlaytestValues).GetFields())if(field.Name.EndsWith("Multiplier")){var node=xml.DocumentElement.SelectSingleNode(field.Name);xml.DocumentElement.RemoveChild(node);}
+   xml.Save(file);var old=new PlaytestSession(3,file).ObserveSettings();Assert.IsNull(old.Error);Assert.AreEqual(1.1f,old.Current.FoxSpeedMultiplier);Assert.AreEqual(1.55f,old.Current.RabbitJumpMultiplier);
+   var unknown=AnimalBalance.For(old.Current,new PlayerState{Faction=Faction.Animal,CharacterId="animal-default"});Assert.AreEqual(1,unknown.Speed);
+   var human=AnimalBalance.For(old.Current,new PlayerState{Faction=Faction.Human,CharacterId=AnimalBalance.Id(0)});Assert.AreEqual(1,human.Knockback);
+  }finally{if(System.IO.File.Exists(file))System.IO.File.Delete(file);}
+ }
  static float AdjacentPositiveFloat(float value,int step) {
   int bits=System.BitConverter.ToInt32(System.BitConverter.GetBytes(value),0);
   return System.BitConverter.ToSingle(System.BitConverter.GetBytes(bits+step),0);

@@ -45,13 +45,13 @@ namespace AvH {
    var args=System.Environment.GetCommandLineArgs();int capture=System.Array.IndexOf(args,"-avhDebugPreview");
    if(capture<0||capture+1>=args.Length)return;
    session.StartSolo("디버그",123,System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml"));
-   SetDebugPanelOpen(true);settingsPanel.SelectTab(1);StartCoroutine(CaptureDebugPreview(args[capture+1]));
+   SetDebugPanelOpen(true);settingsPanel.SelectTab(3);StartCoroutine(CaptureDebugPreview(args[capture+1]));
   }
   System.Collections.IEnumerator CaptureDebugPreview(string folder) {
    System.IO.Directory.CreateDirectory(folder);
    for(int frame=0;frame<90;frame++) {
     if(frame==30||frame==60) {
-     session.Session.BeginSettingsEdit(0);var values=session.Session.ObserveSettings().Edit;values.HumanSpeed=frame==30?8:3;
+     session.Session.BeginSettingsEdit(0);var values=session.Session.ObserveSettings().Edit;values.FoxSpeedMultiplier=frame==30?1.8f:1.1f;
      session.Session.UpdateSettingsEdit(0,values);session.Session.ApplySettingsNow(0,false);
     }
     yield return new WaitForEndOfFrame();
