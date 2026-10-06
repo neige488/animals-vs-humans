@@ -24,6 +24,7 @@ namespace AvH {
   /// <summary>Sounds read from public state (reload starts). The first observation of a session only primes.</summary>
   void PresentStateAudio(SessionState state,bool prime) {
    if(state?.Players==null)return;
+   Audio.SetPhase(state.Phase,state.SecondsRemaining);
    for(int i=0;i<state.Players.Length&&i<heardReloading.Length;i++) {
     var p=state.Players[i];bool reloading=p.Faction==Faction.Human&&p.ReloadRemaining>0;
     if(reloading&&!heardReloading[i]&&audioPrimed&&!prime&&i<bodies.Count)Audio.Play("reload",bodies[i].transform.position+Vector3.up*1.2f);

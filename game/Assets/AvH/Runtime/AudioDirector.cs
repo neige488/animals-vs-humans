@@ -15,6 +15,8 @@ namespace AvH {
   internal Dictionary<string,int> Played=new Dictionary<string,int>();
   /// <summary>How many times a cue has been voiced since the director started.</summary>
   public int Count(string cue)=>Played.TryGetValue(cue,out var n)?n:0;
+  /// <summary>Current phase music, the track still fading out (null when settled) and the 0..1 crossfade progress.</summary>
+  public string Music,FadingMusic,Ambience;public float MusicLevel;
  }
  /// <summary>
  /// Presentation only: turns public events, round phases and character motion into 3D sound.
@@ -77,10 +79,31 @@ namespace AvH {
    if(synthesized){var clip=SoundSynth.Make(cue);if(clip!=null){generated.Add(clip);clips=new[]{clip};}}
    return bank[cue]=(clips,synthesized);
   }
-  public void Advance(float seconds){if(seconds>0&&!float.IsInfinity(seconds))clock+=seconds;}
+  /// <summary>The last stretch of the chase that switches to the final music.</summary>
+  public const double FinalSeconds=30;
+  public const float CrossfadeSeconds=1.5f,MusicVolume=.3f,AmbienceVolume=.35f;
+  AudioSource current,previous,ambience;string music,fading;float musicLevel,fadeFrom;
+  /// <summary>Round phase (and time left) picks the music: preparation/results calm, chase, then the last thirty seconds.</summary>
+  public void SetPhase(RoundPhase phase,double secondsRemaining) {
+   if(ambience==null){ambience=Bed("Ambience");var bed=Clips("ambience").clips;if(bed.Length>0){ambience.clip=bed[0];ambience.volume=AmbienceVolume;ambience.Play();}}
+   string want=phase==RoundPhase.Chase?(secondsRemaining<=FinalSeconds?"music-final":"music-chase"):"music-prepare";
+   if(want==music)return;
+   var clips=Clips(want).clips;if(clips.Length==0)return;
+   if(current==null){current=Bed("Music A");previous=Bed("Music B");}
+   else{var swap=previous;previous=current;current=swap;fading=music;fadeFrom=previous.volume;}
+   current.Stop();current.clip=clips[0];current.volume=0;current.Play();music=want;musicLevel=0;
+  }
+  AudioSource Bed(string name){var go=new GameObject(name);go.transform.SetParent(transform,false);var s=go.AddComponent<AudioSource>();s.playOnAwake=false;s.loop=true;s.spatialBlend=0;s.priority=0;s.volume=0;return s;}
+  public void Advance(float seconds) {
+   if(!(seconds>0)||float.IsInfinity(seconds))return;
+   clock+=seconds;
+   if(current==null)return;
+   musicLevel=Mathf.Min(1,musicLevel+seconds/CrossfadeSeconds);current.volume=MusicVolume*musicLevel;
+   if(fading!=null){previous.volume=fadeFrom*(1-musicLevel);if(musicLevel>=1){previous.Stop();previous.volume=0;fading=null;}}
+  }
   void Update(){if(AutomaticUpdate)Advance(Time.unscaledDeltaTime);}
   public AudioView Observe()=>new AudioView{
-   Played=new Dictionary<string,int>(played),
+   Played=new Dictionary<string,int>(played),Music=music,FadingMusic=fading,MusicLevel=current==null?0:musicLevel,Ambience=ambience!=null&&ambience.clip!=null?"ambience":null,
    Voices=voices.Where(v=>v.Until>clock).Select(v=>new AudioVoiceView{Cue=v.Cue,Position=v.Source.transform.position,SpatialBlend=v.Source.spatialBlend,MinDistance=v.Source.minDistance,MaxDistance=v.Source.maxDistance,Volume=v.Source.volume,Pitch=v.Source.pitch,Remaining=v.Until-clock,Priority=v.Priority,Synthesized=v.Synthesized}).ToArray()
   };
   /// <summary>Per-species voice: step cue and pitch, vocal cue and pitch, and the attack-tell snarl pitch.</summary>

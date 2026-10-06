@@ -90,7 +90,7 @@ namespace AvH.Tests {
    var view=world.Audio.Observe();
    Assert.AreEqual("music-prepare",view.Music,"Preparation has its own calm music");Assert.AreEqual("ambience",view.Ambience,"The village ambience loops underneath");
    world.Audio.Advance(3);
-   foreach(var s in root.GetComponentsInChildren<AudioSource>().Where(s=>s.loop))Assert.AreEqual(0,s.spatialBlend,1e-4,"Music and ambience are not positional: "+s.clip.name);
+   foreach(var s in root.GetComponentsInChildren<AudioSource>().Where(s=>s.loop&&s.clip!=null))Assert.AreEqual(0,s.spatialBlend,1e-4,"Music and ambience are not positional: "+s.clip.name);
    Assert.AreEqual(2,root.GetComponentsInChildren<AudioSource>().Count(s=>s.loop&&s.clip!=null&&s.volume>0),"One music track and the ambience sound once settled");
    world.Step(1f);Assert.AreEqual(RoundPhase.Chase,world.Observe().Phase);
    view=world.Audio.Observe();Assert.AreEqual("music-chase",view.Music,"The chase changes the music");Assert.AreEqual("music-prepare",view.FadingMusic,"...by crossfading out the previous track");
