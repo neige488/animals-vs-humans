@@ -24,6 +24,9 @@ namespace AvH {
   public ActionPhase Action;
   /// <summary>0..1 bubble-stun wobble currently shown.</summary>
   public float Stagger;
+  /// <summary>Weight of the attack/tell clip over locomotion, and the code lunge (metres forward of the body).</summary>
+  public float ActionWeight, Lunge;
+  public string ActionClip;
  }
  /// <summary>
  /// Presentation-only locomotion. One public input (<see cref="LocomotionState"/>) drives speed-blended walk/run,
@@ -50,29 +53,38 @@ namespace AvH {
    }
   }
   const float StartSpeed=.25f,StopSpeed=.12f,StopHold=.1f,AirDelay=.08f,LandSeconds=.2f;
-  PlayableGraph graph;AnimationMixerPlayable mixer;AnimationClipPlayable idle,walk,run,air;
-  AnimationClip idleClip,walkClip,runClip,airClip;bool airIsJump;
-  Transform visual;Vector3 baseScale;Quaternion baseRotation;BubbleGunPose pose;Character character;float referenceSpeed;
+  // Share of an attack clip used as the tell; the rest is the swing.
+  const float WindupShare=.35f;
+  PlayableGraph graph;AnimationMixerPlayable mixer;AnimationClipPlayable idle,walk,run,air,act;
+  AnimationClip idleClip,walkClip,runClip,airClip,actClip;bool airIsJump,shakeTell;float lungeDistance;
+  Transform visual;Vector3 baseScale,basePosition;Quaternion baseRotation;BubbleGunPose pose;Character character;float referenceSpeed;
   bool moving,airborne,lastGrounded=true;float stillTime,airTime,landTimer,phase,idleTime,lastSpeed,lastYaw,lastFall;
-  float squash,squashVelocity,pitch,roll,actionPitch,actionRoll,staggerClock;
+  float squash,squashVelocity,pitch,roll,actionPitch,actionRoll,actionSquash,actionTime,staggerClock;
   CharacterAnimationView view;
   public void Bind(Transform model,Faction faction,string characterId,BubbleGunPose gunPose) {
-   Release();visual=model;pose=gunPose;character=For(faction,characterId);
-   baseScale=model.localScale;baseRotation=model.localRotation;
+   Release();act=default;visual=model;pose=gunPose;character=For(faction,characterId);
+   baseScale=model.localScale;baseRotation=model.localRotation;basePosition=model.localPosition;actionSquash=0;
    referenceSpeed=Mathf.Max(.1f,CharacterMotion.Profile(new PlaytestValues(),new PlayerState{Faction=faction,CharacterId=characterId}).MaxSpeed);
    moving=airborne=false;lastGrounded=true;stillTime=airTime=landTimer=phase=idleTime=squash=squashVelocity=pitch=roll=actionPitch=actionRoll=0;lastYaw=transform.eulerAngles.y;lastSpeed=0;
    view=new CharacterAnimationView{Gait=LocomotionGait.Idle,StrideDirection=1};
    Animator animator=null;foreach(var a in model.GetComponentsInChildren<Animator>())if(a.runtimeAnimatorController!=null){animator=a;break;}
+   var clips=animator==null?new AnimationClip[0]:animator.runtimeAnimatorController.animationClips;
+   // Attack presentation: own attack clip; the penguin tells with Shake and lunges; the rabbit (no attack clip) crouches and lunges.
+   actClip=null;shakeTell=false;lungeDistance=0;
+   if(faction==Faction.Animal) {
+    if(characterId=="animal-penguin"){actClip=Find(clips,"Shake");shakeTell=true;lungeDistance=.5f;}
+    else{actClip=Find(clips,"Attack","Bite","Swipe");lungeDistance=actClip==null?.45f:.12f;}
+   }
+   view.ActionClip=actClip!=null?actClip.name:null;
    if(animator==null)return;
-   var clips=animator.runtimeAnimatorController.animationClips;
    idleClip=Find(clips,"Idle_Generic","Idle_Breathing","_Idle");walkClip=Find(clips,"Common_Walk","Jump_Walk","_Walk");runClip=Find(clips,"Run_InPlace","_Run");
    var jump=Find(clips,"Jump_Up");airIsJump=jump!=null;airClip=jump??runClip;
    if(idleClip==null||walkClip==null||runClip==null)return;
    graph=PlayableGraph.Create("AvH locomotion "+name);graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
-   mixer=AnimationMixerPlayable.Create(graph,4);
-   idle=Clip(idleClip,0);walk=Clip(walkClip,1);run=Clip(runClip,2);air=Clip(airClip,3);
+   mixer=AnimationMixerPlayable.Create(graph,5);
+   idle=Clip(idleClip,0);walk=Clip(walkClip,1);run=Clip(runClip,2);air=Clip(airClip,3);if(actClip!=null)act=Clip(actClip,4);
    var output=AnimationPlayableOutput.Create(graph,"Locomotion",animator);output.SetSourcePlayable(mixer);
-   graph.Play();Weights(1,0,0,0);
+   graph.Play();Weights(1,0,0,0,0);
    view.IdleClip=idleClip.name;view.WalkClip=walkClip.name;view.RunClip=runClip.name;view.AirClip=airClip.name;view.DrivesAnimator=true;
   }
   AnimationClipPlayable Clip(AnimationClip clip,int input) {
@@ -141,26 +153,41 @@ namespace AvH {
    if(Mathf.Abs(squash)<.0005f&&Mathf.Abs(squashVelocity)<.01f){squash=0;squashVelocity=0;}
    // Bubble stun: a quick side-to-side totter that fades as control returns.
    view.Stagger=Mathf.MoveTowards(view.Stagger,state.Action==ActionPhase.Stunned?1-state.ActionProgress:0,dt/.05f);
-   staggerClock+=dt;actionRoll=Mathf.Sin(staggerClock*26)*14*view.Stagger;actionPitch=-7*view.Stagger;
-   view.Squash=squash;view.BodyPitch=pitch+actionPitch;view.BodyRoll=roll+actionRoll;
+   staggerClock+=dt;actionRoll=Mathf.Sin(staggerClock*26)*14*view.Stagger;
+   // Attack: a readable tell (clip start, crouch, lean back) then the swing (clip end, lunge, lean in).
+   float actionTarget=0,kick=0,crouch=0,lunge=0;
+   if(state.Action==ActionPhase.Windup) {
+    float t=1-(1-state.ActionProgress)*(1-state.ActionProgress);
+    actionTarget=actClip!=null?1:0;actionTime=actClip==null?0:(shakeTell?t*.6f:t*WindupShare)*actClip.length;crouch=.1f*t;kick=-6*t;
+   } else if(state.Action==ActionPhase.Swing) {
+    float u=state.ActionProgress,arc=Mathf.Sin(Mathf.PI*u);
+    actionTarget=actClip==null?0:shakeTell?1-u:1;if(actClip!=null&&!shakeTell)actionTime=Mathf.Lerp(WindupShare,1,u)*actClip.length;
+    lunge=arc*lungeDistance;kick=10*arc;
+   }
+   view.ActionWeight=Mathf.MoveTowards(view.ActionWeight,actionTarget,dt/.05f);
+   view.Lunge=lunge;actionSquash=Mathf.MoveTowards(actionSquash,crouch,dt/.05f);actionPitch=-7*view.Stagger+kick;
+   view.Squash=squash+actionSquash;view.BodyPitch=pitch+actionPitch;view.BodyRoll=roll+actionRoll;
    view.Gait=airborne?LocomotionGait.Airborne:landTimer>0?LocomotionGait.Landing:!moving?LocomotionGait.Idle:view.RunBlend>=.5f?LocomotionGait.Run:LocomotionGait.Walk;
    Present(state);
   }
   void Present(LocomotionState state) {
    if(visual!=null) {
-    visual.localScale=new Vector3(baseScale.x*(1+squash*.5f),baseScale.y*(1-squash),baseScale.z*(1+squash*.5f));
+    float sq=view.Squash;visual.localScale=new Vector3(baseScale.x*(1+sq*.5f),baseScale.y*(1-sq),baseScale.z*(1+sq*.5f));
+    visual.localPosition=basePosition+Vector3.forward*view.Lunge;
     if(pose==null)visual.localRotation=baseRotation*Quaternion.Euler(view.BodyPitch,0,view.BodyRoll);
    }
    if(!graph.IsValid())return;
    float ground=1-view.AirWeight;
-   Weights(ground*(1-view.MoveWeight),ground*view.MoveWeight*(1-view.RunBlend),ground*view.MoveWeight*view.RunBlend,view.AirWeight);
+   float keep=act.IsValid()?1-view.ActionWeight:1;
+   Weights(keep*ground*(1-view.MoveWeight),keep*ground*view.MoveWeight*(1-view.RunBlend),keep*ground*view.MoveWeight*view.RunBlend,keep*view.AirWeight,1-keep);
+   if(act.IsValid())act.SetTime(actionTime);
    idle.SetTime(Mathf.Repeat(idleTime,idleClip.length));
    walk.SetTime(phase*walkClip.length);run.SetTime(phase*runClip.length);
    // Rabbit plays its own jump by vertical speed; others hold an extended stride while airborne.
    float airPhase=airIsJump?Mathf.Lerp(.45f,.15f,Mathf.InverseLerp(-8,8,state.VerticalSpeed)):.3f;
    air.SetTime(airPhase*airClip.length);
   }
-  void Weights(float a,float b,float c,float d){mixer.SetInputWeight(0,a);mixer.SetInputWeight(1,b);mixer.SetInputWeight(2,c);mixer.SetInputWeight(3,d);}
+  void Weights(float a,float b,float c,float d,float e){mixer.SetInputWeight(0,a);mixer.SetInputWeight(1,b);mixer.SetInputWeight(2,c);mixer.SetInputWeight(3,d);mixer.SetInputWeight(4,e);}
   void Release(){if(graph.IsValid())graph.Destroy();if(pose!=null)pose.LegYaw=0;}
   void OnDestroy(){Release();}
  }
