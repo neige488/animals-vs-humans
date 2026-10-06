@@ -156,6 +156,21 @@ namespace AvH.Tests {
    if(catalog!=null&&catalog.Sounds!=null&&catalog.Sounds.Length>0){foreach(var entry in AudioCatalog.Entries.Where(e=>e.Origin==SoundOrigin.Owned))real.Play(entry.Cue,Vector3.zero);CollectionAssert.IsEmpty(real.Observe().Fallbacks,"Configured owned sounds load");}
   }
 
+  [UnityTest] public IEnumerator AnEmptyMagazineClicksOncePerTriggerPull() {
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.Magazine=1;});
+   world.Step(.02f);world.Step(1f);Spread();Step(5);
+   world.PresentTrigger(8,true);world.PresentTrigger(8,false);
+   Assert.AreEqual(0,world.Audio.Observe().Count("dry-fire"),"A loaded gun does not click");
+   Step(1,(8,new PlayerInput{Attack=true,Yaw=180}));Assert.AreEqual(0,world.Observe().Players[8].Ammo);
+   world.PresentTrigger(8,true);world.PresentTrigger(8,true);world.PresentTrigger(8,true);
+   Assert.AreEqual(1,world.Audio.Observe().Count("dry-fire"),"Pulling the trigger on an empty magazine clicks once");
+   var click=world.Audio.Observe().Voices.Single(v=>v.Cue=="dry-fire");Assert.AreEqual(1,click.SpatialBlend,1e-4);
+   world.PresentTrigger(8,false);world.PresentTrigger(8,true);
+   Assert.AreEqual(2,world.Audio.Observe().Count("dry-fire"),"...and again on the next pull");
+   world.PresentTrigger(0,false);world.PresentTrigger(0,true);
+   Assert.AreEqual(2,world.Audio.Observe().Count("dry-fire"),"Animals have no gun to click");
+  }
+
   [UnityTest] public IEnumerator RemoteViewersHearTheSamePublicEventsOnceAndNeverOnJoin() {
    var source=new PlaytestSession(123);source.StartSolo("source");source.BeginSettingsEdit(0);var v=source.ObserveSettings().Edit;v.InitialAttackGrace=0;v.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,v);Assert.IsTrue(source.ApplySettingsNow(0));
    source.Advance(20.01);var state=source.Observe();int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int other=state.Players.Last(p=>p.Faction==Faction.Animal).Slot;
