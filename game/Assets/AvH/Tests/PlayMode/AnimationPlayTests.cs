@@ -59,6 +59,15 @@ namespace AvH.Tests {
    Assert.AreEqual(2f,walk.CyclesPerSecond/crawl.CyclesPerSecond,.1f,"Doubling a slow walk doubles the stride rate");
   }
 
+  [UnityTest] public IEnumerator SlowestAllowedSpeedStillWalksInsteadOfSlidingInIdle() {
+   // Review F-3: a 0.1 m/s walk is inside the settings range, so the body must not glide in the idle pose.
+   yield return Create(false);int h=Human;Tune(v=>{v.InertiaSeconds=0;v.HumanSpeed=.1f;});
+   var start=world.PlayerTransform(h).position;var walk=Drive(h,new PlayerInput{Forward=1},25);
+   Assert.Greater(Vector3.Distance(start,world.PlayerTransform(h).position),.03f,"The body really moves");
+   Assert.AreEqual(LocomotionGait.Walk,walk.Gait);Assert.Greater(walk.MoveWeight,.9f);Assert.Greater(walk.CyclesPerSecond,0);
+   var stop=Drive(h,new PlayerInput(),20);Assert.AreEqual(LocomotionGait.Idle,stop.Gait,"Releasing still settles to idle");
+  }
+
   [UnityTest] public IEnumerator TappingAndStoppingDoNotFlickerBetweenIdleAndRun() {
    yield return Create(false);int h=Human;
    foreach(float inertia in new[]{0f,.12f}) {
