@@ -67,6 +67,8 @@ namespace AvH {
    p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
    Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
+  /// <summary>Called only by the authoritative physics adapter when a body or bubble knocks a light prop (presentation event).</summary>
+  public bool RecordPropPush(int prop,int actor,WorldPosition position,float strength)=>false;
   /// <summary>Hard-landing threshold (m/s downward) shared with the landing dust.</summary>
   public const float HardLandingSpeed=4;
   /// <summary>Called only by the authoritative physics adapter when a body touches down hard.</summary>
