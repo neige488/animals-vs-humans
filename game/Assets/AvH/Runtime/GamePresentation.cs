@@ -72,9 +72,9 @@ namespace AvH {
    System.Collections.IEnumerator Shot(string name){for(int i=0;i<20;i++)yield return null;yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(folder,name+".png"));yield return new WaitForSecondsRealtime(.3f);}
    yield return Shot("start-first-run");
    display.SetQuality(GraphicsQuality.Medium);display.SetScreenShake(false);yield return Shot("start-medium-shake-off");
-   session.StartSolo("미리보기",123,System.IO.Path.Combine(temp,"playtest.xml"));menu=true;SetCursor();yield return Shot("esc-menu");
+   session.StartSolo("미리보기",123,System.IO.Path.Combine(temp,"playtest.xml"));yield return null;yield return null;menu=true;SetCursor();yield return Shot("esc-menu");
    System.IO.Directory.CreateDirectory(System.IO.Path.Combine(temp,"display-settings.xml.tmp"));
-   display.SetQuality(GraphicsQuality.Low);displayMenu.ShowNotice();yield return Shot("esc-menu-save-failed");
+   display.SetQuality(GraphicsQuality.Low);displayMenu.ShowNotice();menu=true;yield return Shot("esc-menu-save-failed");
    menu=false;SetDebugPanelOpen(true);settingsPanel.SelectTab(4);yield return Shot("debug-impact-tab");
    Application.Quit();
   }
