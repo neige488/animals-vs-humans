@@ -57,11 +57,12 @@ namespace AvH {
     if(input.Attack) {
      var state=Session.Observe();
      if(state.Players[slot].Faction==Faction.Human){if(Session.TryFire(slot,input.RoundId))FireBubble(slot,input);}
-     else Session.TryStartAttack(slot,input.RoundId);
+     // A zero-windup swing is judged here, in slot order, exactly like the original click-frame rule.
+     else if(Session.TryStartAttack(slot,input.RoundId)&&Session.AttackDue(slot))Melee(slot,beforeCombat.Round);
     }
     inputs[slot].Reload=false;
    }
-   // A swing is judged by physics at its strike moment: the click step at zero windup, otherwise one windup later.
+   // Tells that reached their strike moment during this step's Advance are judged now (already-judged swings are no longer due).
    for(int slot=0;slot<bodies.Count;slot++)if(Session.AttackDue(slot))Melee(slot,beforeCombat.Round);
    var after=Session.Observe();
    for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction)ChangeVisual(beforeCombat,after,slot,bodies[slot].transform.position);
