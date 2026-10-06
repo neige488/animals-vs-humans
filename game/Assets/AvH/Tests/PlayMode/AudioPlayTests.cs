@@ -84,6 +84,26 @@ namespace AvH.Tests {
    Assert.Less(world.Audio.Observe().Count(animal.Growl),growls+5,"...but only occasionally");
   }
 
+  [UnityTest] public IEnumerator MusicFollowsPreparationChaseAndTheLastThirtySecondsWithCrossfadesOverVillageAmbience() {
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.RoundSeconds=40;v.ResultSeconds=2;});
+   world.Step(.02f);
+   var view=world.Audio.Observe();
+   Assert.AreEqual("music-prepare",view.Music,"Preparation has its own calm music");Assert.AreEqual("ambience",view.Ambience,"The village ambience loops underneath");
+   world.Audio.Advance(3);
+   foreach(var s in root.GetComponentsInChildren<AudioSource>().Where(s=>s.loop))Assert.AreEqual(0,s.spatialBlend,1e-4,"Music and ambience are not positional: "+s.clip.name);
+   Assert.AreEqual(2,root.GetComponentsInChildren<AudioSource>().Count(s=>s.loop&&s.isPlaying||s.loop&&s.clip!=null&&s.volume>0),"One music track and the ambience sound once settled");
+   world.Step(1f);Assert.AreEqual(RoundPhase.Chase,world.Observe().Phase);
+   view=world.Audio.Observe();Assert.AreEqual("music-chase",view.Music,"The chase changes the music");Assert.AreEqual("music-prepare",view.FadingMusic,"...by crossfading out the previous track");
+   world.Audio.Advance(.5f);var mid=world.Audio.Observe();Assert.Greater(mid.MusicLevel,0);Assert.Less(mid.MusicLevel,1,"The crossfade takes a moment");
+   world.Audio.Advance(3);view=world.Audio.Observe();Assert.AreEqual(1,view.MusicLevel,1e-4);Assert.IsNull(view.FadingMusic,"The old track stops after the crossfade");
+   for(int i=0;i<10;i++)world.Step(.5f);Assert.Greater(world.Observe().SecondsRemaining,30);Assert.AreEqual("music-chase",world.Audio.Observe().Music);
+   for(int i=0;i<4;i++)world.Step(.5f);Assert.LessOrEqual(world.Observe().SecondsRemaining,30);
+   Assert.AreEqual("music-final",world.Audio.Observe().Music,"The last thirty seconds raise the tension");
+   while(world.Observe().Phase==RoundPhase.Chase)world.Step(.5f);
+   Assert.AreEqual("music-prepare",world.Audio.Observe().Music,"Results calm down again");
+   Assert.AreEqual("ambience",world.Audio.Observe().Ambience);
+  }
+
   [UnityTest] public IEnumerator RemoteViewersHearTheSamePublicEventsOnceAndNeverOnJoin() {
    var source=new PlaytestSession(123);source.StartSolo("source");source.BeginSettingsEdit(0);var v=source.ObserveSettings().Edit;v.InitialAttackGrace=0;v.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,v);Assert.IsTrue(source.ApplySettingsNow(0));
    source.Advance(20.01);var state=source.Observe();int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int other=state.Players.Last(p=>p.Faction==Faction.Animal).Slot;
