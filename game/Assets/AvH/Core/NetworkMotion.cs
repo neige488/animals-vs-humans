@@ -31,9 +31,27 @@ namespace AvH {
    VelocityX=VelocityX/100f,VelocityZ=VelocityZ/100f,VerticalSpeed=VerticalSpeed/100f,TopSpeed=TopSpeed/100f,AimYaw=AimYaw(),
    Grounded=(Flags&GroundedFlag)!=0,Action=Enum.IsDefined(typeof(ActionPhase),(int)Action)?(ActionPhase)Action:ActionPhase.None,ActionProgress=Progress/255f
   };
+  /// <summary>Farther than this between two frames is a warp (respawn, map-edge recovery): shown at once, never slid.</summary>
+  public const float TeleportDistance=6;
+  /// <summary>The body between two host frames. A phase change shows on the later frame, never half-way.</summary>
+  public static RemoteBodyPose Blend(NetworkBodyMotion from,NetworkBodyMotion to,float t) {
+   t=Clamp01(Finite(t));var a=from.Locomotion();var b=to.Locomotion();var pa=from.Position();var pb=to.Position();
+   float dx=pb.X-pa.X,dy=pb.Y-pa.Y,dz=pb.Z-pa.Z;bool warp=dx*dx+dy*dy+dz*dz>TeleportDistance*TeleportDistance;
+   if(warp||t>=1)return new RemoteBodyPose{Position=pb,Yaw=to.AimYaw(),Pitch=to.AimPitch(),Motion=b};
+   float yaw=NormalizeAngle(from.AimYaw()+NormalizeAngle(to.AimYaw()-from.AimYaw())*t);
+   var motion=new LocomotionState {
+    VelocityX=Lerp(a.VelocityX,b.VelocityX,t),VelocityZ=Lerp(a.VelocityZ,b.VelocityZ,t),VerticalSpeed=Lerp(a.VerticalSpeed,b.VerticalSpeed,t),TopSpeed=Lerp(a.TopSpeed,b.TopSpeed,t),
+    AimYaw=yaw,Grounded=t<.5f?a.Grounded:b.Grounded,
+    Action=a.Action,ActionProgress=a.Action==b.Action?Lerp(a.ActionProgress,b.ActionProgress,t):a.ActionProgress
+   };
+   return new RemoteBodyPose{Position=new WorldPosition(Lerp(pa.X,pb.X,t),Lerp(pa.Y,pb.Y,t),Lerp(pa.Z,pb.Z,t)),Yaw=yaw,Pitch=Lerp(from.AimPitch(),to.AimPitch(),t),Motion=motion};
+  }
+  static float Lerp(float a,float b,float t)=>a+(b-a)*t;
   static short Centi(float value)=>(short)Math.Max(short.MinValue,Math.Min(short.MaxValue,Math.Round(Finite(value)*100)));
   static float Finite(float value)=>float.IsNaN(value)||float.IsInfinity(value)?0:value;
   static float Clamp01(float value)=>Math.Max(0,Math.Min(1,value));
   internal static float NormalizeAngle(float degrees){degrees=Finite(degrees)%360;if(degrees>=180)degrees-=360;if(degrees<-180)degrees+=360;return degrees;}
  }
+ /// <summary>A decoded body pose for presentation: position, facing/aim and the motion to animate.</summary>
+ public struct RemoteBodyPose {public WorldPosition Position;public float Yaw,Pitch;public LocomotionState Motion;}
 }
