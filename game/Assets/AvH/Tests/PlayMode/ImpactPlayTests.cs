@@ -64,5 +64,32 @@ namespace AvH.Tests {
    Assert.Greater(stunned,0,"Stunned animals still steer");Assert.Less(stunned,normal*.6f,"...but weakly");
    Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction,"A bubble never changes faction");
   }
+
+  [UnityTest] public IEnumerator TransformationIsShownBrieflyWhileTheNewAnimalAlreadyPlaysByTheRules() {
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.AttackWindupSeconds=0;v.HitStopSeconds=0;v.TransformAttackGrace=.6f;});
+   Step(1,(0,new PlayerInput{Attack=true,Yaw=0}));
+   Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction,"Judged an animal at the hit");
+   var shown=world.ObserveAnimation(4);Assert.Less(shown.TransformProgress,.3f,"The transformation starts presenting");Assert.AreEqual(1,shown.TransformPlays);
+   var start=At(4);Step(10,(4,new PlayerInput{Forward=1,Yaw=90}));
+   Assert.Greater(Vector3.Distance(start,At(4)),.5f,"The new animal moves during the presentation");
+   var mid=world.ObserveAnimation(4).TransformProgress;Assert.That(mid,Is.InRange(.2f,.99f),"Presentation lasts about 0.3~0.5s");
+   Assert.IsFalse(world.Session.TryStartAttack(4,world.Observe().Round),"Attacks follow the transform attack grace");
+   Step(15,(4,new PlayerInput()));
+   Assert.AreEqual(1,world.ObserveAnimation(4).TransformProgress,1e-4);Assert.AreEqual(1,world.ObserveAnimation(4).TransformPlays,"Never replayed");
+   Assert.IsTrue(world.Session.TryStartAttack(4,world.Observe().Round),"Grace over");
+  }
+
+  [UnityTest] public IEnumerator RemoteViewsPresentEachTransformationOnceAndNotOnJoin() {
+   var source=new PlaytestSession(7);source.StartSolo("source");source.BeginSettingsEdit(0);var v=source.ObserveSettings().Edit;v.InitialAttackGrace=0;v.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,v);Assert.IsTrue(source.ApplySettingsNow(0));
+   source.Advance(20.01);
+   root=new GameObject("remote transform");world=root.AddComponent<UnityPlaytestSession>();world.StartRemote(source.Observe());
+   var state=source.Observe();int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int human=state.Players.First(p=>p.Faction==Faction.Human).Slot;
+   Assert.AreEqual(0,world.ObserveAnimation(animal).TransformPlays,"Joining mid-round does not replay earlier transformations");
+   source.RecordWorldPosition(human,state.Players[animal].Position);Assert.IsTrue(source.TryStartAttack(animal,state.Round)&&source.TryMeleeHit(animal,human,state.Round));
+   world.ApplyRemoteSnapshot(source.Observe());yield return null;world.ApplyRemoteSnapshot(source.Observe());yield return null;
+   Assert.AreEqual(1,world.ObserveAnimation(human).TransformPlays,"Duplicate snapshots present it once");
+   yield return new WaitForSeconds(.6f);world.ApplyRemoteSnapshot(source.Observe());
+   Assert.AreEqual(1,world.ObserveAnimation(human).TransformPlays);Assert.AreEqual(1,world.ObserveAnimation(human).TransformProgress,1e-4);
+  }
  }
 }
