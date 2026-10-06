@@ -53,7 +53,8 @@ namespace AvH {
     var move=brain.Cursor<brain.Path.Count?Flat(brain.Path[brain.Cursor]-position).normalized:Vector3.zero;
     // Round corners: close to a waypoint, start turning toward the one after it.
     if(brain.Cursor+1<brain.Path.Count){float near=Flat(brain.Path[brain.Cursor]-position).magnitude;
-     if(near<CornerRadius)move=Vector3.Lerp(Flat(brain.Path[brain.Cursor+1]-position).normalized,move,near/CornerRadius).normalized;}
+     // A waypoint pair that doubles back cancels out; then keep heading for the current waypoint.
+     if(near<CornerRadius){var rounded=Vector3.Lerp(Flat(brain.Path[brain.Cursor+1]-position).normalized,move,near/CornerRadius);if(rounded.magnitude>.3f)move=rounded.normalized;}}
     float remaining=Flat(goal-position).magnitude;
     if(remaining<.4f)move=Vector3.zero;
     // Ease into a fixed destination (shelter) like a person; CharacterMotion adds the body's own inertia. Animals keep charging.
