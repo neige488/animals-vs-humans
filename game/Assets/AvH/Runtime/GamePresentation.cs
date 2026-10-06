@@ -30,7 +30,7 @@ namespace AvH {
   public Vector3 FollowPoint=>follow;
   /// <summary>Replaces the per-PC display preferences (tests and isolated profiles).</summary>
   public void UseDisplaySettings(LocalDisplaySettings settings){display=settings??new LocalDisplaySettings(null);appliedDisplay=-1;ApplyDisplay();}
-  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;}
+  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality);}
   GUIStyle label, title;
   // Override the fullscreen preference saved by older playtest builds on every desktop launch.
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
@@ -74,6 +74,7 @@ namespace AvH {
    }
   }
   void Update() {
+   if(display!=null&&appliedDisplay!=display.Version)ApplyDisplay();
    if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;debugOpen=false;return;}
    rosterHud.Present(session.Observe(),network.LocalSlot);
    if(!wasPlaying){menu=false;SetCursor();wasPlaying=true;}
