@@ -67,6 +67,9 @@ namespace AvH {
   CharacterAnimationView view;int transformPlays;float transformTime=TransformSeconds;
   /// <summary>Presents a fresh transformation on the newly bound model once.</summary>
   public void PlayTransform(){transformPlays++;transformTime=0;}
+  /// <summary>Settles a transformation pop at once (round end).</summary>
+  public void EndTransform(){transformTime=TransformSeconds;Present(lastState);}
+  LocomotionState lastState;
   public void Bind(Transform model,Faction faction,string characterId,BubbleGunPose gunPose) {
    Release();act=default;visual=model;pose=gunPose;character=For(faction,characterId);
    transformTime=TransformSeconds;baseScale=model.localScale;baseRotation=model.localRotation;basePosition=model.localPosition;actionSquash=0;
@@ -108,7 +111,7 @@ namespace AvH {
   public CharacterAnimationView Observe(){var v=view;v.DrivesAnimator=graph.IsValid()&&graph.IsPlaying();v.TransformPlays=transformPlays;v.TransformProgress=Mathf.Clamp01(transformTime/TransformSeconds);return v;}
   public void Apply(LocomotionState state,float seconds) {
    if(seconds<=0||float.IsNaN(seconds)||float.IsInfinity(seconds))return;
-   view.Action=state.Action;view.Frozen=state.Action==ActionPhase.HitStop;
+   lastState=state;view.Action=state.Action;view.Frozen=state.Action==ActionPhase.HitStop;
    transformTime=Mathf.Min(TransformSeconds,transformTime+seconds);
    if(view.Frozen){Present(state);return;}
    float dt=seconds;var velocity=new Vector3(state.VelocityX,0,state.VelocityZ);float speed=velocity.magnitude;

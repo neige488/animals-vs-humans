@@ -54,6 +54,7 @@ namespace AvH {
    Session.Advance(seconds);
    var state=Session.Observe();
    PrepareCombatWorld(state,before.Round);
+   if(state.Phase==RoundPhase.Results&&before.Phase!=RoundPhase.Results)CutTransformations();
    if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
@@ -117,9 +118,17 @@ namespace AvH {
   // presented once per (round, animal): particles plus the short cosmetic pop. Joins and round resets swap silently.
   void ChangeVisual(SessionState before,SessionState after,int slot,Vector3 position) {
    var p=after.Players[slot];
-   bool birth=before!=null&&before.Round==after.Round&&before.Players[slot].Faction==Faction.Human&&p.Faction==Faction.Animal&&presentedBirths[slot]!=(after.Round,p.CharacterId);
+   // The hit that ends the round swaps the model without a new presentation.
+   bool birth=before!=null&&before.Round==after.Round&&after.Phase!=RoundPhase.Results&&before.Players[slot].Faction==Faction.Human&&p.Faction==Faction.Animal&&presentedBirths[slot]!=(after.Round,p.CharacterId);
    if(birth){presentedBirths[slot]=(after.Round,p.CharacterId);Effects.Emit(position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);}
    RefreshVisual(slot,p.Faction,birth);
+  }
+  /// <summary>Round end: every transformation pop settles and every shrinking ghost disappears at once.</summary>
+  void CutTransformations() {
+   foreach(var body in bodies) {
+    var animator=body.GetComponent<CharacterAnimator>();if(animator!=null)animator.EndTransform();
+    foreach(var ghost in body.GetComponentsInChildren<TransformGhost>(true)){ghost.gameObject.SetActive(false);Destroy(ghost.gameObject);}
+   }
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
   /// <summary>Locomotion animation currently shown for a slot (presentation only).</summary>

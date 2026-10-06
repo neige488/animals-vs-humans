@@ -65,6 +65,7 @@ namespace AvH {
    for(int slot=0;slot<bodies.Count;slot++)if(Session.AttackDue(slot))Melee(slot,beforeCombat.Round);
    var after=Session.Observe();
    for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction)ChangeVisual(beforeCombat,after,slot,bodies[slot].transform.position);
+   if(after.Phase==RoundPhase.Results&&beforeCombat.Phase!=RoundPhase.Results)CutTransformations();
   }
   void FireBubble(int slot,PlayerInput input) {
    var rules=Session.ObserveSettings().Current;
