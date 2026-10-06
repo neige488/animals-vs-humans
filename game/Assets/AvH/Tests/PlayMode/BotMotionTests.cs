@@ -8,6 +8,36 @@ namespace AvH.Tests {
  // Bots move like people: smoothed paths instead of 45-degree grid zigzags, easing into where they stop.
  public class BotMotionTests {
   static Vector3 V(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
+  // Every human-bot bubble against the exact line to its nearest animal when the bot chose its input.
+  static IEnumerator AimErrors(float delay,float error,List<float> errors) {
+   var path=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml");
+   var root=new GameObject("bot aim");
+   try {
+    var game=root.AddComponent<UnityPlaytestSession>();game.AutomaticStep=false;game.StartSolo("observer",123,path);yield return null;
+    game.Session.BeginSettingsEdit(0);var rules=game.Session.ObserveSettings().Edit;rules.BotAimDelaySeconds=delay;rules.BotAimErrorDegrees=error;game.Session.UpdateSettingsEdit(0,rules);Assert.IsTrue(game.Session.ApplySettingsNow(0));
+    var seen=new HashSet<int>();
+    for(int step=0;step<2500;step++) {
+     var before=game.Observe();game.Step(.02f);
+     foreach(var bubble in game.ObserveBubbles()) {
+      if(!seen.Add(bubble.Id)||step<1000)continue;
+      var shooter=before.Players[bubble.OwnerSlot];if(!shooter.IsBot)continue;
+      // The bot chose its target after this step's rules update; skip the step where factions just changed.
+      var target=before.Players.Where(p=>p.Faction!=shooter.Faction).OrderBy(p=>(V(p.Position)-V(shooter.Position)).sqrMagnitude).FirstOrDefault();
+      if(target==null||game.Observe().Players.Count(p=>p.Faction==Faction.Animal)!=before.Players.Count(p=>p.Faction==Faction.Animal))continue;
+      errors.Add(Vector3.Angle(V(target.Position)-V(shooter.Position),V(bubble.Direction)));
+     }
+     if(step%100==0)yield return null;
+    }
+   } finally {Object.Destroy(root);if(System.IO.File.Exists(path))System.IO.File.Delete(path);}
+  }
+  [UnityTest] public IEnumerator ZeroBotAimSettingsShootExactlyAndDefaultsAimLikeAPerson() {
+   var exact=new List<float>();yield return AimErrors(0,0,exact);
+   var human=new List<float>();yield return AimErrors(.2f,3,human);
+   Debug.Log($"BOT_AIM zero shots={exact.Count} maxError={exact.DefaultIfEmpty().Max():F3} default shots={human.Count} meanError={human.DefaultIfEmpty().Average():F2} maxError={human.DefaultIfEmpty().Max():F2}");
+   Assert.Greater(exact.Count,5);Assert.Greater(human.Count,5,"Default bots still defend with bubbles");
+   Assert.Less(exact.Max(),.05f,"0 delay and 0 error is the original exact aim");
+   Assert.Greater(human.Average(),.5f,"Default bots aim slightly off and late");
+  }
   [UnityTest] public IEnumerator HumanBotsWalkSmoothedPathsAndEaseIntoTheirShelter() {
    var root=new GameObject("bot motion");
    try {
