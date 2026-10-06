@@ -33,8 +33,10 @@ namespace AvH {
     p.FireCooldownRemaining=Math.Max(0,p.FireCooldownRemaining-elapsed);
     p.AttackGraceRemaining=Math.Max(0,p.AttackGraceRemaining-elapsed);
     p.SwingRemaining=Math.Max(0,p.SwingRemaining-elapsed);
+    // A tell pauses while its character is frozen: the strike moment moves back by the freeze.
+    double frozen=Math.Min(elapsed,p.HitStopRemaining);
     p.HitStopRemaining=Math.Max(0,p.HitStopRemaining-elapsed);p.StunRemaining=Math.Max(0,p.StunRemaining-elapsed);
-    if(p.AttackWindupRemaining>0){p.AttackWindupRemaining=Math.Max(0,p.AttackWindupRemaining-elapsed);if(p.AttackWindupRemaining==0)dueAttacks.Add(p.Slot);}
+    if(p.AttackWindupRemaining>0){p.AttackWindupRemaining=Math.Max(0,p.AttackWindupRemaining-(elapsed-frozen));if(p.AttackWindupRemaining==0)dueAttacks.Add(p.Slot);}
     if(p.ReloadRemaining>0){p.ReloadRemaining=Math.Max(0,p.ReloadRemaining-elapsed);if(p.ReloadRemaining==0)p.Ammo=settings.Current.Magazine;}
    }
   }
@@ -78,7 +80,7 @@ namespace AvH {
   /// </summary>
   public bool TryStartAttack(int slot,int roundId) {
    if(!CanAct(slot,roundId)||phase!=RoundPhase.Chase)return false;var p=players[slot];
-   if(p.Faction!=Faction.Animal||p.AttackGraceRemaining>0||p.FireCooldownRemaining>0||p.AttackWindupRemaining>0)return false;
+   if(p.Faction!=Faction.Animal||p.AttackGraceRemaining>0||p.FireCooldownRemaining>0||p.AttackWindupRemaining>0||p.HitStopRemaining>0)return false;
    if(dueAttacks.Contains(slot))return true;
    double windup=settings.Current.AttackWindupSeconds;
    if(windup<=0){dueAttacks.Add(slot);return true;}
@@ -86,10 +88,10 @@ namespace AvH {
    p.AttackWindupRemaining=windup;Publish(FeelEventKind.AttackWindup,slot,-1,p.Position);return true;
   }
   /// <summary>True when this animal's swing reaches its strike moment and waits for host physics to judge it.</summary>
-  public bool AttackDue(int slot)=>dueAttacks.Contains(slot);
+  public bool AttackDue(int slot)=>dueAttacks.Contains(slot)&&players[slot].HitStopRemaining<=0;
   /// <summary>Host physics found no reachable human for a due swing.</summary>
   public bool ResolveAttackMiss(int slot,int roundId) {
-   if(!CanAct(slot,roundId)||!dueAttacks.Remove(slot))return false;var p=players[slot];
+   if(!CanAct(slot,roundId)||players[slot].HitStopRemaining>0||!dueAttacks.Remove(slot))return false;var p=players[slot];
    // A held button re-swings every step at zero windup; publish one swing per presented swing.
    if(p.SwingRemaining<=0){p.SwingRemaining=CombatRules.SwingSeconds;Publish(FeelEventKind.AttackMiss,slot,-1,p.Position);}
    return true;
@@ -98,7 +100,7 @@ namespace AvH {
   public bool TryMeleeHit(int attackerSlot,int victimSlot,int roundId) {
    if(!CanAct(attackerSlot,roundId)||phase!=RoundPhase.Chase||victimSlot<0||victimSlot>=players.Length||!dueAttacks.Contains(attackerSlot))return false;
    var attacker=players[attackerSlot];var victim=players[victimSlot];
-   if(attacker.Faction!=Faction.Animal||victim.Faction!=Faction.Human||attacker.AttackGraceRemaining>0||attacker.FireCooldownRemaining>0)return false;
+   if(attacker.Faction!=Faction.Animal||victim.Faction!=Faction.Human||attacker.AttackGraceRemaining>0||attacker.FireCooldownRemaining>0||attacker.HitStopRemaining>0)return false;
    double x=attacker.Position.X-victim.Position.X,y=attacker.Position.Y-victim.Position.Y,z=attacker.Position.Z-victim.Position.Z;
    if(x*x+y*y+z*z>CombatRules.MeleeDistance*CombatRules.MeleeDistance)return false;
    dueAttacks.Remove(attackerSlot);
