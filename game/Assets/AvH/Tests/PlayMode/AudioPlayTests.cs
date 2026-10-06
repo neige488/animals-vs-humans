@@ -165,7 +165,7 @@ namespace AvH.Tests {
    world.PresentTrigger(8,true);world.PresentTrigger(8,true);world.PresentTrigger(8,true);
    Assert.AreEqual(1,world.Audio.Observe().Count("dry-fire"),"Pulling the trigger on an empty magazine clicks once");
    var click=world.Audio.Observe().Voices.Single(v=>v.Cue=="dry-fire");Assert.AreEqual(1,click.SpatialBlend,1e-4);
-   world.PresentTrigger(8,false);world.PresentTrigger(8,true);
+   world.PresentTrigger(8,false);world.Audio.Advance(.3f);world.PresentTrigger(8,true);
    Assert.AreEqual(2,world.Audio.Observe().Count("dry-fire"),"...and again on the next pull");
    world.PresentTrigger(0,false);world.PresentTrigger(0,true);
    Assert.AreEqual(2,world.Audio.Observe().Count("dry-fire"),"Animals have no gun to click");
