@@ -7,16 +7,17 @@ namespace AvH {
  public struct BotNavigationDiagnostics {public int GridBuilds,MaxGridBuildsPerStep;}
  public sealed class BotDirector {
   public BotNavigationDiagnostics ObserveNavigation()=>routes.Observe();
-  sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;}
-  readonly Brain[] brains=Enumerable.Range(0,12).Select(i=>new Brain{Shelter=i%3}).ToArray();
+  sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;public BotAim Aim;}
+  readonly Brain[] brains=Enumerable.Range(0,12).Select(i=>new Brain{Shelter=i%3,Aim=new BotAim(i+1)}).ToArray();
+  double clock;
   readonly VillageRoutes routes=new VillageRoutes();
   
   public void Step(UnityPlaytestSession game,float seconds) {
-   var Shelters=game.ShelterPoints;var state=game.Observe();var rules=game.Session.ObserveSettings().Current;routes.BeginStep(seconds);
+   var Shelters=game.ShelterPoints;var state=game.Observe();var rules=game.Session.ObserveSettings().Current;routes.BeginStep(seconds);clock+=seconds;
    foreach(var player in state.Players) {
     if(!player.IsBot)continue;
     var brain=brains[player.Slot];var position=V(player.Position);
-    if(brain.Round!=state.Round||brain.Faction!=player.Faction) {brain.Round=state.Round;brain.Faction=player.Faction;brain.Replan=0;brain.Path.Clear();brain.Stuck=0;brain.Shelter=player.Slot%3;brain.Flee=0;brain.ProgressTime=0;brain.LastDistance=float.MaxValue;}
+    if(brain.Round!=state.Round||brain.Faction!=player.Faction) {brain.Round=state.Round;brain.Faction=player.Faction;brain.Replan=0;brain.Path.Clear();brain.Stuck=0;brain.Shelter=player.Slot%3;brain.Flee=0;brain.ProgressTime=0;brain.LastDistance=float.MaxValue;brain.Aim.Reset();}
     if(state.Phase==RoundPhase.Results){game.SubmitInput(player.Slot,new PlayerInput{RoundId=state.Round});continue;}
     var target=state.Players.Where(p=>p.Faction!=player.Faction).OrderBy(p=>(V(p.Position)-position).sqrMagnitude).FirstOrDefault();
     float distance=target==null?float.MaxValue:Vector3.Distance(position,V(target.Position));
@@ -65,14 +66,18 @@ namespace AvH {
     if(brain.Stuck>.8f)move+=Vector3.Cross(move,Vector3.up)*(player.Slot%2==0?1:-1);
     move=Vector3.ClampMagnitude(move,1);
     Vector3 aim=target==null?move:V(target.Position)-position;
-    float yaw=Mathf.Atan2(aim.x,aim.z)*Mathf.Rad2Deg;
-    var local=Quaternion.Euler(0,-yaw,0)*move;
+    float yaw=Mathf.Atan2(aim.x,aim.z)*Mathf.Rad2Deg,pitch=-Mathf.Atan2(aim.y,Flat(aim).magnitude)*Mathf.Rad2Deg;
     bool visible=target!=null;
     // Linecast normally ends at the target controller; accept that nearest hit.
     if(target!=null && Physics.Linecast(position+Vector3.up*.9f,V(target.Position)+Vector3.up*.9f,out var sight,~0,QueryTriggerInteraction.Ignore)) visible=sight.collider.transform==game.PlayerTransform(target.Slot);
+    // Human-like aim: lags the seen heading and wanders slightly; zero settings return the exact aim above.
+    bool canFire=visible;
+    if(target!=null){var aimed=brain.Aim.Step(clock,target.Slot,visible,yaw,pitch,rules.BotAimDelaySeconds,rules.BotAimErrorDegrees);yaw=aimed.Yaw;pitch=aimed.Pitch;canFire=aimed.CanFire;}
+    // Movement input is relative to the submitted aim, so aim lag never bends the path.
+    var local=Quaternion.Euler(0,-yaw,0)*move;
     game.SubmitInput(player.Slot,new PlayerInput {Right=local.x,Forward=local.z,Yaw=yaw,
-     Pitch=-Mathf.Atan2(aim.y,Flat(aim).magnitude)*Mathf.Rad2Deg,
-     Jump=brain.Stuck>1.5f,Attack=target!=null&&visible&&distance<(player.Faction==Faction.Human?rules.BubbleRange:CombatRules.MeleeDistance-.15f),
+     Pitch=pitch,
+     Jump=brain.Stuck>1.5f,Attack=target!=null&&canFire&&distance<(player.Faction==Faction.Human?rules.BubbleRange:CombatRules.MeleeDistance-.15f),
      Reload=player.Faction==Faction.Human&&player.Ammo==0,RoundId=state.Round});
    }
   }
