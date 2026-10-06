@@ -65,6 +65,13 @@ namespace AvH {
    p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
    Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
+  /// <summary>Hard-landing threshold (m/s downward) shared with the landing dust.</summary>
+  public const float HardLandingSpeed=4;
+  /// <summary>Called only by the authoritative physics adapter when a body touches down hard.</summary>
+  public bool RecordLanding(int slot,float impactSpeed) {
+   if(slot<0||slot>=players.Length||float.IsNaN(impactSpeed)||impactSpeed<=HardLandingSpeed)return false;
+   Publish(FeelEventKind.Landing,slot,-1,players[slot].Position,Math.Min(1,(impactSpeed-HardLandingSpeed)/12f));return true;
+  }
   /// <summary>
   /// An animal starts a swing. With a configured tell the swing is judged one windup later
   /// (<see cref="AttackDue"/>); with zero windup it is due on this same step, as the click-frame rule.
