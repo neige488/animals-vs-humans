@@ -47,7 +47,12 @@ namespace AvH {
    else if(along<wanted)nextAlong=Math.Min(wanted,along+accelStep);
    else nextAlong=Math.Max(wanted,along-decelStep);
    var side=Toward(sideX,sideZ,0,0,decelStep);
-   return new MotionState{VelocityX=ux*nextAlong+side.VelocityX,VelocityZ=uz*nextAlong+side.VelocityZ};
+   float nx=ux*nextAlong+side.VelocityX,nz=uz*nextAlong+side.VelocityZ;
+   // Turning blends the new heading in while the old one decays; never let the sum outrun the species.
+   float limit=Math.Max(profile.MaxSpeed,(float)Math.Sqrt(current.VelocityX*current.VelocityX+current.VelocityZ*current.VelocityZ));
+   float magnitude=(float)Math.Sqrt(nx*nx+nz*nz);
+   if(magnitude>limit&&magnitude>1e-6f){nx*=limit/magnitude;nz*=limit/magnitude;}
+   return new MotionState{VelocityX=nx,VelocityZ=nz};
   }
   static MotionState Toward(float x,float z,float tx,float tz,float step) {
    float dx=tx-x,dz=tz-z;float d=(float)Math.Sqrt(dx*dx+dz*dz);

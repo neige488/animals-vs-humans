@@ -114,9 +114,9 @@ namespace AvH {
    view.StrideDirection=direction;
    view.LegYaw=Mathf.MoveTowards(view.LegYaw,legTarget,dt*600);
    if(pose!=null)pose.LegYaw=view.LegYaw;
-   // Cadence follows ground speed against the species' default top speed.
-   float walkCycles=walkClip==null?0:character.WalkRate/walkClip.length*Mathf.Clamp(speed/Mathf.Max(.01f,walkSpeed),.6f,1.6f);
-   float runCycles=runClip==null?0:character.RunRate/runClip.length*Mathf.Clamp(speed/referenceSpeed,.5f,2f);
+   // Cadence follows ground speed against the species' default top speed across the whole settings range.
+   float walkCycles=walkClip==null?0:character.WalkRate/walkClip.length*speed/Mathf.Max(.01f,walkSpeed);
+   float runCycles=runClip==null?0:character.RunRate/runClip.length*speed/referenceSpeed;
    float cycles=walkClip==null||runClip==null?1.6f*speed/referenceSpeed:Mathf.Lerp(walkCycles,runCycles,view.RunBlend);
    view.CyclesPerSecond=moving?cycles:0;
    if(moving&&!airborne)phase=Mathf.Repeat(phase+direction*cycles*dt,1);
