@@ -59,6 +59,7 @@ namespace AvH {
    Session.Advance(seconds);
    var state=Session.Observe();
    PrepareCombatWorld(state,before.Round);
+   if(state.Round!=before.Round)props?.ResetHome();
    if(state.Phase==RoundPhase.Results&&before.Phase!=RoundPhase.Results)CutTransformations();
    if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;
@@ -101,6 +102,7 @@ namespace AvH {
     var push=pushVelocity[i];CharacterMotion.DecayKnockback(ref push.x,ref push.y,ref push.z,body.isGrounded,seconds);pushVelocity[i]=push;
     inputs[i].Jump=false;
    }
+   props?.Simulate(bodies,seconds,Session.HostTime);
    StepCombatWorld(seconds,state);
    var presented=Session.Observe();PresentEvents(presented);PresentStateAudio(presented,false);PresentMotionAudio(presented,seconds);
   }

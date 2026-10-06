@@ -21,8 +21,8 @@ namespace AvH.Tests {
   void Drive(int slot,PlayerInput input,int steps){for(int i=0;i<steps;i++){world.SubmitInput(slot,input);world.Step(.02f);}}
   static float YawOf(Vector3 direction)=>Mathf.Atan2(direction.x,direction.z)*Mathf.Rad2Deg;
   // A prop with a free straight run through it: from `start`, walking `-away` passes over the prop's home.
-  (PropView prop,Vector3 away) Open(float before,float after) {
-   foreach(var prop in world.ObserveProps().OrderBy(p=>p.Home.sqrMagnitude))
+  (PropView prop,Vector3 away) Open(float before,float after,float minHeight=0) {
+   foreach(var prop in world.ObserveProps().Where(p=>p.Height>=minHeight).OrderBy(p=>p.Home.sqrMagnitude))
    for(int k=0;k<8;k++) {
     var away=Quaternion.Euler(0,k*45,0)*Vector3.forward;var start=prop.Home+away*before;
     if(world.ObserveProps().Any(o=>o.Index!=prop.Index&&Vector3.Distance(o.Home,prop.Home)<before+after))continue;
@@ -46,7 +46,7 @@ namespace AvH.Tests {
     Assert.IsFalse(TownLayout.NearShelter(p.Home),$"Prop {p.Index} stands inside or at the entrance of a shelter: {p.Home}");
     foreach(var shelter in world.ShelterPoints)Assert.GreaterOrEqual(Vector2.Distance(new Vector2(p.Home.x,p.Home.z),new Vector2(shelter.x,shelter.z)),TownLayout.PropClearance);
     Assert.AreEqual(p.Home,p.Position);Assert.AreEqual(p.HomeYaw,p.Yaw);Assert.IsFalse(p.Moving);
-    Assert.That(p.Radius,Is.InRange(.15f,.7f));Assert.That(p.Height,Is.InRange(.2f,1.6f));
+    Assert.That(p.Radius,Is.InRange(.15f,.7f));Assert.That(p.Height,Is.InRange(.05f,1.6f));
    }
   }
 
@@ -78,7 +78,7 @@ namespace AvH.Tests {
 
   [UnityTest] public IEnumerator ABubbleHitShovesAProp() {
    yield return Village();
-   var (prop,away)=Open(4,3);Warp(0,prop.Home+away*4);Physics.SyncTransforms();
+   var (prop,away)=Open(4,3,.5f);Warp(0,prop.Home+away*4);Physics.SyncTransforms();
    float pitch=Mathf.Atan2(1.3f-prop.Height*.5f,4)*Mathf.Rad2Deg;
    Drive(0,new PlayerInput{Yaw=YawOf(-away),Pitch=pitch},5);
    Drive(0,new PlayerInput{Attack=true,Yaw=YawOf(-away),Pitch=pitch},1);

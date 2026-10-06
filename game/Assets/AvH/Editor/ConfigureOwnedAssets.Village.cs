@@ -97,10 +97,18 @@ namespace AvH.Editor {
    var awning=Solid(map,"Street awning",p+new Vector3(0,2.15f,-.65f),new Vector3(2.5f,.12f,1.7f),index%2==0?Teal:Clay,false);awning.transform.rotation=Quaternion.Euler(7,0,0);
    foreach(float x in new[]{-1.1f,1.1f})Solid(map,"Awning strut",p+new Vector3(x,1,-1.35f),new Vector3(.08f,2,.08f),Wood,false);
    if(index%2==0)Supply(map,new Vector3(b.max.x+.65f,0,b.center.z));
-   Place(map,"Props/SM_Prop_Pot_01.prefab",p+new Vector3(1.6f,0,-.25f),15,.8f);
+   Pushable(map,"Props/SM_Prop_Pot_01.prefab",p+new Vector3(1.6f,0,-.25f),15,.8f);
    Place(map,"Environments/SM_Env_Bush_02.prefab",new Vector3(b.min.x-.6f,0,b.max.z-.3f),index*26,.65f,false);
   }
-  static void Supply(GameObject map,Vector3 p) {Place(map,"Props/SM_Prop_Crate_01.prefab",p,8,.8f);Place(map,"Props/SM_Prop_Barrel_01.prefab",p+new Vector3(1.1f,0,.2f),0,.85f);}
+  static void Supply(GameObject map,Vector3 p) {Pushable(map,"Props/SM_Prop_Crate_01.prefab",p,8,.8f);Pushable(map,"Props/SM_Prop_Barrel_01.prefab",p+new Vector3(1.1f,0,.2f),0,.85f);}
+  // Crates, barrels and pots: light enough for any body or bubble to shove (host-judged, synced, back home each round).
+  // Inside a shelter or at its entrance they stay fixed props so nothing is ever pushed out of or wedged into cover by design.
+  static void Pushable(GameObject map,string path,Vector3 floor,float yaw,float scale) {
+   if(TownLayout.NearShelter(floor)){Place(map,path,floor,yaw,scale);return;}
+   var container=map.transform.Find(PushProps.Container);
+   if(container==null){container=new GameObject(PushProps.Container).transform;container.SetParent(map.transform,false);}
+   Place(map,path,floor,yaw,scale,false).transform.SetParent(container,true);
+  }
   static void Rock(GameObject map,Vector3 p,Vector3 size,float angle) {
    var go=new GameObject("Limestone outcrop");go.transform.SetParent(map.transform);go.transform.position=p;go.transform.localScale=size;go.transform.rotation=Quaternion.Euler(0,angle,0);
    var mesh=AssetDatabase.LoadAssetAtPath<Mesh>(Generated+"Outcrop.asset");

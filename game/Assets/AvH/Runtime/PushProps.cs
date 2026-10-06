@@ -12,15 +12,173 @@ namespace AvH {
   public bool Moving;
  }
  /// <summary>
- /// Light crates, barrels and pots that bodies and bubbles shove. The host judges them; remote viewers only show
- /// the poses it sends.
+ /// Light crates, barrels and pots that bodies and bubbles shove. The host judges them with a small deterministic
+ /// slide: an upright footprint circle that bodies push ahead of themselves, bubbles knock along, other props
+ /// bump, and static scenery stops. Props have no colliders, so no body, bubble line of sight, camera or bot
+ /// navigation ever treats them as an obstacle, and only this world's own props take part (tests and the remote
+ /// mirror share one scene). Remote viewers only show the poses the host sends.
  /// </summary>
  public sealed class PushProps {
   /// <summary>Village child holding the pushable props, in a fixed order every build shares.</summary>
   public const string Container="Pushable props";
-  readonly List<PropView> props=new List<PropView>();
+  /// <summary>Moving props, and props that stopped this recently, ride every host frame.</summary>
+  public const double SettleWindow=.5;
+  const float BodyRadius=.38f,BodyHeight=1.8f,Friction=7,SpinFriction=540,MaxSpeed=9,Gravity=22,Skin=.01f,StepUp=.32f,LostDepth=-20;
+  /// <summary>Share of a bubble's push force a prop receives.</summary>
+  public const float BubbleShare=.6f;
+  sealed class Prop {
+   public Transform Visual;public string Kind;
+   public Vector3 Home,Position,PivotOffset;public Quaternion HomeRotation;public float HomeYaw,Yaw,Radius,Height;
+   public Vector2 Velocity;public float Spin,Fall;public bool Moving,Lost;public double SettledAt=double.NegativeInfinity;
+  }
+  readonly List<Prop> props=new List<Prop>();
+  readonly List<Vector3> lastBodies=new List<Vector3>();
   public int Count=>props.Count;
-  public static PushProps Adopt(Transform village)=>new PushProps();
-  public PropView[] Observe()=>props.ToArray();
+
+  /// <summary>Takes over the village's pushable props (none when the village has no container).</summary>
+  public static PushProps Adopt(Transform village) {
+   var result=new PushProps();var container=village==null?null:Find(village,Container);if(container==null)return result;
+   for(int i=0;i<container.childCount;i++) {
+    var visual=container.GetChild(i);var renderers=visual.GetComponentsInChildren<Renderer>();if(renderers.Length==0)continue;
+    var b=renderers[0].bounds;foreach(var r in renderers)b.Encapsulate(r.bounds);
+    var home=new Vector3(b.center.x,b.min.y,b.center.z);float yaw=visual.eulerAngles.y;
+    result.props.Add(new Prop{Visual=visual,Kind=KindOf(visual.name),Home=home,Position=home,PivotOffset=visual.position-home,HomeRotation=visual.rotation,HomeYaw=yaw,Yaw=yaw,
+     Radius=Mathf.Min(b.size.x,b.size.z)*.5f,Height=b.size.y});
+   }
+   return result;
+  }
+  static Transform Find(Transform parent,string name){if(parent.name==name)return parent;foreach(Transform child in parent){var found=Find(child,name);if(found!=null)return found;}return null;}
+  static string KindOf(string name){name=name.ToLowerInvariant();return name.Contains("barrel")?"barrel":name.Contains("pot")?"pot":"crate";}
+
+  public PropView[] Observe() {
+   var result=new PropView[props.Count];
+   for(int i=0;i<props.Count;i++){var p=props[i];result[i]=new PropView{Index=i,Kind=p.Kind,Position=p.Position,Home=p.Home,Yaw=p.Yaw,HomeYaw=p.HomeYaw,Radius=p.Radius,Height=p.Height,Moving=p.Moving};}
+   return result;
+  }
+
+  /// <summary>Round start (and joining): every prop back at its own spot, at rest.</summary>
+  public void ResetHome() {
+   foreach(var p in props){p.Position=p.Home;p.Yaw=p.HomeYaw;p.Velocity=Vector2.zero;p.Spin=p.Fall=0;p.Moving=p.Lost=false;p.SettledAt=double.NegativeInfinity;Show(p);}
+   lastBodies.Clear();
+  }
+
+  /// <summary>
+  /// Host step: bodies shove the props they walk into, props bump each other, slide, slow down and stop at static
+  /// scenery. A body is never slowed: a prop it cannot move (wedged against a wall) simply lets it through.
+  /// </summary>
+  public void Simulate(IReadOnlyList<CharacterController> bodies,float seconds,double hostTime) {
+   if(props.Count==0||seconds<=0)return;
+   if(lastBodies.Count!=bodies.Count){lastBodies.Clear();foreach(var b in bodies)lastBodies.Add(b.transform.position);}
+   for(int i=0;i<bodies.Count;i++) {
+    var body=bodies[i];var now=body.transform.position;var delta=now-lastBodies[i];lastBodies[i]=now;
+    if(!body.enabled)continue;
+    // A warp (spawn, recovery) is not a shove.
+    var velocity=delta.sqrMagnitude>9?Vector2.zero:new Vector2(delta.x,delta.z)/seconds;
+    foreach(var p in props)if(!p.Lost)Shove(p,now,velocity,seconds);
+   }
+   Collide();
+   foreach(var p in props)if(p.Moving&&!p.Lost){Slide(p,seconds);if(!p.Moving)p.SettledAt=hostTime;Show(p);}
+  }
+  void Shove(Prop p,Vector3 body,Vector2 velocity,float seconds) {
+   // Feet ride a skin above the floor, so a low pot still meets the shins.
+   if(body.y>p.Position.y+p.Height+.2f||body.y+BodyHeight<p.Position.y)return;
+   var offset=new Vector2(p.Position.x-body.x,p.Position.z-body.z);float reach=BodyRadius+p.Radius,distance=offset.magnitude;
+   if(distance>=reach)return;
+   var normal=distance>1e-4f?offset/distance:velocity.sqrMagnitude>1e-6f?velocity.normalized:Vector2.right;
+   // Run ahead of the body, plus a gentle push out of the overlap.
+   float wanted=Mathf.Max(0,Vector2.Dot(velocity,normal))*1.1f+(reach-distance)*6;
+   float along=Vector2.Dot(p.Velocity,normal);
+   if(along<wanted)p.Velocity+=normal*(wanted-along);
+   // Off-centre shoves turn the prop a little.
+   p.Spin=Mathf.Clamp(p.Spin+(normal.x*velocity.y-normal.y*velocity.x)*40*seconds,-240,240);
+   Wake(p);
+  }
+  void Collide() {
+   for(int i=0;i<props.Count;i++)for(int j=i+1;j<props.Count;j++) {
+    var a=props[i];var b=props[j];if(a.Lost||b.Lost||!a.Moving&&!b.Moving)continue;
+    if(a.Position.y>b.Position.y+b.Height||b.Position.y>a.Position.y+a.Height)continue;
+    var offset=new Vector2(b.Position.x-a.Position.x,b.Position.z-a.Position.z);float reach=a.Radius+b.Radius,distance=offset.magnitude;
+    if(distance>=reach)continue;
+    var normal=distance>1e-4f?offset/distance:Vector2.right;
+    float closing=Vector2.Dot(a.Velocity-b.Velocity,normal);
+    if(closing>0){float impulse=closing*.65f;a.Velocity-=normal*impulse;b.Velocity+=normal*impulse;}
+    float apart=(reach-distance)*3;a.Velocity-=normal*apart;b.Velocity+=normal*apart;
+    Wake(a);Wake(b);
+   }
+  }
+  static void Wake(Prop p){p.Moving=true;if(p.Velocity.magnitude>MaxSpeed)p.Velocity=p.Velocity.normalized*MaxSpeed;}
+
+  void Slide(Prop p,float seconds) {
+   float radius=Mathf.Max(.05f,p.Radius*.9f);
+   Vector3 Center()=>p.Position+Vector3.up*(radius+.06f);
+   Depenetrate(p,Center(),radius);
+   var move=new Vector3(p.Velocity.x,0,p.Velocity.y)*seconds;
+   for(int pass=0;pass<2&&move.sqrMagnitude>1e-10f;pass++) {
+    float length=move.magnitude;var direction=move/length;
+    if(!Sweep(Center(),radius,direction,length+Skin,out var hit)){p.Position+=move;break;}
+    float travel=Mathf.Max(0,hit.distance-Skin);p.Position+=direction*travel;
+    var normal=new Vector2(hit.normal.x,hit.normal.z);if(normal.sqrMagnitude<1e-6f)break;normal.Normalize();
+    float into=Vector2.Dot(p.Velocity,normal);if(into<0)p.Velocity-=normal*into*1.2f;
+    var rest=new Vector2(move.x,move.z)*(1-travel/length);rest-=normal*Vector2.Dot(rest,normal);move=new Vector3(rest.x,0,rest.y);
+   }
+   Ground(p,seconds);
+   float speed=p.Velocity.magnitude;
+   if(p.Fall==0)speed=Mathf.Max(0,speed-Friction*seconds);
+   p.Velocity=speed>0?p.Velocity.normalized*speed:Vector2.zero;
+   p.Spin=Mathf.MoveTowards(p.Spin,0,SpinFriction*seconds);p.Yaw=Mathf.Repeat(p.Yaw+p.Spin*seconds,360);
+   if(p.Position.y<LostDepth){p.Lost=true;p.Moving=false;p.Velocity=Vector2.zero;return;}
+   if(p.Fall==0&&speed<.05f&&Mathf.Abs(p.Spin)<5){p.Velocity=Vector2.zero;p.Spin=0;p.Moving=false;}
+  }
+  // Pushed out of any static scenery it was squeezed into (another body may have shoved it against a wall).
+  static void Depenetrate(Prop p,Vector3 center,float radius) {
+   foreach(var collider in Physics.OverlapSphere(center,radius,~0,QueryTriggerInteraction.Ignore)) {
+    if(collider is CharacterController||collider is MeshCollider mesh&&!mesh.convex)continue;
+    var closest=collider.ClosestPoint(center);var away=center-closest;away.y=0;float distance=away.magnitude;
+    if(distance<1e-4f||distance>=radius)continue;
+    var normal=away/distance;p.Position+=normal*(radius-distance+Skin);center+=normal*(radius-distance+Skin);
+    var flat=new Vector2(normal.x,normal.z);float into=Vector2.Dot(p.Velocity,flat);if(into<0)p.Velocity-=flat*into;
+   }
+  }
+  static bool Sweep(Vector3 center,float radius,Vector3 direction,float distance,out RaycastHit nearest) {
+   nearest=default;bool found=false;
+   foreach(var hit in Physics.SphereCastAll(center,radius,direction,distance,~0,QueryTriggerInteraction.Ignore)) {
+    if(hit.collider is CharacterController||hit.distance<=0)continue;
+    if(!found||hit.distance<nearest.distance){nearest=hit;found=true;}
+   }
+   return found;
+  }
+  // Rides gentle slopes; falls off a ledge or the map edge (the sweep stops it at any real step).
+  static void Ground(Prop p,float seconds) {
+   float drop=.05f+Mathf.Max(0,-p.Fall*seconds),best=float.NegativeInfinity;
+   foreach(var hit in Physics.RaycastAll(p.Position+Vector3.up*StepUp,Vector3.down,StepUp+drop,~0,QueryTriggerInteraction.Ignore))
+    if(!(hit.collider is CharacterController)&&hit.normal.y>.5f&&hit.point.y>best)best=hit.point.y;
+   if(best>float.NegativeInfinity){p.Position.y=best;p.Fall=0;return;}
+   p.Fall-=Gravity*seconds;p.Position.y+=p.Fall*seconds;
+  }
+  /// <summary>Earliest prop a bubble sweep meets within <paramref name="distance"/>, as an upright footprint cylinder.</summary>
+  public bool Hit(Vector3 origin,Vector3 direction,float bubbleRadius,float distance,out int index,out float at) {
+   index=-1;at=float.MaxValue;var flat=new Vector2(direction.x,direction.z);float a=flat.sqrMagnitude;
+   for(int i=0;i<props.Count;i++) {
+    var p=props[i];if(p.Lost)continue;
+    var c=new Vector2(p.Position.x-origin.x,p.Position.z-origin.z);float reach=p.Radius+bubbleRadius,cc=c.sqrMagnitude-reach*reach,s;
+    if(cc<=0)s=0;
+    else {if(a<1e-8f)continue;float b=-2*Vector2.Dot(c,flat),disc=b*b-4*a*cc;if(disc<0)continue;s=(-b-Mathf.Sqrt(disc))/(2*a);if(s<0)continue;}
+    if(s>distance||s>=at)continue;
+    float y=origin.y+direction.y*s;if(y<p.Position.y-bubbleRadius||y>p.Position.y+p.Height+bubbleRadius)continue;
+    index=i;at=s;
+   }
+   return index>=0;
+  }
+  /// <summary>Host: a bubble (or other impulse) knocks a prop along, in metres per second.</summary>
+  public void Push(int index,Vector3 velocity) {
+   if(index<0||index>=props.Count||props[index].Lost)return;var p=props[index];
+   p.Velocity+=new Vector2(velocity.x,velocity.z);p.Spin=Mathf.Clamp(p.Spin+(index%2==0?1:-1)*velocity.magnitude*12,-240,240);Wake(p);
+  }
+
+  void Show(Prop p) {
+   if(p.Visual==null)return;
+   if(p.Visual.gameObject.activeSelf==p.Lost)p.Visual.gameObject.SetActive(!p.Lost);
+   var turn=Quaternion.Euler(0,p.Yaw-p.HomeYaw,0);p.Visual.SetPositionAndRotation(p.Position+turn*p.PivotOffset,turn*p.HomeRotation);
+  }
  }
 }
