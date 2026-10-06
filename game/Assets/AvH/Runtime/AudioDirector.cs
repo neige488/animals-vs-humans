@@ -17,6 +17,8 @@ namespace AvH {
   public int Count(string cue)=>Played.TryGetValue(cue,out var n)?n:0;
   /// <summary>Current phase music, the track still fading out (null when settled) and the 0..1 crossfade progress.</summary>
   public string Music,FadingMusic,Ambience;public float MusicLevel;
+  /// <summary>Requests not voiced: over a cap with nothing less important to replace, or too far from the listener.</summary>
+  public int Dropped,Culled,Stolen;
  }
  /// <summary>
  /// Presentation only: turns public events, round phases and character motion into 3D sound.
@@ -25,7 +27,10 @@ namespace AvH {
  /// </summary>
  public sealed class AudioDirector : MonoBehaviour {
   public bool AutomaticUpdate=true;
-  sealed class Voice {public AudioSource Source;public string Cue;public float Until;public int Priority;public bool Synthesized;}
+  /// <summary>Effect voices sounding at once (music and ambience are separate beds).</summary>
+  public const int MaxVoices=16,MaxFootstepVoices=6,MaxGrowlVoices=3;
+  int dropped,culled,stolen;AudioListener listener;float listenerCheck=-1;
+  sealed class Voice {public AudioSource Source;public string Cue;public float Until,Length;public int Priority;public bool Synthesized;}
   readonly List<Voice> voices=new List<Voice>();
   readonly Dictionary<string,int> played=new Dictionary<string,int>();
   readonly Dictionary<string,(AudioClip[] clips,bool synthesized)> bank=new Dictionary<string,(AudioClip[],bool)>();
@@ -62,14 +67,32 @@ namespace AvH {
   public bool Play(string cue,Vector3 position,float volume=1,float pitch=1) {
    if(string.IsNullOrEmpty(cue)||float.IsNaN(position.x)||float.IsNaN(position.y)||float.IsNaN(position.z))return false;
    var profile=For(cue);var clips=Clips(cue);if(clips.clips.Length==0)return false;
+   if(!Audible(position,profile.Max)){culled++;return false;}
+   string family=Family(cue);int cap=family=="step"?MaxFootstepVoices:family=="growl"?MaxGrowlVoices:MaxVoices;
+   var sounding=voices.Where(v=>v.Until>clock).ToArray();
+   // The same cue twice at the same spot in the same instant is one sound.
+   if(sounding.Any(v=>v.Cue==cue&&v.Until-clock>v.Length-.03f&&(v.Source.transform.position-position).sqrMagnitude<.25f)){dropped++;return false;}
+   if(sounding.Count(v=>Family(v.Cue)==family)>=cap){dropped++;return false;}
    var voice=voices.FirstOrDefault(v=>v.Until<=clock);
+   if(voice==null&&voices.Count>=MaxVoices) {
+    // Full: replace the least important (then most finished) sound, but only for something more important.
+    voice=sounding.Where(v=>v.Priority<profile.Priority).OrderBy(v=>v.Priority).ThenBy(v=>v.Until).FirstOrDefault();
+    if(voice==null){dropped++;return false;}
+    stolen++;
+   }
    if(voice==null){var go=new GameObject("Voice");go.transform.SetParent(transform,false);var s=go.AddComponent<AudioSource>();s.playOnAwake=false;s.spatialBlend=1;s.rolloffMode=AudioRolloffMode.Logarithmic;s.dopplerLevel=0;s.spread=0;voice=new Voice{Source=s};voices.Add(voice);}
    var source=voice.Source;source.Stop();
    var clip=clips.clips[random.Next(clips.clips.Length)];
    source.transform.position=position;source.clip=clip;source.minDistance=profile.Min;source.maxDistance=profile.Max;
    source.volume=Mathf.Clamp01(profile.Volume*volume);source.pitch=Mathf.Clamp(pitch*(.95f+(float)random.NextDouble()*.1f),.3f,3);source.priority=Mathf.Clamp(128-profile.Priority*10,0,256);
-   voice.Cue=cue;voice.Priority=profile.Priority;voice.Synthesized=clips.synthesized;voice.Until=clock+clip.length/source.pitch;
+   voice.Cue=cue;voice.Priority=profile.Priority;voice.Synthesized=clips.synthesized;voice.Length=clip.length/source.pitch;voice.Until=clock+voice.Length;
    source.Play();played[cue]=(played.TryGetValue(cue,out var n)?n:0)+1;return true;
+  }
+  static string Family(string cue){int dash=cue.IndexOf('-');var head=dash<0?cue:cue.Substring(0,dash);return head=="step"||head=="growl"?head:cue;}
+  // Beyond its distance band a sound is silent anyway; skipping it keeps voices for what can be heard.
+  bool Audible(Vector3 position,float max) {
+   if(listener==null&&clock>=listenerCheck){listener=FindAnyObjectByType<AudioListener>();listenerCheck=clock+1;}
+   return listener==null||!listener.isActiveAndEnabled||(listener.transform.position-position).sqrMagnitude<=max*max;
   }
   (AudioClip[] clips,bool synthesized) Clips(string cue) {
    if(bank.TryGetValue(cue,out var cached))return cached;
@@ -103,7 +126,7 @@ namespace AvH {
   }
   void Update(){if(AutomaticUpdate)Advance(Time.unscaledDeltaTime);}
   public AudioView Observe()=>new AudioView{
-   Played=new Dictionary<string,int>(played),Music=music,FadingMusic=fading,MusicLevel=current==null?0:musicLevel,Ambience=ambience!=null&&ambience.clip!=null?"ambience":null,
+   Played=new Dictionary<string,int>(played),Dropped=dropped,Culled=culled,Stolen=stolen,Music=music,FadingMusic=fading,MusicLevel=current==null?0:musicLevel,Ambience=ambience!=null&&ambience.clip!=null?"ambience":null,
    Voices=voices.Where(v=>v.Until>clock).Select(v=>new AudioVoiceView{Cue=v.Cue,Position=v.Source.transform.position,SpatialBlend=v.Source.spatialBlend,MinDistance=v.Source.minDistance,MaxDistance=v.Source.maxDistance,Volume=v.Source.volume,Pitch=v.Source.pitch,Remaining=v.Until-clock,Priority=v.Priority,Synthesized=v.Synthesized}).ToArray()
   };
   /// <summary>Per-species voice: step cue and pitch, vocal cue and pitch, and the attack-tell snarl pitch.</summary>

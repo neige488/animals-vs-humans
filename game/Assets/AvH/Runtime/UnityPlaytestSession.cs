@@ -161,6 +161,8 @@ namespace AvH {
    locomotion.Bind(visual.transform,faction,Observe().Players[slot].CharacterId,gunPose);
    if(transformation)locomotion.PlayTransform();
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;
+   // Every sound goes through the AudioDirector; vendor model audio sources stay silent.
+   foreach(var vendor in visual.GetComponentsInChildren<AudioSource>(true))vendor.enabled=false;
   }
  }
  /// <summary>The replaced model shrinks away quickly under the transformation burst. Presentation only.</summary>

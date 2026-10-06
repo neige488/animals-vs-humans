@@ -126,7 +126,7 @@ namespace AvH.Tests {
    for(int i=0;i<400;i++){world.Step(.02f);world.Audio.Advance(.02f);peak=Mathf.Max(peak,world.Audio.Observe().Voices.Length);}
    Assert.Greater(world.Audio.Observe().Count("step-human")+world.Audio.Observe().Count("step-paw"),20,"Twelve runners make plenty of footsteps");
    Assert.LessOrEqual(peak,AudioDirector.MaxVoices,"...without ever exceeding the voice cap");
-   Assert.LessOrEqual(root.GetComponentsInChildren<AudioSource>().Count(s=>!s.loop),AudioDirector.MaxVoices);
+   Assert.LessOrEqual(world.Audio.GetComponentsInChildren<AudioSource>().Count(s=>!s.loop),AudioDirector.MaxVoices);
   }
 
   [UnityTest] public IEnumerator RemoteViewersHearTheSamePublicEventsOnceAndNeverOnJoin() {
