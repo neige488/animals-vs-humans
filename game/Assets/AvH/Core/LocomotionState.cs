@@ -11,5 +11,8 @@ namespace AvH {
   public bool Grounded;
   /// <summary>Current top ground speed for this character (m/s). 0 = unknown; gait thresholds fall back to fixed values.</summary>
   public float TopSpeed;
+  /// <summary>Host action phase (tell, swing, stun, hit-stop) and its 0..1 progress.</summary>
+  public ActionPhase Action;
+  public float ActionProgress;
  }
 }

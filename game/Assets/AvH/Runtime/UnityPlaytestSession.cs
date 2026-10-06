@@ -63,6 +63,11 @@ namespace AvH {
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
      if(guns[i]!=null&&input.RoundId==state.Round)guns[i].GetComponent<BubbleGunPose>().SetAim(input.Yaw,input.Pitch);
+     if(CharacterMotion.Frozen(p)) {
+      // Hit-stop holds only this body: no steering, gravity or knockback until it ends. Momentum resumes after.
+      Animate(i,new LocomotionState{Grounded=body.isGrounded,AimYaw=input.Yaw,Action=p.Action},seconds);
+      var held=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(held.x,held.y,held.z));inputs[i].Jump=false;continue;
+     }
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
      if(body.isGrounded && input.Jump){vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
      vertical[i]-=22*seconds;
@@ -76,7 +81,7 @@ namespace AvH {
      // Animate what the body actually did: a wall-blocked body does not run at full cadence.
      var moved=body.transform.position-from;moved.y=0;float actual=moved.magnitude/seconds;
      var shown=planar.sqrMagnitude>actual*actual?planar.normalized*actual:planar;
-     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed},seconds);
+     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed,Action=p.Action,ActionProgress=ActionProgress(p,rules)},seconds);
      if(!wasGrounded&&body.isGrounded&&fallingSpeed< -4)Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
      if(body.transform.position.y < -12) {
@@ -91,6 +96,16 @@ namespace AvH {
     inputs[i].Jump=false;
    }
    StepCombatWorld(seconds,state);
+  }
+  internal static float ActionProgress(PlayerState p,PlaytestValues rules) {
+   double left,total;
+   switch(p.Action) {
+    case ActionPhase.Windup:left=p.AttackWindupRemaining;total=rules.AttackWindupSeconds;break;
+    case ActionPhase.Swing:left=p.SwingRemaining;total=CombatRules.SwingSeconds;break;
+    case ActionPhase.Stunned:left=p.StunRemaining;total=rules.HitStunSeconds;break;
+    default:return 0;
+   }
+   return total<=0?1:Mathf.Clamp01(1-(float)(left/total));
   }
   internal void ResolveKnockbackContact(int slot,Vector3 normal) {
    float inward=Vector3.Dot(pushVelocity[slot],normal);

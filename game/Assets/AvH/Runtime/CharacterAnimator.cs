@@ -19,6 +19,9 @@ namespace AvH {
   public float Squash, BodyPitch, BodyRoll;
   public bool DrivesAnimator;
   public string IdleClip, WalkClip, RunClip, AirClip;
+  /// <summary>Hit-stop: the whole pose holds still until the freeze ends.</summary>
+  public bool Frozen;
+  public ActionPhase Action;
  }
  /// <summary>
  /// Presentation-only locomotion. One public input (<see cref="LocomotionState"/>) drives speed-blended walk/run,
@@ -85,6 +88,8 @@ namespace AvH {
   public CharacterAnimationView Observe(){var v=view;v.DrivesAnimator=graph.IsValid()&&graph.IsPlaying();return v;}
   public void Apply(LocomotionState state,float seconds) {
    if(seconds<=0||float.IsNaN(seconds)||float.IsInfinity(seconds))return;
+   view.Action=state.Action;view.Frozen=state.Action==ActionPhase.HitStop;
+   if(view.Frozen){Present(state);return;}
    float dt=seconds;var velocity=new Vector3(state.VelocityX,0,state.VelocityZ);float speed=velocity.magnitude;
    // Gait hysteresis: start instantly, but only call it stopped after holding still briefly.
    // Thresholds shrink with a very slow configured top speed so a slow walk never glides in the idle pose.
