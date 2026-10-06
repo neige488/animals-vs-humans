@@ -8,6 +8,10 @@ namespace AvH {
   public float PreparationSeconds=20, RoundSeconds=180, ResultSeconds=5, InitialAttackGrace=2, TransformAttackGrace=1;
   public int InitialAnimals=2, Magazine=12;
   public float HumanSpeed=5, AnimalSpeed=5.6f, HumanJump=1.5f, AnimalJump=1.5f;
+  // Seconds from standing to full speed on the ground; 0 restores instant start/stop.
+  public float InertiaSeconds=.12f;
+  // Share of ground control kept in the air (1 = same as ground).
+  public float AirControl=.45f;
   public float ReloadSeconds=1.5f, BubbleRadius=.35f, BubbleSpeed=18, BubbleRange=25, BubbleLifetime=2, FireInterval=.3f, PushForce=8;
   public float FoxSpeedMultiplier=1.1f, FoxJumpMultiplier=1.1f, FoxKnockbackMultiplier=1.15f;
   public float WolfSpeedMultiplier=1.15f, WolfJumpMultiplier=1.0f, WolfKnockbackMultiplier=1.0f;
@@ -95,6 +99,8 @@ namespace AvH {
      case "RoundSeconds":min=1;max=3600;break;
      case "ResultSeconds":min=1;max=30;break;
      case "HumanSpeed":case "AnimalSpeed":max=20;break;
+     case "InertiaSeconds":min=0;max=1;break;
+     case "AirControl":min=.05;max=1;break;
      case "HumanJump":case "AnimalJump":max=5;break;
      case "BubbleRadius":max=2;break;
      case "ReloadSeconds":case "FireInterval":max=30;break;

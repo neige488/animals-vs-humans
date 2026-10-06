@@ -24,10 +24,14 @@ namespace AvH {
    }
   }
   void InterpolateRemote() {
-   foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];var next=ToVector(p.Position);var delta=next-body.transform.position;
-    body.transform.position=Vector3.Lerp(body.transform.position,next,Mathf.Min(1,Time.deltaTime*20));
-    var flat=new Vector3(delta.x,0,delta.z);if(remoteVisuals!=null&&remoteVisuals.Yaws.Length==12)body.transform.rotation=Quaternion.Slerp(body.transform.rotation,Quaternion.Euler(0,remoteVisuals.Yaws[p.Slot],0),1-Mathf.Exp(-24f*Time.deltaTime));
-    foreach(var animator in body.GetComponentsInChildren<Animator>())foreach(var parameter in animator.parameters)if(parameter.type==AnimatorControllerParameterType.Bool&&parameter.name=="isRunning")animator.SetBool(parameter.name,flat.sqrMagnitude>.002f);
+   float dt=Time.deltaTime;bool yaws=remoteVisuals!=null&&remoteVisuals.Yaws.Length==12;
+   foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];var next=ToVector(p.Position);var from=body.transform.position;
+    body.transform.position=Vector3.Lerp(from,next,Mathf.Min(1,dt*20));
+    if(yaws)body.transform.rotation=Quaternion.Slerp(body.transform.rotation,Quaternion.Euler(0,remoteVisuals.Yaws[p.Slot],0),1-Mathf.Exp(-24f*dt));
+    // Until snapshots carry motion state (S4), the shared animator reads motion estimated from the interpolation.
+    if(dt>0){var step=(body.transform.position-from)/dt;
+     body.GetComponent<CharacterAnimator>().Apply(new LocomotionState{VelocityX=step.x,VelocityZ=step.z,VerticalSpeed=step.y,Grounded=Mathf.Abs(step.y)<1.5f,
+      AimYaw=yaws?remoteVisuals.Yaws[p.Slot]:body.transform.eulerAngles.y},dt);}
    }
   }
   public void ApplyRemoteVisuals(NetworkVisualState visual) {
@@ -56,7 +60,7 @@ namespace AvH {
    AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
    seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
-   System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);
+   System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);
   }
  }
 }

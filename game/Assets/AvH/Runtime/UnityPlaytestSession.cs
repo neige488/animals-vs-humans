@@ -14,6 +14,7 @@ namespace AvH {
   readonly List<CharacterController> bodies = new List<CharacterController>();
   readonly PlayerInput[] inputs = new PlayerInput[12];
   readonly float[] vertical = new float[12];
+  readonly MotionState[] motion = new MotionState[12];
   readonly Transform[] guns=new Transform[12];
   readonly Vector3[] returns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
   public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
@@ -57,7 +58,7 @@ namespace AvH {
    var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
-    if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; }
+    if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; }
     if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
@@ -67,23 +68,23 @@ namespace AvH {
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];
-     body.Move((direction*(p.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed*modifiers.Speed)+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
+     var profile=CharacterMotion.Profile(rules,p);
+     motion[i]=CharacterMotion.Next(motion[i],new MotionIntent{DirectionX=direction.x,DirectionZ=direction.z,Grounded=wasGrounded},profile,seconds);
+     var planar=new Vector3(motion[i].VelocityX,0,motion[i].VelocityZ);
+     var from=body.transform.position;
+     body.Move((planar+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
+     // Animate what the body actually did: a wall-blocked body does not run at full cadence.
+     var moved=body.transform.position-from;moved.y=0;float actual=moved.magnitude/seconds;
+     var shown=planar.sqrMagnitude>actual*actual?planar.normalized*actual:planar;
+     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed},seconds);
      if(!wasGrounded&&body.isGrounded&&fallingSpeed< -4)Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
-     foreach(var animator in body.GetComponentsInChildren<Animator>()) {
-      animator.applyRootMotion=false;
-      foreach(var parameter in animator.parameters) {
-       if(parameter.type!=AnimatorControllerParameterType.Bool)continue;
-       if(parameter.name=="isRunning")animator.SetBool(parameter.name,direction.sqrMagnitude>.01f);
-       if(parameter.name=="isWalking")animator.SetBool(parameter.name,false);
-      }
-     }
      if(body.transform.position.y < -12) {
       var closest=returns[0]; float distance=float.MaxValue;
       foreach(var point in returns) { var d=Vector2.SqrMagnitude(new Vector2(point.x-body.transform.position.x,point.z-body.transform.position.z)); if(d<distance) {distance=d;closest=point;} }
-      Warp(body,closest); vertical[i]=0;
+      Warp(body,closest); vertical[i]=0; motion[i]=default;
      }
-    }
+    } else {motion[i]=default;Animate(i,new LocomotionState{Grounded=true,AimYaw=PresentationYaw(i)},seconds);}
     var pos=body.transform.position;
     Session.RecordWorldPosition(i,new WorldPosition(pos.x,pos.y,pos.z));
     pushVelocity[i]=Vector3.MoveTowards(pushVelocity[i],Vector3.zero,20*seconds);
@@ -100,6 +101,9 @@ namespace AvH {
     Effects.Emit(position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
+  /// <summary>Locomotion animation currently shown for a slot (presentation only).</summary>
+  public CharacterAnimationView ObserveAnimation(int slot)=>bodies[slot].GetComponent<CharacterAnimator>().Observe();
+  void Animate(int slot,LocomotionState state,float seconds)=>bodies[slot].GetComponent<CharacterAnimator>().Apply(state,seconds);
   internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
@@ -119,8 +123,11 @@ namespace AvH {
     visual.GetComponent<Renderer>().sharedMaterial=PrototypeVillage.Material(faction==Faction.Human?new Color(.15f,.7f,.95f):new Color(1,.48f,.16f));
    }
    visual.name="Visual";
-   foreach(var animator in visual.GetComponentsInChildren<Animator>()){animator.fireEvents=false;animator.Rebind();animator.Update(0);}
-   if(guns[slot]!=null)guns[slot].GetComponent<BubbleGunPose>().Bind(visual.transform);
+   foreach(var animator in visual.GetComponentsInChildren<Animator>()){animator.fireEvents=false;animator.applyRootMotion=false;animator.Rebind();animator.Update(0);}
+   var gunPose=guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>():null;
+   if(gunPose!=null)gunPose.Bind(visual.transform);
+   var locomotion=parent.GetComponent<CharacterAnimator>()??parent.gameObject.AddComponent<CharacterAnimator>();
+   locomotion.Bind(visual.transform,faction,Observe().Players[slot].CharacterId,gunPose);
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;
   }
  }
