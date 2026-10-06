@@ -40,6 +40,8 @@ namespace AvH {
   /// <summary>Adds one host presentation frame to the playback buffer (duplicates and stale frames are ignored).</summary>
   public void ReceiveRemoteMotion(NetworkMotionFrame frame) {
    if(remoteSnapshot==null||frame==null||frame.Bodies.Length!=bodies.Count)return;
+   // A receive can carry the next round's snapshot together with the previous round's last frames; those are never replayed.
+   if(frame.Round!=remoteSnapshot.Round)return;
    int before=remoteMotion.Count;var newest=remoteMotion.Latest;remoteMotion.Add(frame.HostTime,remoteClock,frame);
    if(remoteMotion.Latest!=newest||remoteMotion.Count!=before)lastFrameArrival=remoteClock;
    for(int i=0;i<bodies.Count;i++)if(snapRemoteFacing[i]){var pose=frame.Bodies[i];bodies[i].transform.rotation=Quaternion.Euler(0,pose.AimYaw(),0);snapRemoteFacing[i]=false;}

@@ -106,6 +106,8 @@ namespace AvH
         static void AssignCharacter(PlayerState player,CharacterDefinition character){player.CharacterId=character.Id;player.CharacterName=character.Name;player.CharacterRarity=character.Rarity;}
         /// <summary>Authoritative simulation clock in seconds since the session started (frame timestamps).</summary>
         public double HostTime => hostTime;
+        /// <summary>Current round number (frame tagging without copying the whole state).</summary>
+        public int Round => round;
         public void RecordWorldPosition(int slot, WorldPosition position) {
             if (slot < 0 || slot >= players.Length) throw new ArgumentOutOfRangeException(nameof(slot));
             players[slot].Position = position;
