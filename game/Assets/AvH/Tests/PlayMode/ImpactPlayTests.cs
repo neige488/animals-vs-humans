@@ -49,5 +49,20 @@ namespace AvH.Tests {
    a=At(0);Step(15,(0,forward));Assert.Greater(Vector3.Distance(a,At(0)),.3f,"Movement resumes after the hit-stop");
    Assert.IsFalse(world.ObserveAnimation(0).Frozen);
   }
+
+  [UnityTest] public IEnumerator BubbleHitStaggersTheAnimalAndWeakensItsSteeringBriefly() {
+   yield return Create(Faction.Human,Faction.Animal,v=>{v.HitStunSeconds=.5f;v.InertiaSeconds=0;});
+   Warp(4,new Vector3(100,0,4));Physics.SyncTransforms();Step(2);
+   Step(1,(0,new PlayerInput{Attack=true,Yaw=0}));
+   for(int i=0;i<20&&world.Observe().Players[4].StunRemaining<=0;i++)Step(1,(0,new PlayerInput{Yaw=0}));
+   var state=world.Observe();Assert.AreEqual(ActionPhase.Stunned,state.Players[4].Action,"A real bubble hit stuns the animal");
+   Assert.IsTrue(state.Events.Any(e=>e.Kind==FeelEventKind.Stagger&&e.Target==4&&e.Actor==0));
+   var side=new PlayerInput{Right=1,Yaw=0};float x=At(4).x;Step(10,(4,side));float stunned=At(4).x-x;
+   var view=world.ObserveAnimation(4);Assert.AreEqual(ActionPhase.Stunned,view.Action);Assert.Greater(view.Stagger,.1f,"The body visibly staggers");
+   Step(30,(4,new PlayerInput{Yaw=0}));Assert.AreEqual(ActionPhase.None,world.Observe().Players[4].Action);
+   x=At(4).x;Step(10,(4,side));float normal=At(4).x-x;
+   Assert.Greater(stunned,0,"Stunned animals still steer");Assert.Less(stunned,normal*.6f,"...but weakly");
+   Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction,"A bubble never changes faction");
+  }
  }
 }
