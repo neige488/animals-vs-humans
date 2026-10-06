@@ -51,6 +51,18 @@ namespace AvH.Tests {
    Assert.AreEqual(-20,remote.PlayerTransform(runner).GetComponentInChildren<BubbleGunPose>().AimPitch,.05,"Aim pitch follows the host, not only shots");
    Assert.AreEqual(LocomotionGait.Idle,remote.ObserveAnimation(runner).Gait);
   }
+  [UnityTest] public IEnumerator FramesFromThePreviousRoundAreNotReplayedAfterARoundChange() {
+   var source=new PlaytestSession(123);source.StartSolo("source");var first=source.Observe();
+   root=new GameObject("remote round change");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(first);remote.AutomaticRemotePlayback=false;yield return null;
+   const int slot=3;var start=first.Players[slot].Position;
+   for(float h=0;h<.5f;h+=Send){remote.ApplyRemoteVisuals(new NetworkVisualState{Motion=RemoteFrames.Of(first,10+h)});remote.Step(Send);}
+   // One receive brings the newest snapshot (next round, new placement) together with the last old-round frames.
+   var next=source.Observe();next.Round=first.Round+1;next.Players[slot].Position=new WorldPosition(start.X+2,start.Y,start.Z);
+   remote.ApplyRemoteSnapshot(next);
+   foreach(double h in new[]{10.5,10.55})remote.ReceiveRemoteMotion(RemoteFrames.Of(first,h));
+   remote.ReceiveRemoteMotion(RemoteFrames.Of(next,10.6));
+   for(int i=0;i<30;i++){remote.Step(Dt);Assert.AreEqual(start.X+2,remote.PlayerTransform(slot).position.x,.01,"The new round's placement holds; old-round frames are not replayed (step "+i+")");}
+  }
   [UnityTest] public IEnumerator StalledStreamStandsStillAndTheViewersOwnBodySkipsTheBuffer() {
    var source=new PlaytestSession(123);source.StartSolo("source");var state=source.Observe();
    root=new GameObject("remote stall");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(state);remote.AutomaticRemotePlayback=false;remote.LocalViewerSlot=5;yield return null;

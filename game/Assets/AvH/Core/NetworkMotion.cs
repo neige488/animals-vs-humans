@@ -7,6 +7,8 @@ namespace AvH {
  /// </summary>
  [Serializable] public sealed class NetworkMotionFrame {
   public double HostTime;
+  /// <summary>Host round the frame belongs to; a viewer drops frames from any other round than its snapshot's.</summary>
+  public int Round;
   public NetworkBodyMotion[] Bodies=Array.Empty<NetworkBodyMotion>();
  }
  /// <summary>
