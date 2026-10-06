@@ -19,6 +19,8 @@ namespace AvH {
   public string Music,FadingMusic,Ambience;public float MusicLevel;
   /// <summary>Requests not voiced: over a cap with nothing less important to replace, or too far from the listener.</summary>
   public int Dropped,Culled,Stolen;
+  /// <summary>Cues whose CC0 or owned clip could not be loaded and are synthesized instead (reported once each).</summary>
+  public string[] Fallbacks=Array.Empty<string>();
  }
  /// <summary>
  /// Presentation only: turns public events, round phases and character motion into 3D sound.
@@ -35,6 +37,7 @@ namespace AvH {
   readonly Dictionary<string,int> played=new Dictionary<string,int>();
   readonly Dictionary<string,(AudioClip[] clips,bool synthesized)> bank=new Dictionary<string,(AudioClip[],bool)>();
   readonly List<AudioClip> generated=new List<AudioClip>();
+  readonly List<string> fallbacks=new List<string>();
   readonly System.Random random=new System.Random(7);
   Func<string,AudioClip> loader;float clock;
   /// <summary>Replaces where clips come from (tests reproduce missing files with a loader that returns null).</summary>
@@ -99,7 +102,10 @@ namespace AvH {
    var entry=AudioCatalog.Find(cue);var load=loader??DefaultLoad;
    var clips=entry==null?new AudioClip[0]:entry.Clips.Select(c=>{try{return load(c);}catch(Exception){return null;}}).Where(c=>c!=null).ToArray();
    bool synthesized=clips.Length==0;
-   if(synthesized){var clip=SoundSynth.Make(cue);if(clip!=null){generated.Add(clip);clips=new[]{clip};}}
+   if(synthesized){
+    var clip=SoundSynth.Make(cue);if(clip!=null){generated.Add(clip);clips=new[]{clip};}
+    if(entry!=null&&entry.Origin!=SoundOrigin.Synthesized&&!fallbacks.Contains(cue)){fallbacks.Add(cue);Debug.LogWarning($"소리 합성음 대체: {cue} ({(entry.Origin==SoundOrigin.Owned?"보유 에셋":"CC0 파일")} {string.Join(", ",entry.Clips)} 없음). 플레이는 계속합니다.");}
+   }
    return bank[cue]=(clips,synthesized);
   }
   /// <summary>The last stretch of the chase that switches to the final music.</summary>
@@ -126,7 +132,7 @@ namespace AvH {
   }
   void Update(){if(AutomaticUpdate)Advance(Time.unscaledDeltaTime);}
   public AudioView Observe()=>new AudioView{
-   Played=new Dictionary<string,int>(played),Dropped=dropped,Culled=culled,Stolen=stolen,Music=music,FadingMusic=fading,MusicLevel=current==null?0:musicLevel,Ambience=ambience!=null&&ambience.clip!=null?"ambience":null,
+   Played=new Dictionary<string,int>(played),Dropped=dropped,Culled=culled,Stolen=stolen,Fallbacks=fallbacks.ToArray(),Music=music,FadingMusic=fading,MusicLevel=current==null?0:musicLevel,Ambience=ambience!=null&&ambience.clip!=null?"ambience":null,
    Voices=voices.Where(v=>v.Until>clock).Select(v=>new AudioVoiceView{Cue=v.Cue,Position=v.Source.transform.position,SpatialBlend=v.Source.spatialBlend,MinDistance=v.Source.minDistance,MaxDistance=v.Source.maxDistance,Volume=v.Source.volume,Pitch=v.Source.pitch,Remaining=v.Until-clock,Priority=v.Priority,Synthesized=v.Synthesized}).ToArray()
   };
   /// <summary>Per-species voice: step cue and pitch, vocal cue and pitch, and the attack-tell snarl pitch.</summary>
