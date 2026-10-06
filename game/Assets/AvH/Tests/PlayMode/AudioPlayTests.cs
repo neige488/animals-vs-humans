@@ -104,6 +104,31 @@ namespace AvH.Tests {
    Assert.AreEqual("ambience",world.Audio.Observe().Ambience);
   }
 
+  [UnityTest] public IEnumerator TwelvePlayersAtOnceStayUnderTheVoiceCapAndKeepTheImportantSounds() {
+   root=new GameObject("voice cap");var audio=root.AddComponent<AudioDirector>();audio.AutomaticUpdate=false;
+   for(int slot=0;slot<12;slot++)for(int n=0;n<4;n++)audio.Play(slot%2==0?"step-paw":"step-human",new Vector3(slot,0,n));
+   var view=audio.Observe();
+   Assert.LessOrEqual(view.Voices.Length,AudioDirector.MaxVoices,"Simultaneous voices are capped");
+   Assert.LessOrEqual(view.Voices.Count(v=>v.Cue.StartsWith("step")),AudioDirector.MaxFootstepVoices,"Footsteps alone never fill the mix");
+   Assert.Greater(view.Dropped,0,"Excess requests are dropped instead of stacking");
+   for(int slot=0;slot<12;slot++){audio.Play("growl-wolf",new Vector3(slot,0,0));audio.Play("swing",new Vector3(slot,0,1));}
+   for(int slot=0;slot<12;slot++){audio.Play("hit",new Vector3(slot,0,2));audio.Play("transform",new Vector3(slot,0,3));}
+   view=audio.Observe();
+   Assert.LessOrEqual(view.Voices.Length,AudioDirector.MaxVoices);
+   Assert.GreaterOrEqual(view.Voices.Count(v=>v.Cue=="hit"||v.Cue=="transform"),AudioDirector.MaxVoices/2,"Hits and transformations take voices from lesser sounds");
+   Assert.AreEqual(0,view.Voices.Count(v=>v.Cue.StartsWith("step")),"Footsteps give way first");
+   Assert.LessOrEqual(root.GetComponentsInChildren<AudioSource>().Count(s=>!s.loop),AudioDirector.MaxVoices,"Sources are pooled, never one per request");
+   audio.Advance(5);Assert.AreEqual(0,audio.Observe().Voices.Length,"Voices free up when their sound ends");
+   Object.Destroy(root);root=null;
+   // A live twelve-player round with every bot moving.
+   yield return Create(Faction.Animal,Faction.Human);world.BotAutomationEnabled=true;
+   world.Step(.02f);int peak=0;
+   for(int i=0;i<400;i++){world.Step(.02f);world.Audio.Advance(.02f);peak=Mathf.Max(peak,world.Audio.Observe().Voices.Length);}
+   Assert.Greater(world.Audio.Observe().Count("step-human")+world.Audio.Observe().Count("step-paw"),20,"Twelve runners make plenty of footsteps");
+   Assert.LessOrEqual(peak,AudioDirector.MaxVoices,"...without ever exceeding the voice cap");
+   Assert.LessOrEqual(root.GetComponentsInChildren<AudioSource>().Count(s=>!s.loop),AudioDirector.MaxVoices);
+  }
+
   [UnityTest] public IEnumerator RemoteViewersHearTheSamePublicEventsOnceAndNeverOnJoin() {
    var source=new PlaytestSession(123);source.StartSolo("source");source.BeginSettingsEdit(0);var v=source.ObserveSettings().Edit;v.InitialAttackGrace=0;v.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,v);Assert.IsTrue(source.ApplySettingsNow(0));
    source.Advance(20.01);var state=source.Observe();int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int other=state.Players.Last(p=>p.Faction==Faction.Animal).Slot;
