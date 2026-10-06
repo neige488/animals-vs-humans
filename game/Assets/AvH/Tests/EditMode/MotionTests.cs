@@ -22,4 +22,30 @@ public class MotionTests {
    }
   }
  }
+ static (int steps,MotionState state) Run(MotionState from,MotionIntent intent,MotionProfile profile,System.Func<MotionState,bool> done,int max=200) {
+  var state=from;for(int i=1;i<=max;i++){state=CharacterMotion.Next(state,intent,profile,.01);if(done(state))return (i,state);}return (max+1,state);
+ }
+ static float Speed(MotionState s)=>(float)System.Math.Sqrt(s.VelocityX*s.VelocityX+s.VelocityZ*s.VelocityZ);
+ [Test] public void InertiaRampsToFullSpeedAndBackToRestOverTheConfiguredTime() {
+  var s=Session(v=>{v.InertiaSeconds=.2f;v.AirControl=.5f;});var profile=Profile(s,"human-default",Faction.Human);
+  var start=Run(new MotionState(),new MotionIntent{DirectionX=1,Grounded=true},profile,m=>Speed(m)>=profile.MaxSpeed-1e-4f);
+  Assert.That(start.steps,Is.InRange(19,21),"Ground start reaches max speed after InertiaSeconds");
+  var half=CharacterMotion.Next(new MotionState(),new MotionIntent{DirectionX=1,Grounded=true},profile,.1);
+  Assert.AreEqual(profile.MaxSpeed*.5f,half.VelocityX,.01f,"Ramp is linear in time");
+  var stop=Run(start.state,new MotionIntent{Grounded=true},profile,m=>Speed(m)<1e-4f);
+  Assert.That(stop.steps,Is.InRange(19,21),"Ground stop takes InertiaSeconds");
+  var air=Run(new MotionState(),new MotionIntent{DirectionX=1},profile,m=>Speed(m)>=profile.MaxSpeed-1e-4f);
+  Assert.That(air.steps,Is.InRange(39,41),"Half air control doubles the time to change speed in the air");
+  var neverOvershoot=CharacterMotion.Next(start.state,new MotionIntent{DirectionX=1,Grounded=true},profile,5);
+  Assert.AreEqual(profile.MaxSpeed,Speed(neverOvershoot),1e-4f);
+ }
+ [Test] public void ReversingDirectionIsNotSlowerThanStopping() {
+  var s=Session(v=>v.InertiaSeconds=.2f);var profile=Profile(s,"human-default",Faction.Human);
+  var full=new MotionState{VelocityX=profile.MaxSpeed};
+  var stop=Run(full,new MotionIntent{Grounded=true},profile,m=>Speed(m)<1e-4f);
+  var turn=Run(full,new MotionIntent{DirectionX=-1,Grounded=true},profile,m=>m.VelocityX<=0);
+  Assert.LessOrEqual(turn.steps,stop.steps,"A sharp turn sheds speed at least as fast as a stop");
+  var side=Run(full,new MotionIntent{DirectionZ=1,Grounded=true},profile,m=>m.VelocityZ>=profile.MaxSpeed*.9f);
+  Assert.Less(side.steps,stop.steps+5,"A 90 degree turn reaches the new heading without a long drift");
+ }
 }}
