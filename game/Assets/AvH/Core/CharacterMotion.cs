@@ -9,9 +9,22 @@ namespace AvH {
  /// <summary>Host-side movement rule. Unity-free and deterministic for the same inputs.</summary>
  public static class CharacterMotion {
   public static MotionProfile Profile(PlaytestValues rules,PlayerState player) {
-   var modifiers=AnimalBalance.For(rules,player);
+   var modifiers=AnimalBalance.For(rules,player);float start,stop;Weight(player,out start,out stop);
    return new MotionProfile{MaxSpeed=player.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed*modifiers.Speed,
-    AccelerationSeconds=rules.InertiaSeconds,DecelerationSeconds=rules.InertiaSeconds,AirControl=rules.AirControl};
+    AccelerationSeconds=rules.InertiaSeconds*start,DecelerationSeconds=rules.InertiaSeconds*stop,AirControl=rules.AirControl};
+  }
+  // Species personality lives in the curve, not in the agreed speed/jump/knockback multipliers.
+  // Values scale the shared inertia slider, so zero inertia stays instant for every species.
+  static void Weight(PlayerState player,out float start,out float stop) {
+   start=1;stop=1;if(player.Faction!=Faction.Animal)return;
+   switch(player.CharacterId) {
+    case "animal-fox":start=.8f;stop=.9f;break;          // nimble
+    case "animal-wolf":start=1;stop=1;break;              // steady runner
+    case "animal-bear_grizzly":start=1.7f;stop=1.6f;break;// heavy both ways
+    case "animal-boar":start=1.2f;stop=1.8f;break;        // charges past its stop
+    case "animal-rabbit_brown":start=.6f;stop=.7f;break;  // springy
+    case "animal-penguin":start=1.1f;stop=1.9f;break;     // belly-slides to a stop
+   }
   }
   public static MotionState Next(MotionState current,MotionIntent intent,MotionProfile profile,double seconds) {
    float x=intent.DirectionX,z=intent.DirectionZ;float length=(float)Math.Sqrt(x*x+z*z);
