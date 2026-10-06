@@ -36,14 +36,14 @@ namespace AvH {
   public void DrawStart(string nickname,GUIStyle label,float centerY=-1,System.Action<Rect> displayRows=null){
    var w=Screen.width;var h=Screen.height;float c=centerY<0?h/2:centerY;
    if(clientStarted){
-    GUI.Box(new Rect(w/2-280,c-70,560,230),"");
+    var status=StartScreenLayout.StatusPanel(w,c);GUI.Box(status,"");
     if(client.Status==ConnectionStatus.Interrupted){
-     GUI.Label(new Rect(w/2-270,c-50,540,75),"호스트와의 연결이 종료되었습니다.\n이번 라운드는 중단되었습니다.",new GUIStyle(label){wordWrap=true});
-     if(GUI.Button(new Rect(w/2-125,c+40,250,42),"시작 화면으로"))Leave();return;
+     GUI.Label(new Rect(w/2-270,status.y+20,540,75),"호스트와의 연결이 종료되었습니다.\n이번 라운드는 중단되었습니다.",new GUIStyle(label){wordWrap=true});
+     if(GUI.Button(new Rect(w/2-125,status.y+110,250,42),"시작 화면으로"))Leave();return;
     }
-    GUI.Label(new Rect(w/2-270,c-50,540,75),client.Error??(client.Status==ConnectionStatus.Waiting?"다음 준비 구간을 기다립니다 · 봇은 계속 플레이합니다":"방에 연결 중입니다 · 봇은 계속 플레이합니다"),new GUIStyle(label){wordWrap=true});
-    if(client.Status==ConnectionStatus.Failed)if(GUI.Button(new Rect(w/2-245,c+40,230,42),"재시도")){world.ResetSession();client.Connect(code,lastNickname);}
-    if(GUI.Button(new Rect(w/2+15,c+40,230,42),"취소 · 시작 화면"))Leave();return;
+    GUI.Label(new Rect(w/2-270,status.y+20,540,75),client.Error??(client.Status==ConnectionStatus.Waiting?"다음 준비 구간을 기다립니다 · 봇은 계속 플레이합니다":"방에 연결 중입니다 · 봇은 계속 플레이합니다"),new GUIStyle(label){wordWrap=true});
+    if(client.Status==ConnectionStatus.Failed)if(GUI.Button(new Rect(w/2-245,status.y+110,230,42),"재시도")){world.ResetSession();client.Connect(code,lastNickname);}
+    if(GUI.Button(new Rect(w/2+15,status.y+110,230,42),"취소 · 시작 화면"))Leave();return;
    }
    float extra=displayRows==null?0:DisplaySettingsMenu.Height;GUI.Box(StartScreenLayout.ConnectPanel(w,c,displayRows!=null),"");
    GUI.Label(new Rect(w/2-270,c+70,540,30),"같은 LAN 또는 기존 VPN에서 연결",label);
