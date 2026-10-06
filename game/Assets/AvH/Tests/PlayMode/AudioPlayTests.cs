@@ -171,6 +171,15 @@ namespace AvH.Tests {
    Assert.AreEqual(2,world.Audio.Observe().Count("dry-fire"),"Animals have no gun to click");
   }
 
+  [Test] public void CommittedEffectClipsAreMonoSoTheyPositionCleanlyAndMusicStreams() {
+   foreach(var entry in AudioCatalog.Entries.Where(e=>e.Origin==SoundOrigin.Cc0))foreach(var name in entry.Clips) {
+    var clip=Resources.Load<AudioClip>(name);Assert.IsNotNull(clip,name);
+    bool bed=entry.Cue.StartsWith("music")||entry.Cue=="ambience";
+    if(bed)Assert.AreEqual(AudioClipLoadType.Streaming,clip.loadType,"Long loops stream instead of sitting decoded in memory: "+name);
+    else Assert.AreEqual(1,clip.channels,"A positional effect is mono: "+name);
+   }
+  }
+
   [UnityTest] public IEnumerator RemoteViewersHearTheSamePublicEventsOnceAndNeverOnJoin() {
    var source=new PlaytestSession(123);source.StartSolo("source");source.BeginSettingsEdit(0);var v=source.ObserveSettings().Edit;v.InitialAttackGrace=0;v.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,v);Assert.IsTrue(source.ApplySettingsNow(0));
    source.Advance(20.01);var state=source.Observe();int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int other=state.Players.Last(p=>p.Faction==Faction.Animal).Slot;
