@@ -10,10 +10,10 @@ namespace AvH.Tests {
   string profile;GameObject root;UnityPlaytestSession world;
   [TearDown] public void Cleanup(){if(root!=null)Object.Destroy(root);if(profile!=null&&File.Exists(profile))File.Delete(profile);}
   // Slot 0 and slot 4 get the requested factions after a one second preparation without attack grace.
-  IEnumerator Create(Faction slot0,Faction slot4,System.Action<PlaytestValues> tune=null) {
+  IEnumerator Create(Faction slot0,Faction slot4,System.Action<PlaytestValues> tune=null,bool slot8Human=true) {
    profile=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid()+".xml");
    var setup=new PlaytestSession(1,profile);setup.BeginSettingsEdit(0);var v=setup.ObserveSettings().Edit;v.PreparationSeconds=1;v.InitialAttackGrace=0;v.TransformAttackGrace=0;tune?.Invoke(v);setup.UpdateSettingsEdit(0,v);Assert.IsTrue(setup.ApplySettingsNow(0,true));
-   int seed=0;for(;seed<2000;seed++){var probe=new PlaytestSession(seed,profile);probe.StartSolo("probe");probe.Advance(1.01);var s=probe.Observe();if(s.Players[0].Faction==slot0&&s.Players[4].Faction==slot4&&s.Players[8].Faction==Faction.Human)break;}
+   int seed=0;for(;seed<2000;seed++){var probe=new PlaytestSession(seed,profile);probe.StartSolo("probe");probe.Advance(1.01);var s=probe.Observe();if(s.Players[0].Faction==slot0&&s.Players[4].Faction==slot4&&(!slot8Human||s.Players[8].Faction==Faction.Human))break;}
    Assert.Less(seed,2000);
    root=new GameObject("impact physics");world=root.AddComponent<UnityPlaytestSession>();world.AutomaticStep=false;world.BotAutomationEnabled=false;world.StartSolo("host",seed,profile);
    var floor=GameObject.CreatePrimitive(PrimitiveType.Cube);floor.transform.SetParent(root.transform);floor.transform.position=new Vector3(100,-.5f,0);floor.transform.localScale=new Vector3(120,1,60);
@@ -101,6 +101,30 @@ namespace AvH.Tests {
    Assert.AreEqual(Faction.Human,world.Observe().Players[8].Faction,"A frozen animal cannot hit");
    Step(12,(0,new PlayerInput{Yaw=0}),(4,new PlayerInput{Yaw=0}));Assert.IsFalse(world.ObserveAnimation(4).Frozen);
    Step(1,(4,new PlayerInput{Attack=true,Yaw=0}));Assert.AreEqual(Faction.Animal,world.Observe().Players[8].Faction,"After the freeze it can");
+  }
+
+  bool GhostShown(int slot){var ghost=world.PlayerTransform(slot).Find("Transform ghost");return ghost!=null&&ghost.gameObject.activeSelf;}
+
+  [UnityTest] public IEnumerator TheHitThatEndsTheRoundDoesNotStartATransformationPop() {
+   // Review F-2: the last human's hit goes straight to results; the model swaps without a new pop.
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.AttackWindupSeconds=0;v.HitStopSeconds=0;v.InitialAnimals=11;},false);
+   Assert.AreEqual(1,world.Observe().Players.Count(p=>p.Faction==Faction.Human));
+   Step(1,(0,new PlayerInput{Attack=true,Yaw=0}));
+   Assert.AreEqual(RoundPhase.Results,world.Observe().Phase);Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction);
+   var view=world.ObserveAnimation(4);Assert.AreEqual(0,view.TransformPlays,"No pop after the round ended");Assert.AreEqual(1,view.TransformProgress,1e-4);
+   Assert.IsFalse(GhostShown(4),"No shrinking ghost in the results");
+  }
+
+  [UnityTest] public IEnumerator TimeRunningOutCutsATransformationInProgress() {
+   // Review F-2: a pop still playing when the clock ends is settled at once.
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.AttackWindupSeconds=0;v.HitStopSeconds=0;v.RoundSeconds=2;});
+   for(int i=0;i<200&&world.Observe().SecondsRemaining>.15;i++)Step(1);
+   Assert.AreEqual(RoundPhase.Chase,world.Observe().Phase);
+   Step(1,(0,new PlayerInput{Attack=true,Yaw=0}));Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction);
+   Assert.Less(world.ObserveAnimation(4).TransformProgress,1);Assert.IsTrue(GhostShown(4));
+   for(int i=0;i<30&&world.Observe().Phase!=RoundPhase.Results;i++)Step(1);
+   Assert.AreEqual(RoundPhase.Results,world.Observe().Phase);
+   Assert.AreEqual(1,world.ObserveAnimation(4).TransformProgress,1e-4,"Pop settled at the round end");Assert.IsFalse(GhostShown(4),"Ghost removed at the round end");
   }
  }
 }
