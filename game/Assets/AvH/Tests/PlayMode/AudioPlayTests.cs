@@ -180,6 +180,24 @@ namespace AvH.Tests {
    }
   }
 
+  [UnityTest] public IEnumerator RemoteViewersHearFootstepsOfBodiesPlayedBackFromHostFrames() {
+   // Merge regression (S3 audio x S4 playback): footsteps must follow the buffered remote playback, not only the pre-frame hold.
+   var source=new PlaytestSession(123);source.StartSolo("source");source.Advance(20.01);var state=source.Observe();
+   int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;var start=state.Players[animal].Position;
+   root=new GameObject("remote footsteps");world=root.AddComponent<UnityPlaytestSession>();world.StartRemote(state);world.AutomaticRemotePlayback=false;world.Audio.AutomaticUpdate=false;yield return null;
+   var camera=new GameObject("listener").AddComponent<AudioListener>();camera.transform.SetParent(root.transform);camera.transform.position=new Vector3(start.X,start.Y+2,start.Z);
+   const float dt=1/60f;float sent=-1;
+   for(float now=0;now<2.5f;now+=dt) {
+    if(now-sent>=.05f){sent=now;float t=now;
+     world.ApplyRemoteVisuals(new NetworkVisualState{Motion=RemoteFrames.Of(state,t,yaw:s=>s==animal?90:0,
+      position:s=>s==animal?new WorldPosition(start.X+5*t,start.Y,start.Z):state.Players[s].Position,
+      motion:s=>s==animal?new LocomotionState{VelocityX=5,Grounded=true,AimYaw=90,TopSpeed=5.6f}:new LocomotionState{Grounded=true})});}
+    world.Step(dt);world.Audio.Advance(dt);
+   }
+   Assert.AreEqual(LocomotionGait.Run,world.ObserveAnimation(animal).Gait,"The remote animal is played back running");
+   Assert.Greater(world.Audio.Observe().Count("step-paw"),2,"A remote viewer hears the running animal's footsteps");
+  }
+
   [UnityTest] public IEnumerator RemoteViewersHearTheSamePublicEventsOnceAndNeverOnJoin() {
    var source=new PlaytestSession(123);source.StartSolo("source");source.BeginSettingsEdit(0);var v=source.ObserveSettings().Edit;v.InitialAttackGrace=0;v.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,v);Assert.IsTrue(source.ApplySettingsNow(0));
    source.Advance(20.01);var state=source.Observe();int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int other=state.Players.Last(p=>p.Faction==Faction.Animal).Slot;

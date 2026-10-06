@@ -11,6 +11,15 @@ namespace AvH {
   readonly HashSet<int> seenRemoteImpacts=new HashSet<int>();
   readonly Queue<int> recentRemoteImpacts=new Queue<int>();
   public bool IsRemote=>remoteSnapshot!=null;
+  /// <summary>Remote views play host frames from the jitter buffer each frame (tests drive <see cref="Step"/> instead).</summary>
+  public bool AutomaticRemotePlayback=true;
+  /// <summary>The viewer's own slot on a remote view: it follows the newest frame instead of the jitter buffer, so control latency does not grow.</summary>
+  public int LocalViewerSlot=-1;
+  // Snapshot buffer interpolation: host presentation frames on a local playback clock.
+  readonly InterpolationTimeline<NetworkMotionFrame> remoteMotion=new InterpolationTimeline<NetworkMotionFrame>();
+  double remoteClock,lastFrameArrival;
+  // A stream silent this long stops animating in place; the newest pose is held.
+  const float StalledSeconds=.35f;
   public void StartRemote(SessionState state) {
    StartSolo("연결 중");AutomaticStep=false;ApplyRemoteSnapshot(state,true);
   }
@@ -19,29 +28,55 @@ namespace AvH {
    var old=remoteSnapshot;remoteSnapshot=state;
    foreach(var p in state.Players){
     if(old==null||old.Players[p.Slot].Faction!=p.Faction||old.Players[p.Slot].CharacterId!=p.CharacterId)ChangeVisual(immediate?null:old,state,p.Slot,ToVector(p.Position));
-    if(immediate||old==null||state.Round!=old.Round||Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>6){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
+    // With host frames flowing, the frames themselves show warps at the right moment; snapshots only reset on joins and new rounds.
+    bool reset=immediate||old==null||state.Round!=old.Round;
+    if(reset||remoteMotion.Count==0&&Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>NetworkBodyMotion.TeleportDistance){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
     bodies[p.Slot].enabled=false;
    }
+   if(immediate||old==null||state.Round!=old.Round)remoteMotion.Clear();
    if(state.Phase==RoundPhase.Results&&(old==null||old.Phase!=RoundPhase.Results))CutTransformations();
    if(immediate)ForgetPresentedEvents();PresentEvents(state);PresentStateAudio(state,immediate);
   }
-  void InterpolateRemote() {
-   float dt=Time.deltaTime;bool yaws=remoteVisuals!=null&&remoteVisuals.Yaws.Length==12;
-   foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];var next=ToVector(p.Position);var from=body.transform.position;
-    body.transform.position=Vector3.Lerp(from,next,Mathf.Min(1,dt*20));
-    if(yaws)body.transform.rotation=Quaternion.Slerp(body.transform.rotation,Quaternion.Euler(0,remoteVisuals.Yaws[p.Slot],0),1-Mathf.Exp(-24f*dt));
-    // Until snapshots carry motion state (S4), the shared animator reads motion estimated from the interpolation.
-    if(dt>0){var step=(body.transform.position-from)/dt;
-     body.GetComponent<CharacterAnimator>().Apply(new LocomotionState{VelocityX=step.x,VelocityZ=step.z,VerticalSpeed=step.y,Grounded=Mathf.Abs(step.y)<1.5f,
-      AimYaw=yaws?remoteVisuals.Yaws[p.Slot]:body.transform.eulerAngles.y},dt);}
+  /// <summary>Adds one host presentation frame to the playback buffer (duplicates and stale frames are ignored).</summary>
+  public void ReceiveRemoteMotion(NetworkMotionFrame frame) {
+   if(remoteSnapshot==null||frame==null||frame.Bodies.Length!=bodies.Count)return;
+   // A receive can carry the next round's snapshot together with the previous round's last frames; those are never replayed.
+   if(frame.Round!=remoteSnapshot.Round)return;
+   int before=remoteMotion.Count;var newest=remoteMotion.Latest;remoteMotion.Add(frame.HostTime,remoteClock,frame);
+   if(remoteMotion.Latest!=newest||remoteMotion.Count!=before)lastFrameArrival=remoteClock;
+   for(int i=0;i<bodies.Count;i++)if(snapRemoteFacing[i]){var pose=frame.Bodies[i];bodies[i].transform.rotation=Quaternion.Euler(0,pose.AimYaw(),0);snapRemoteFacing[i]=false;}
+  }
+  void InterpolateRemote(float dt) {
+   if(dt<=0||float.IsNaN(dt)||float.IsInfinity(dt))return;
+   remoteClock+=dt;
+   if(!remoteMotion.Sample(remoteClock,out var from,out var to,out float t)){HoldSnapshot(dt);return;}
+   var newest=remoteMotion.Latest;bool stalled=remoteClock-lastFrameArrival>StalledSeconds;
+   foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];bool own=p.Slot==LocalViewerSlot;
+    var pose=own?NetworkBodyMotion.Blend(newest.Bodies[p.Slot],newest.Bodies[p.Slot],1):NetworkBodyMotion.Blend(from.Bodies[p.Slot],to.Bodies[p.Slot],t);
+    var target=ToVector(pose.Position);
+    if(Vector3.Distance(body.transform.position,target)>NetworkBodyMotion.TeleportDistance)body.transform.position=target;
+    // The viewer's own body keeps the previous light smoothing toward the newest frame.
+    else body.transform.position=own?Vector3.Lerp(body.transform.position,target,Mathf.Min(1,dt*20)):target;
+    body.transform.rotation=Quaternion.Euler(0,pose.Yaw,0);
+    if(guns[p.Slot]!=null)guns[p.Slot].GetComponent<BubbleGunPose>().SetAim(pose.Yaw,pose.Pitch);
+    var motion=pose.Motion;if(stalled){motion.VelocityX=motion.VelocityZ=motion.VerticalSpeed=0;}
+    body.GetComponent<CharacterAnimator>().Apply(motion,dt);
+   }
+   // Footsteps and growls follow the played-back animation (merged S3 audio with S4 playback).
+   PresentMotionAudio(remoteSnapshot,dt);
+  }
+  // Before the first host frame (joining): stand at the snapshot position with the snapshot's action.
+  void HoldSnapshot(float dt) {
+   foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];
+    body.transform.position=Vector3.Lerp(body.transform.position,ToVector(p.Position),Mathf.Min(1,dt*20));
+    body.GetComponent<CharacterAnimator>().Apply(new LocomotionState{Grounded=true,AimYaw=body.transform.eulerAngles.y,Action=p.Action},dt);
    }
    PresentMotionAudio(remoteSnapshot,dt);
   }
   public void ApplyRemoteVisuals(NetworkVisualState visual) {
    if(ReferenceEquals(remoteVisuals,visual))return;
    bool liveEffects=remoteVisuals!=null;remoteVisuals=visual;if(visual==null)return;
-   for(int i=0;i<bodies.Count&&i<visual.Yaws.Length;i++)if(snapRemoteFacing[i]){bodies[i].transform.rotation=Quaternion.Euler(0,visual.Yaws[i],0);snapRemoteFacing[i]=false;}
-   for(int i=0;i<guns.Length&&i<visual.Yaws.Length;i++)if(guns[i]!=null){var pose=guns[i].GetComponent<BubbleGunPose>();pose.SetAim(visual.Yaws[i],pose.AimPitch);}
+   ReceiveRemoteMotion(visual.Motion);
    var incoming=new HashSet<int>(visual.Bubbles.Select(b=>b.Id));
    foreach(int id in remoteBubbles.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBubbles[id]);remoteBubbles.Remove(id);}
    foreach(var bubble in visual.Bubbles){GameObject obj;if(!remoteBubbles.TryGetValue(bubble.Id,out obj)){
@@ -60,7 +95,7 @@ namespace AvH {
   }
   public SettingsState ObserveActiveSettings()=>remoteVisuals==null?Session.ObserveSettings():new SettingsState{Current=remoteVisuals.CurrentRules.Copy(),Pending=remoteVisuals.HasPending?remoteVisuals.PendingRules.Copy():null,Version=remoteVisuals.SettingsVersion};
   public void ResetSession() {
-   AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
+   AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
    seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;ForgetAudio();System.Array.Clear(presentedBirths,0,presentedBirths.Length);ForgetPresentedEvents();
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
    System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);

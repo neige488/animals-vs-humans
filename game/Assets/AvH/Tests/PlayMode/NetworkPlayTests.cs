@@ -24,6 +24,25 @@ namespace AvH.Tests {
     client.Leave();for(int n=0;n<20;n++)yield return new WaitForSecondsRealtime(.02f);Assert.That(hostWorld.Observe().Players[slot].IsBot,Is.True);
    }finally{Object.Destroy(h);Object.Destroy(c);}
   }
+  [UnityTest] public IEnumerator RealSocketRemoteViewShowsTheHostsJumpAimPitchAndRun() {
+   var h=new GameObject("Network host motion");var c=new GameObject("Network client motion");
+   try {
+    var hostWorld=h.AddComponent<UnityPlaytestSession>();hostWorld.BotAutomationEnabled=false;var host=h.AddComponent<NetworkPresentation>();host.Initialize(hostWorld);host.StartHost("host","127.0.0.1");hostWorld.AutomaticStep=false;
+    var clientWorld=c.AddComponent<UnityPlaytestSession>();var client=c.AddComponent<NetworkPresentation>();client.Initialize(clientWorld);client.JoinRoom(host.RoomCode,"guest");
+    for(int n=0;n<180&&!client.CanPlay;n++)yield return new WaitForSecondsRealtime(.02f);
+    Assert.That(client.CanPlay,Is.True);
+    for(int n=0;n<20;n++){hostWorld.Step(.02f);yield return new WaitForSecondsRealtime(.02f);}
+    bool airborne=false,ran=false;float pitch=0;
+    for(int n=0;n<60;n++){
+     hostWorld.SubmitInput(0,new PlayerInput{Forward=n<40?1:0,Yaw=30,Pitch=-25,Jump=n==10});hostWorld.Step(.02f);yield return new WaitForSecondsRealtime(.02f);
+     var view=clientWorld.ObserveAnimation(0);airborne|=view.Gait==LocomotionGait.Airborne;ran|=view.Gait==LocomotionGait.Run||view.Gait==LocomotionGait.Walk;
+     pitch=clientWorld.PlayerTransform(0).GetComponentInChildren<BubbleGunPose>().AimPitch;
+    }
+    Assert.IsTrue(ran,"The host's run reaches the client's animator");Assert.IsTrue(airborne,"The host's jump shows on the client");
+    Assert.AreEqual(-25,pitch,.1,"The host's aim pitch shows on the client without firing");
+    Assert.Less(Vector3.Distance(clientWorld.PlayerTransform(0).position,hostWorld.PlayerTransform(0).position),1.5f);
+   }finally{Object.Destroy(h);Object.Destroy(c);}
+  }
   [UnityTest] public IEnumerator RemoteEffectSnapshotReconcilesLargeSetAndRemovesDepartedIds() {
    var go=new GameObject("Remote effects test");
    try {

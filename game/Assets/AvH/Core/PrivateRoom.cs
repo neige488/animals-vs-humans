@@ -12,15 +12,17 @@ namespace AvH {
   public static string Create(){var bytes=new byte[16];using(var rng=System.Security.Cryptography.RandomNumberGenerator.Create())rng.GetBytes(bytes);return BitConverter.ToString(bytes).Replace("-","").ToLowerInvariant();}
  }
  public static class RoomProtocol {
-  public const string Version="avh-private-8";
+  public const string Version="avh-private-9";
   public static string SchemaFingerprint()=>BuildVersion();
+  /// <summary>Encoded size of one wire value in bytes (bandwidth checks).</summary>
+  public static int EncodedBytes(object value)=>RoomWire.Encode(value).Length;
   static string Schema(Type t){if(t.IsArray)return "[]"+Schema(t.GetElementType());if(Nullable.GetUnderlyingType(t)!=null)return "?"+Schema(Nullable.GetUnderlyingType(t));if(t.IsPrimitive||t==typeof(string)||t.IsEnum)return t.FullName;return t.FullName+"{"+string.Join(";",t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name,StringComparer.Ordinal).Select(f=>f.Name+":"+Schema(f.FieldType)))+"}";}
   static string BuildVersion(){using(var hash=System.Security.Cryptography.SHA256.Create())return Convert.ToBase64String(hash.ComputeHash(Encoding.UTF8.GetBytes(Schema(typeof(SessionState))+Schema(typeof(NetworkInput))+Schema(typeof(NetworkVisualState)))));}
  }
  [Serializable] public sealed class NetworkBubble {public int Id,OwnerSlot,Round;public WorldPosition Position,Direction;public float RemainingLife,Travelled;}
  [Serializable] public sealed class NetworkBurst {public int Id;public WorldPosition Position;public float Remaining;}
  [Serializable] public sealed class NetworkVisualState {
-  public NetworkBurst[] Bursts=Array.Empty<NetworkBurst>();public float[] Yaws=new float[12];public NetworkBubble[] Bubbles=Array.Empty<NetworkBubble>();
+  public NetworkBurst[] Bursts=Array.Empty<NetworkBurst>();public NetworkMotionFrame Motion=new NetworkMotionFrame();public NetworkBubble[] Bubbles=Array.Empty<NetworkBubble>();
   public PlaytestValues CurrentRules=new PlaytestValues(),PendingRules=new PlaytestValues();public bool HasPending;public int SettingsVersion;
   public NetworkVisualState WithBubbles(NetworkBubble[] bubbles){var copy=(NetworkVisualState)MemberwiseClone();copy.Bubbles=bubbles;return copy;}
  }
@@ -41,14 +43,14 @@ namespace AvH {
  static class RoomWire {
   public static byte[] Encode(params object[] values){using(var m=new MemoryStream())using(var w=new BinaryWriter(m)){foreach(var value in values)Write(w,value.GetType(),value);return m.ToArray();}}
   static void Write(BinaryWriter w,Type t,object v) {
-   if(t==typeof(string)){w.Write((string)v??"");return;} if(t==typeof(int)){w.Write((int)v);return;}if(t==typeof(float)){w.Write((float)v);return;}if(t==typeof(double)){w.Write((double)v);return;}if(t==typeof(bool)){w.Write((bool)v);return;}
+   if(t==typeof(string)){w.Write((string)v??"");return;} if(t==typeof(int)){w.Write((int)v);return;}if(t==typeof(short)){w.Write((short)v);return;}if(t==typeof(byte)){w.Write((byte)v);return;}if(t==typeof(float)){w.Write((float)v);return;}if(t==typeof(double)){w.Write((double)v);return;}if(t==typeof(bool)){w.Write((bool)v);return;}
    if(t.IsEnum){w.Write(Convert.ToInt32(v));return;}var nullable=Nullable.GetUnderlyingType(t);if(nullable!=null){w.Write(v!=null);if(v!=null)Write(w,nullable,v);return;}
    if(t.IsArray){var array=(Array)v;w.Write(array==null?0:array.Length);if(array!=null)foreach(var item in array)Write(w,t.GetElementType(),item);return;}
    foreach(var field in t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name,StringComparer.Ordinal))Write(w,field.FieldType,field.GetValue(v));
   }
   public static T Read<T>(BinaryReader r)=>(T)Read(r,typeof(T));
   static object Read(BinaryReader r,Type t) {
-   if(t==typeof(string)){var s=r.ReadString();if(s.Length>2048)throw new IOException("문자열 상한");return s;}if(t==typeof(int))return r.ReadInt32();if(t==typeof(float))return r.ReadSingle();if(t==typeof(double))return r.ReadDouble();if(t==typeof(bool))return r.ReadBoolean();
+   if(t==typeof(string)){var s=r.ReadString();if(s.Length>2048)throw new IOException("문자열 상한");return s;}if(t==typeof(int))return r.ReadInt32();if(t==typeof(short))return r.ReadInt16();if(t==typeof(byte))return r.ReadByte();if(t==typeof(float))return r.ReadSingle();if(t==typeof(double))return r.ReadDouble();if(t==typeof(bool))return r.ReadBoolean();
    if(t.IsEnum)return Enum.ToObject(t,r.ReadInt32());var nullable=Nullable.GetUnderlyingType(t);if(nullable!=null)return r.ReadBoolean()?Read(r,nullable):null;
    if(t.IsArray){int n=r.ReadInt32();if(n<0||n>512)throw new IOException("배열 상한");var a=Array.CreateInstance(t.GetElementType(),n);for(int i=0;i<n;i++)a.SetValue(Read(r,t.GetElementType()),i);return a;}
    var result=Activator.CreateInstance(t);foreach(var f in t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name,StringComparer.Ordinal))f.SetValue(result,Read(r,f.FieldType));return result;
@@ -122,7 +124,7 @@ namespace AvH {
      if(p.Effects==null){
       if(sharedVisual==null){
        var captured=CaptureVisuals?.Invoke()??new NetworkVisualState();var settings=world.ObserveSettings();sharedEffects=captured.Bubbles;
-       sharedVisual=new NetworkVisualState{Yaws=captured.Yaws,Bursts=captured.Bursts,CurrentRules=settings.Current,PendingRules=settings.Pending??settings.Current,HasPending=settings.Pending!=null,SettingsVersion=settings.Version};
+       sharedVisual=new NetworkVisualState{Motion=captured.Motion??new NetworkMotionFrame(),Bursts=captured.Bursts,CurrentRules=settings.Current,PendingRules=settings.Pending??settings.Current,HasPending=settings.Pending!=null,SettingsVersion=settings.Version};
       }
       p.Effects=sharedEffects;p.EffectsOffset=0;
       if(p.Effects.Length>16384){Reject(p,"버블 표현 상한을 초과했습니다. 호스트 설정을 낮춘 뒤 재시도하세요.");continue;}
@@ -144,6 +146,9 @@ namespace AvH {
  }
  public sealed class PrivateRoomClient : IDisposable {
   readonly Func<DateTime> utcNow;readonly string identity,protocolVersion;RoomPeer peer;TcpClient pending;Task connect;string roomKey,nickname;DateTime started,lastPing,snapshotStarted;bool ready,assembling;int snapshotSerial,receivedBubbles;NetworkBubble[] pendingBubbles;
+  readonly Queue<NetworkMotionFrame> motionFrames=new Queue<NetworkMotionFrame>();
+  /// <summary>Every motion frame received since the last call, oldest first (bounded), for the playback buffer.</summary>
+  public NetworkMotionFrame[] TakeMotionFrames(){var result=motionFrames.ToArray();motionFrames.Clear();return result;}
   public bool VisualsDelayed {get;private set;}
   public ConnectionStatus Status {get;private set;} public string Error {get;private set;} public SessionState Snapshot {get;private set;} public NetworkVisualState Visuals {get;private set;} public int Slot {get;private set;}=-1;
   public PrivateRoomClient(string reconnectIdentity=null,string protocolVersion=null,Func<DateTime> clock=null){utcNow=clock??(()=>DateTime.UtcNow);identity=reconnectIdentity??RoomSecrets.Create();this.protocolVersion=protocolVersion??RoomProtocol.Version;}
@@ -153,7 +158,7 @@ namespace AvH {
   public void Pump(){try {
    if(Status==ConnectionStatus.Connecting){if(!connect.IsCompleted){if((utcNow()-started).TotalSeconds>8)Fail("연결 시간이 초과되었습니다");return;}if(connect.IsFaulted){Fail("방에 연결하지 못했습니다");return;}peer=new RoomPeer(pending);pending=null;peer.Send("hello",protocolVersion,roomKey,identity,nickname);Status=ConnectionStatus.Loading;}
    if(peer==null)return;
-   foreach(var r in peer.Receive())using(r){string kind=r.ReadString();if(kind=="state"){snapshotSerial=r.ReadInt32();snapshotStarted=utcNow();assembling=true;pendingBubbles=null;receivedBubbles=0;Slot=r.ReadInt32();Snapshot=RoomWire.Read<SessionState>(r);var previousBubbles=Visuals?.Bubbles??Array.Empty<NetworkBubble>();Visuals=RoomWire.Read<NetworkVisualState>(r);Visuals.Bubbles=previousBubbles;if(ready)Status=Slot>=0?ConnectionStatus.Playing:ConnectionStatus.Waiting;}else if(kind=="bubbles"){
+   foreach(var r in peer.Receive())using(r){string kind=r.ReadString();if(kind=="state"){snapshotSerial=r.ReadInt32();snapshotStarted=utcNow();assembling=true;pendingBubbles=null;receivedBubbles=0;Slot=r.ReadInt32();Snapshot=RoomWire.Read<SessionState>(r);var previousBubbles=Visuals?.Bubbles??Array.Empty<NetworkBubble>();Visuals=RoomWire.Read<NetworkVisualState>(r);Visuals.Bubbles=previousBubbles;if(Visuals.Motion!=null&&Visuals.Motion.Bodies.Length>0){motionFrames.Enqueue(Visuals.Motion);if(motionFrames.Count>32)motionFrames.Dequeue();}if(ready)Status=Slot>=0?ConnectionStatus.Playing:ConnectionStatus.Waiting;}else if(kind=="bubbles"){
      int serial=r.ReadInt32(),offset=r.ReadInt32(),total=r.ReadInt32();var chunk=RoomWire.Read<NetworkBubble[]>(r);
      if(serial!=snapshotSerial)continue;
      if((utcNow()-snapshotStarted).TotalSeconds>2){pendingBubbles=null;VisualsDelayed=true;continue;}
@@ -168,7 +173,7 @@ namespace AvH {
   }catch(Exception e)when(e is IOException||e is SocketException||e is ObjectDisposedException||e is ArgumentException){Interrupt();}}
   public void Ready(){if(peer==null)return;try{ready=true;peer.Send("ready");Status=ConnectionStatus.Waiting;}catch{Interrupt();}}
   public void SubmitInput(NetworkInput input){if(Status==ConnectionStatus.Playing)try{peer.Send("input",input);}catch{Interrupt();}}
-  public void Cancel(){pending?.Close();pending=null;peer?.Dispose();peer=null;connect=null;ready=false;assembling=false;VisualsDelayed=false;Snapshot=null;Visuals=null;pendingBubbles=null;receivedBubbles=0;Slot=-1;Status=ConnectionStatus.Idle;Error=null;}
+  public void Cancel(){pending?.Close();pending=null;peer?.Dispose();peer=null;connect=null;ready=false;assembling=false;VisualsDelayed=false;Snapshot=null;Visuals=null;pendingBubbles=null;receivedBubbles=0;motionFrames.Clear();Slot=-1;Status=ConnectionStatus.Idle;Error=null;}
   void Fail(string error){Cancel();Error=error;Status=ConnectionStatus.Failed;}
   void Interrupt(){Cancel();Status=ConnectionStatus.Interrupted;Error="호스트 연결이 종료되어 승패 없이 매치를 중단했습니다";}
   public void Dispose(){Cancel();}

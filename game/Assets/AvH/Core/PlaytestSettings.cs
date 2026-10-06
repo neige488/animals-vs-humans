@@ -18,6 +18,10 @@ namespace AvH {
   public float HitStopSeconds=.06f;
   // Weakened control of an animal hit by a bubble; 0 = no stun.
   public float HitStunSeconds=.2f;
+  // Bot aim: seconds a bot's aim lags what it sees (and before it starts firing at a newly acquired target),
+  // and the largest wandering aim error in degrees. Both 0 = the original instant, exact aim.
+  public float BotAimDelaySeconds=.2f;
+  public float BotAimErrorDegrees=3f;
   public float ReloadSeconds=1.5f, BubbleRadius=.35f, BubbleSpeed=18, BubbleRange=25, BubbleLifetime=2, FireInterval=.3f, PushForce=8;
   public float FoxSpeedMultiplier=1.1f, FoxJumpMultiplier=1.1f, FoxKnockbackMultiplier=1.15f;
   public float WolfSpeedMultiplier=1.15f, WolfJumpMultiplier=1.0f, WolfKnockbackMultiplier=1.0f;
@@ -109,6 +113,8 @@ namespace AvH {
      case "AirControl":min=.05;max=1;break;
      case "AttackWindupSeconds":case "HitStunSeconds":min=0;max=1;break;
      case "HitStopSeconds":min=0;max=.3;break;
+     case "BotAimDelaySeconds":min=0;max=1;break;
+     case "BotAimErrorDegrees":min=0;max=15;break;
      case "HumanJump":case "AnimalJump":max=5;break;
      case "BubbleRadius":max=2;break;
      case "ReloadSeconds":case "FireInterval":max=30;break;

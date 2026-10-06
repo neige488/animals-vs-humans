@@ -47,8 +47,10 @@ namespace AvH {
    if(input.RoundId==0)input.RoundId=Session.Observe().Round;
    inputs[slot]=input;
   }
-  void Update() { if(remoteSnapshot!=null){InterpolateRemote();return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
+  void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
+  /// <summary>Advances the host simulation, or on a remote view advances frame playback by the same time.</summary>
   public void Step(float seconds) {
+   if(remoteSnapshot!=null){InterpolateRemote(seconds);return;}
    if(seconds<=0 || float.IsNaN(seconds) || float.IsInfinity(seconds)) return;
    var before=Session.Observe();
    Session.Advance(seconds);
@@ -133,7 +135,12 @@ namespace AvH {
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
   /// <summary>Locomotion animation currently shown for a slot (presentation only).</summary>
   public CharacterAnimationView ObserveAnimation(int slot)=>bodies[slot].GetComponent<CharacterAnimator>().Observe();
-  void Animate(int slot,LocomotionState state,float seconds)=>bodies[slot].GetComponent<CharacterAnimator>().Apply(state,seconds);
+  readonly LocomotionState[] presented=new LocomotionState[12];
+  void Animate(int slot,LocomotionState state,float seconds){presented[slot]=state;bodies[slot].GetComponent<CharacterAnimator>().Apply(state,seconds);}
+  /// <summary>Host presentation frame for remote viewers: each body's position, facing, aim pitch and the motion it was animated with.</summary>
+  public NetworkMotionFrame CaptureMotion()=>new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
+   var p=bodies[i].transform.position;float pitch=guns[i]!=null?guns[i].GetComponent<BubbleGunPose>().AimPitch:0;
+   return NetworkBodyMotion.Encode(new WorldPosition(p.x,p.y,p.z),PresentationYaw(i),pitch,presented[i]);}).ToArray()};
   internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);

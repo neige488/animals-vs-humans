@@ -12,7 +12,7 @@ namespace AvH.Tests {
     var shot=new NetworkVisualState();var direction=Quaternion.Euler(-15,100,0)*Vector3.forward;
     shot.Bubbles=new[]{new NetworkBubble{Id=99,OwnerSlot=0,Direction=new WorldPosition(direction.x,direction.y,direction.z),Position=new WorldPosition(0,1,0)}};remote.ApplyRemoteVisuals(shot);
     yield return null;
-    var turn=new NetworkVisualState();turn.Yaws[0]=270;remote.ApplyRemoteVisuals(turn);
+    var turn=RemoteFrames.Facing(source.Observe(),.05,0,270);remote.ApplyRemoteVisuals(turn);
     for(int f=0;f<40;f++)yield return null;
     Assert.Less(Mathf.Abs(Mathf.DeltaAngle(270,remote.PlayerTransform(0).Find("Bubble emitter").eulerAngles.y)),5,"A prior shot must not offset subsequent remote facing");
    } finally {Object.Destroy(root);}

@@ -26,19 +26,22 @@ namespace AvH.Tests {
    Assert.IsTrue(Swing(s,animals[0],bystanderHuman));
    float max=0;for(int i=0;i<10;i++){yield return null;max=Mathf.Max(max,presentation.CameraShakeAngle);}
    Assert.AreEqual(0,max,1e-4,"Someone else's hit never shakes this screen");
+   // Lower bounds read the shake amplitude (envelope). The applied angle samples a noise wobble whose phase follows
+   // real frame time, so a very fast batch-mode frame run can sit in a noise trough for a whole short window.
    Assert.IsTrue(Swing(s,animals[1],0));
-   for(int i=0;i<10;i++){yield return null;max=Mathf.Max(max,presentation.CameraShakeAngle);}
-   Assert.Greater(max,.3f,"Being hit shakes the victim's own camera");
+   float amplitude=0;for(int i=0;i<10;i++){yield return null;max=Mathf.Max(max,presentation.CameraShakeAngle);amplitude=Mathf.Max(amplitude,presentation.Feel.ShakeDegrees);}
+   Assert.Greater(amplitude,.3f,"Being hit shakes the victim's own camera");Assert.Greater(max,0,"and the camera actually turns");
    yield return new WaitForSecondsRealtime(1.5f);yield return null;Assert.Less(presentation.CameraShakeAngle,.05f,"Shake settles quickly");
-   max=0;for(int i=0;i<40;i++){s.RecordLanding(0,40);yield return null;max=Mathf.Max(max,presentation.CameraShakeAngle);}
-   Assert.LessOrEqual(max,FeelDirector.MaxShakeDegrees+1e-3f,"Overlapping events never exceed the maximum");Assert.Greater(max,FeelDirector.MaxShakeDegrees*.5f);
+   max=0;amplitude=0;for(int i=0;i<40;i++){s.RecordLanding(0,40);yield return null;max=Mathf.Max(max,presentation.CameraShakeAngle);amplitude=Mathf.Max(amplitude,presentation.Feel.ShakeDegrees);}
+   Assert.LessOrEqual(max,FeelDirector.MaxShakeDegrees+1e-3f,"Overlapping events never exceed the maximum");Assert.LessOrEqual(amplitude,FeelDirector.MaxShakeDegrees+1e-3f);
+   Assert.Greater(amplitude,FeelDirector.MaxShakeDegrees*.5f,"Overlapping events build up to a strong shake");
    yield return new WaitForSecondsRealtime(1.5f);
    var me=s.Observe().Players[0].Position;var far=s.Observe().Players.First(p=>p.Slot!=0&&Vector3.Distance(new Vector3(p.Position.X,p.Position.Y,p.Position.Z),new Vector3(me.X,me.Y,me.Z))>6).Slot;
    max=0;s.RecordLanding(far,40);for(int i=0;i<10;i++){yield return null;max=Mathf.Max(max,presentation.CameraShakeAngle);}
    Assert.AreEqual(0,max,1e-4,"A distant landing is not this viewer's event");
    int near=s.Observe().Players.First(p=>p.Slot!=0).Slot;s.RecordWorldPosition(near,new WorldPosition(me.X+1.5f,me.Y,me.Z));
-   max=0;s.RecordLanding(near,40);for(int i=0;i<10;i++){yield return null;max=Mathf.Max(max,presentation.CameraShakeAngle);}
-   Assert.Greater(max,.05f,"A heavy landing right beside the viewer is felt lightly");
+   amplitude=0;s.RecordLanding(near,40);for(int i=0;i<10;i++){yield return null;amplitude=Mathf.Max(amplitude,presentation.Feel.ShakeDegrees);}
+   Assert.Greater(amplitude,.05f,"A heavy landing right beside the viewer is felt lightly");
    yield return new WaitForSecondsRealtime(1.5f);
    Assert.IsTrue(settings.SetScreenShake(false));
    max=0;for(int i=0;i<20;i++){s.RecordLanding(0,40);yield return null;max=Mathf.Max(max,presentation.CameraShakeAngle);}
