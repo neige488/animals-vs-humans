@@ -113,5 +113,17 @@ namespace AvH.Tests {
    Assert.AreEqual(3,landings[0].Actor);Assert.That(landings[0].Strength,Is.InRange(.1f,.9f));Assert.AreEqual(1,landings[1].Strength,"Strength is capped");
    Assert.Less(landings[0].Id,landings[1].Id);
   }
+
+  [Test] public void ACharacterInHitStopCannotStartOrLandAnAttackUntilTheFreezeEnds() {
+   // Review F-1: the newly transformed victim is frozen too; it must not chain a hit during the freeze.
+   var s=Chase(v=>{Instant(v);v.HitStopSeconds=.3f;});var state=s.Observe();int round=state.Round;
+   int a=state.Players.First(p=>p.Faction==Faction.Animal).Slot;var humans=state.Players.Where(p=>p.Faction==Faction.Human).Select(p=>p.Slot).ToArray();int b=humans[0],c=humans[1];
+   s.RecordWorldPosition(b,state.Players[a].Position);s.RecordWorldPosition(c,state.Players[a].Position);
+   Assert.IsTrue(Swing(s,a,b,round));Assert.IsTrue(CharacterMotion.Frozen(s.Observe().Players[b]));
+   Assert.IsFalse(s.TryStartAttack(b,round),"No new swing while frozen");Assert.IsFalse(s.AttackDue(b));
+   Assert.IsFalse(s.TryMeleeHit(b,c,round),"No hit while frozen");Assert.AreEqual(Faction.Human,s.Observe().Players[c].Faction);
+   s.Advance(.15);Assert.IsFalse(s.TryStartAttack(b,round),"Still frozen");
+   s.Advance(.16);Assert.IsTrue(Swing(s,b,c,round),"The freeze over, the new animal plays on");
+  }
  }
 }

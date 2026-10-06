@@ -91,5 +91,16 @@ namespace AvH.Tests {
    yield return new WaitForSeconds(.6f);world.ApplyRemoteSnapshot(source.Observe());
    Assert.AreEqual(1,world.ObserveAnimation(human).TransformPlays);Assert.AreEqual(1,world.ObserveAnimation(human).TransformProgress,1e-4);
   }
+
+  [UnityTest] public IEnumerator AFrozenNewAnimalCannotChainAHitThroughRealPhysics() {
+   // Review F-1 through the real adapter: attack input during the victim's hit-stop is ignored.
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.AttackWindupSeconds=0;v.HitStopSeconds=.3f;});
+   Warp(8,new Vector3(100,0,2.4f));Physics.SyncTransforms();Step(1);
+   Step(1,(0,new PlayerInput{Attack=true,Yaw=0}));Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction);
+   Step(5,(0,new PlayerInput{Yaw=0}),(4,new PlayerInput{Attack=true,Yaw=0}));
+   Assert.AreEqual(Faction.Human,world.Observe().Players[8].Faction,"A frozen animal cannot hit");
+   Step(12,(0,new PlayerInput{Yaw=0}),(4,new PlayerInput{Yaw=0}));Assert.IsFalse(world.ObserveAnimation(4).Frozen);
+   Step(1,(4,new PlayerInput{Attack=true,Yaw=0}));Assert.AreEqual(Faction.Animal,world.Observe().Players[8].Faction,"After the freeze it can");
+  }
  }
 }
