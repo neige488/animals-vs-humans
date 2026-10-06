@@ -96,6 +96,7 @@ namespace AvH {
     inputs[i].Jump=false;
    }
    StepCombatWorld(seconds,state);
+   PresentEvents(Session.Observe());
   }
   internal static float ActionProgress(PlayerState p,PlaytestValues rules) {
    double left,total;
