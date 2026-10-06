@@ -8,7 +8,7 @@ namespace AvH.Tests {
  // The gameplay camera: spring follow, and shake only for viewers involved in a public event.
  public class CameraFeelTests {
   GameObject root;string profile,display;
-  [TearDown] public void Cleanup(){if(root!=null)Object.Destroy(root);foreach(var f in new[]{profile,display})if(f!=null&&File.Exists(f))File.Delete(f);}
+  [TearDown] public void Cleanup(){DisplayQuality.Apply(GraphicsQuality.High);if(root!=null)Object.Destroy(root);foreach(var f in new[]{profile,display})if(f!=null&&File.Exists(f))File.Delete(f);}
   static void Instant(PlaytestSession s,System.Action<PlaytestValues> extra=null){s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.AttackWindupSeconds=0;v.HitStopSeconds=0;v.InitialAttackGrace=0;v.TransformAttackGrace=0;v.PreparationSeconds=1;extra?.Invoke(v);s.UpdateSettingsEdit(0,v);Assert.IsTrue(s.ApplySettingsNow(0));}
   static bool Swing(PlaytestSession s,int attacker,int victim){var state=s.Observe();s.RecordWorldPosition(victim,state.Players[attacker].Position);return s.TryStartAttack(attacker,state.Round)&&s.TryMeleeHit(attacker,victim,state.Round);}
   void Presentation(out GamePresentation presentation,out UnityPlaytestSession game,out LocalDisplaySettings settings) {
@@ -80,6 +80,24 @@ namespace AvH.Tests {
     Assert.Greater(clientMax,.3f,"The client's own hit reaches its camera through the public snapshot");
     Assert.AreEqual(0,hostMax,1e-4,"The uninvolved host does not shake");
    } finally {Object.Destroy(h);Object.Destroy(c);}
+  }
+
+  [UnityTest] public IEnumerator GraphicsQualityScalesShadowsEffectsAndShakeImmediately() {
+   Presentation(out var presentation,out var game,out var settings);yield return null;
+   Assert.AreEqual(GraphicsQuality.High,settings.Quality,"First run is high quality");
+   int Burst(){game.Effects.AutomaticUpdate=false;game.Effects.Advance(5);game.Effects.Emit(Vector3.zero,Color.white,20,1);return game.Effects.ActiveCount;}
+   var high=(shadows:QualitySettings.shadows,distance:QualitySettings.shadowDistance,effects:Burst(),shake:presentation.Feel.Scale);
+   Assert.AreEqual(ShadowQuality.All,high.shadows);
+   Assert.IsTrue(settings.SetQuality(GraphicsQuality.Medium));yield return null;
+   var medium=(shadows:QualitySettings.shadows,distance:QualitySettings.shadowDistance,effects:Burst(),shake:presentation.Feel.Scale);
+   Assert.IsTrue(settings.SetQuality(GraphicsQuality.Low));yield return null;
+   var low=(shadows:QualitySettings.shadows,distance:QualitySettings.shadowDistance,effects:Burst(),shake:presentation.Feel.Scale);
+   Assert.AreEqual(ShadowQuality.Disable,low.shadows,"Low turns shadows off");Assert.AreNotEqual(ShadowQuality.Disable,medium.shadows);
+   Assert.Less(medium.distance,high.distance);
+   Assert.Less(medium.effects,high.effects);Assert.Less(low.effects,medium.effects);Assert.Greater(low.effects,0,"Effects still show on low");
+   Assert.Less(medium.shake,high.shake);Assert.Less(low.shake,medium.shake);Assert.Greater(low.shake,0);
+   Assert.AreEqual(GraphicsQuality.Low,new LocalDisplaySettings(display).Quality,"Saved for the next run");
+   Assert.IsTrue(settings.SetQuality(GraphicsQuality.High));yield return null;Assert.AreEqual(high.effects,Burst());Assert.AreEqual(ShadowQuality.All,QualitySettings.shadows);
   }
  }
 }
