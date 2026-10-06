@@ -46,6 +46,17 @@ namespace AvH {
     if(animal&&state.Phase==RoundPhase.Chase&&striding){growlIn[i]-=seconds;if(growlIn[i]<=0){Audio.Play(species.Growl,feet+Vector3.up*.9f,1,species.GrowlPitch);growlIn[i]=7+(float)growlRandom.NextDouble()*7;}}
    }
   }
-  void ForgetAudio(){audioDirector=null;audioPrimed=false;System.Array.Clear(heardReloading,0,heardReloading.Length);System.Array.Clear(heardAirborne,0,12);System.Array.Clear(wasAnimal,0,12);System.Array.Clear(heardFootfalls,0,12);System.Array.Clear(growlIn,0,12);}
+  readonly bool[] triggerHeld=new bool[12];
+  /// <summary>
+  /// The local viewer's trigger (held state, every frame). Pulling it on an empty magazine clicks once per pull.
+  /// Local feedback only: it reads the public ammo count and never changes rules.
+  /// </summary>
+  public void PresentTrigger(int slot,bool held) {
+   if(slot<0||slot>=triggerHeld.Length||slot>=bodies.Count)return;
+   bool pulled=held&&!triggerHeld[slot];triggerHeld[slot]=held;if(!pulled)return;
+   var state=Observe();if(state.Phase==RoundPhase.Results||slot>=state.Players.Length)return;var p=state.Players[slot];
+   if(p.Faction==Faction.Human&&p.Ammo<=0)Audio.Play("dry-fire",bodies[slot].transform.position+Vector3.up*1.3f);
+  }
+  void ForgetAudio(){System.Array.Clear(triggerHeld,0,12);audioDirector=null;audioPrimed=false;System.Array.Clear(heardReloading,0,heardReloading.Length);System.Array.Clear(heardAirborne,0,12);System.Array.Clear(wasAnimal,0,12);System.Array.Clear(heardFootfalls,0,12);System.Array.Clear(growlIn,0,12);}
  }
 }
