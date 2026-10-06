@@ -42,8 +42,9 @@ namespace AvH.Tests {
    Assert.IsTrue(s.TryMeleeHit(attacker,victim,round));
    var hit=Events(s,FeelEventKind.AttackHit).Single();Assert.AreEqual(attacker,hit.Actor);Assert.AreEqual(victim,hit.Target);
    Assert.AreEqual(.15,hit.HostTime-tell.HostTime,.002,"The hit lands one windup after the tell");
-   Assert.AreEqual(ActionPhase.Swing,s.Observe().Players[attacker].Action);
+   Assert.AreEqual(ActionPhase.HitStop,s.Observe().Players[attacker].Action,"A landed swing first holds for the hit-stop");
    Assert.IsFalse(s.AttackDue(attacker),"A judged swing is consumed");
+   s.Advance(.07);Assert.AreEqual(ActionPhase.Swing,s.Observe().Players[attacker].Action,"...then finishes its follow-through");
   }
 
   [Test] public void MissPublishesSwingAndRecoversBeforeTheNextTell() {

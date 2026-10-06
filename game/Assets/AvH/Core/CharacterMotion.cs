@@ -8,6 +8,23 @@ namespace AvH {
  public struct MotionProfile { public float MaxSpeed, AccelerationSeconds, DecelerationSeconds, AirControl; }
  /// <summary>Host-side movement rule. Unity-free and deterministic for the same inputs.</summary>
  public static class CharacterMotion {
+  /// <summary>Share of steering an animal keeps while stunned by a bubble.</summary>
+  public const float StunnedControl=.35f;
+  /// <summary>Knockback decay (m/s per second). Ground keeps the original value; the air slides further.</summary>
+  public const float GroundKnockbackFriction=20, AirKnockbackFriction=6;
+  /// <summary>Hit-stop: this character holds still (no steering, gravity or knockback) until it ends.</summary>
+  public static bool Frozen(PlayerState player)=>player.HitStopRemaining>0;
+  /// <summary>Requested direction after impact rules: a stunned animal steers weakly but never loses control.</summary>
+  public static MotionIntent Restrain(MotionIntent intent,PlayerState player) {
+   if(player.StunRemaining>0){intent.DirectionX*=StunnedControl;intent.DirectionZ*=StunnedControl;}
+   return intent;
+  }
+  /// <summary>Decays a knockback velocity toward zero without reversing it.</summary>
+  public static void DecayKnockback(ref float x,ref float y,ref float z,bool grounded,double seconds) {
+   float length=(float)Math.Sqrt(x*x+y*y+z*z);if(length<1e-6f){x=y=z=0;return;}
+   float next=Math.Max(0,length-(grounded?GroundKnockbackFriction:AirKnockbackFriction)*(float)Math.Max(0,seconds));
+   float scale=next/length;x*=scale;y*=scale;z*=scale;
+  }
   public static MotionProfile Profile(PlaytestValues rules,PlayerState player) {
    var modifiers=AnimalBalance.For(rules,player);float start,stop;Weight(player,out start,out stop);
    return new MotionProfile{MaxSpeed=player.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed*modifiers.Speed,

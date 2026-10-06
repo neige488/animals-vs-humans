@@ -33,6 +33,7 @@ namespace AvH {
     p.FireCooldownRemaining=Math.Max(0,p.FireCooldownRemaining-elapsed);
     p.AttackGraceRemaining=Math.Max(0,p.AttackGraceRemaining-elapsed);
     p.SwingRemaining=Math.Max(0,p.SwingRemaining-elapsed);
+    p.HitStopRemaining=Math.Max(0,p.HitStopRemaining-elapsed);p.StunRemaining=Math.Max(0,p.StunRemaining-elapsed);
     if(p.AttackWindupRemaining>0){p.AttackWindupRemaining=Math.Max(0,p.AttackWindupRemaining-elapsed);if(p.AttackWindupRemaining==0)dueAttacks.Add(p.Slot);}
     if(p.ReloadRemaining>0){p.ReloadRemaining=Math.Max(0,p.ReloadRemaining-elapsed);if(p.ReloadRemaining==0)p.Ammo=settings.Current.Magazine;}
    }
@@ -53,6 +54,16 @@ namespace AvH {
    foreach(var player in changed){var notice=grouped.FirstOrDefault(b=>b.Kind==player.CharacterName&&b.Rarity==player.CharacterRarity);if(notice==null){notice=new BirthNotice{Kind=player.CharacterName,Rarity=player.CharacterRarity};grouped.Add(notice);}notice.Count++;}
    births=grouped.ToArray();
    birthSecondsRemaining=4;birthBatchAge=0;
+  }
+  /// <summary>
+  /// Called only by the authoritative physics adapter when a bubble actually reaches an animal.
+  /// The animal staggers (public event) and, with a configured stun, steers weakly for a moment.
+  /// </summary>
+  public bool RecordBubbleHit(int victimSlot,int ownerSlot) {
+   if(victimSlot<0||victimSlot>=players.Length||phase!=RoundPhase.Chase)return false;var p=players[victimSlot];
+   if(p.Faction!=Faction.Animal)return false;
+   p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
+   Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
   /// <summary>
   /// An animal starts a swing. With a configured tell the swing is judged one windup later
@@ -85,6 +96,8 @@ namespace AvH {
    if(x*x+y*y+z*z>CombatRules.MeleeDistance*CombatRules.MeleeDistance)return false;
    dueAttacks.Remove(attackerSlot);
    attacker.FireCooldownRemaining=.5;attacker.SwingRemaining=CombatRules.SwingSeconds;
+   // Hit-stop freezes only the two characters in the hit; everyone else and the match clock keep running.
+   attacker.HitStopRemaining=victim.HitStopRemaining=settings.Current.HitStopSeconds;
    victim.Faction=Faction.Animal;victim.AttackGraceRemaining=settings.Current.TransformAttackGrace;
    AssignCharacter(victim,animalRoster[nextAnimal++%animalRoster.Length]);
    victim.ReloadRemaining=0;victim.FireCooldownRemaining=0;PublishBirth(new[]{victim});
