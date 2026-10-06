@@ -34,11 +34,11 @@ namespace AvH.Tests {
    }
   }
   [Test] public void RosterIdentitySurvivesTransformationDisconnectAndReconnect() {
-   var world=new PlaytestSession(2);world.StartSolo("host",humans:RosterTests.Definitions("human"),animals:RosterTests.Definitions("animal"));world.Advance(22);
+   var world=new PlaytestSession(2);world.StartSolo("host",humans:RosterTests.Definitions("human"),animals:RosterTests.Definitions("animal"));FeelTests.Instant(world);world.Advance(22);
    using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     int slot=client.Slot;Assert.AreEqual(Faction.Human,client.Snapshot.Players[slot].Faction);
-    var attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal);world.RecordWorldPosition(slot,attacker.Position);Assert.IsTrue(world.TryMeleeHit(attacker.Slot,slot,world.Observe().Round));
+    var attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal);world.RecordWorldPosition(slot,attacker.Position);Assert.IsTrue(FeelTests.Swing(world,attacker.Slot,slot,world.Observe().Round));
     var changed=world.Observe().Players[slot];Until(host,client,()=>client.Snapshot.Players[slot].Faction==Faction.Animal);
     Assert.AreEqual(changed.CharacterId,client.Snapshot.Players[slot].CharacterId);Assert.AreEqual(changed.CharacterName,client.Snapshot.Players[slot].CharacterName);
     client.Cancel();for(int i=0;i<20;i++){host.Pump();Thread.Sleep(2);}
@@ -111,7 +111,7 @@ namespace AvH.Tests {
   }
   [Test] public void SpeciesTuningIsSentLiveAndPreviousProtocolIsRejected() {
    var world=new PlaytestSession(2);world.StartSolo("host");
-   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient())using(var old=new PrivateRoomClient(protocolVersion:"avh-private-6")) {
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient())using(var old=new PrivateRoomClient(protocolVersion:"avh-private-7")) {
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.RabbitSpeedMultiplier=2.2f;rules.BearKnockbackMultiplier=.2f;
     world.UpdateSettingsEdit(0,rules);Assert.IsTrue(world.ApplySettingsNow(0));
@@ -124,11 +124,11 @@ namespace AvH.Tests {
   }
   [Test] public void AnimalBotFallbackKeepsFactionPositionAndAttackGrace() {
    int seed=Enumerable.Range(0,100).First(n=>{var w=new PlaytestSession(n);w.StartSolo("host");w.Advance(20);return w.Observe().Players[0].Faction==Faction.Human;});
-   var world=new PlaytestSession(seed);world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.TransformAttackGrace=30;world.UpdateSettingsEdit(0,rules);world.ApplySettings(0);world.StartSolo("host");
+   var world=new PlaytestSession(seed);world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.TransformAttackGrace=30;FeelTests.Instant(rules);world.UpdateSettingsEdit(0,rules);world.ApplySettings(0);world.StartSolo("host");
    using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);
     world.Advance(22);int attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal).Slot;
-    foreach(var victim in world.Observe().Players.Where(p=>p.IsBot&&p.Faction==Faction.Human)){world.RecordWorldPosition(victim.Slot,world.Observe().Players[attacker].Position);Assert.That(world.TryMeleeHit(attacker,victim.Slot,1),Is.True);world.Advance(.6);}
+    foreach(var victim in world.Observe().Players.Where(p=>p.IsBot&&p.Faction==Faction.Human)){world.RecordWorldPosition(victim.Slot,world.Observe().Players[attacker].Position);Assert.That(FeelTests.Swing(world,attacker,victim.Slot,1),Is.True);world.Advance(.6);}
     var before=world.Observe();client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     Assert.That(client.Snapshot.Players[client.Slot].Faction,Is.EqualTo(Faction.Animal));
     Assert.That(client.Snapshot.Players[client.Slot].AttackGraceRemaining,Is.EqualTo(before.Players[client.Slot].AttackGraceRemaining));
@@ -152,10 +152,25 @@ namespace AvH.Tests {
     Assert.That(client.Status,Is.EqualTo(ConnectionStatus.Playing));Assert.That(client.Visuals.Bubbles[1499].Id,Is.EqualTo(1499));
    }
   }
+  [Test] public void ImpactEventsAndActionPhasesReachTheClientWithTheirParticipants() {
+   var world=new PlaytestSession(2);world.StartSolo("host");FeelTests.Instant(world);
+   world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.InitialAttackGrace=0;rules.HitStopSeconds=.3f;world.UpdateSettingsEdit(0,rules);Assert.IsTrue(world.ApplySettingsNow(0));
+   world.Advance(20.01);
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    int slot=client.Slot;var attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal);
+    if(world.Observe().Players[slot].Faction!=Faction.Human)Assert.Inconclusive("Client took an animal slot");
+    world.RecordWorldPosition(slot,attacker.Position);Assert.IsTrue(FeelTests.Swing(world,attacker.Slot,slot,world.Observe().Round));
+    Until(host,client,()=>client.Snapshot.Events.Any(e=>e.Kind==FeelEventKind.AttackHit));
+    var hit=client.Snapshot.Events.Single(e=>e.Kind==FeelEventKind.AttackHit);Assert.AreEqual(attacker.Slot,hit.Actor);Assert.AreEqual(slot,hit.Target);
+    Assert.AreEqual(world.Observe().Events.Single(e=>e.Kind==FeelEventKind.AttackHit).Id,hit.Id,"Viewers dedupe by host id");
+    Assert.AreEqual(ActionPhase.HitStop,client.Snapshot.Players[slot].Action,"The action phase travels with the public state");
+   }
+  }
   [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
-   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-7"));
-   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("8PodTf9xen26g3Noe0u4I65p9Q4Ym3w8NGUekOhcydc="),"Schema changes require explicit protocol version and guard update");
-   foreach(var t in new[]{typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice)}) {
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-8"));
+   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("D0Gj7BkkgntgBieG046vbu1zoSHycg25RW+RN/58KaI="),"Schema changes require explicit protocol version and guard update");
+   foreach(var t in new[]{typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent)}) {
     Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
     Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);
    }

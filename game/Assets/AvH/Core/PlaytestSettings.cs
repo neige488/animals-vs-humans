@@ -12,6 +12,12 @@ namespace AvH {
   public float InertiaSeconds=.12f;
   // Share of ground control kept in the air (1 = same as ground).
   public float AirControl=.45f;
+  // Animal attack tell before the melee is judged; 0 restores click-frame judgement.
+  public float AttackWindupSeconds=.15f;
+  // Freeze of only the attacker and victim on a melee hit; 0 = no freeze.
+  public float HitStopSeconds=.06f;
+  // Weakened control of an animal hit by a bubble; 0 = no stun.
+  public float HitStunSeconds=.2f;
   public float ReloadSeconds=1.5f, BubbleRadius=.35f, BubbleSpeed=18, BubbleRange=25, BubbleLifetime=2, FireInterval=.3f, PushForce=8;
   public float FoxSpeedMultiplier=1.1f, FoxJumpMultiplier=1.1f, FoxKnockbackMultiplier=1.15f;
   public float WolfSpeedMultiplier=1.15f, WolfJumpMultiplier=1.0f, WolfKnockbackMultiplier=1.0f;
@@ -101,6 +107,8 @@ namespace AvH {
      case "HumanSpeed":case "AnimalSpeed":max=20;break;
      case "InertiaSeconds":min=0;max=1;break;
      case "AirControl":min=.05;max=1;break;
+     case "AttackWindupSeconds":case "HitStunSeconds":min=0;max=1;break;
+     case "HitStopSeconds":min=0;max=.3;break;
      case "HumanJump":case "AnimalJump":max=5;break;
      case "BubbleRadius":max=2;break;
      case "ReloadSeconds":case "FireInterval":max=30;break;

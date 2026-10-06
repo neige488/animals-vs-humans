@@ -10,6 +10,8 @@ namespace AvH {
   readonly Stack<Particle> pool=new Stack<Particle>();
   Material material,film;Mesh ringMesh;MaterialPropertyBlock properties;
   public int ActiveCount=>active.Count;
+  /// <summary>Local graphics quality share of particles per burst (1 = all). Rings and at least one particle always show.</summary>
+  public static float Density=1;
   public bool AutomaticUpdate=true;
   AudioSource audioSource;AudioClip popSound,airSound;float nextSound;
   Material gunBody,gunTrim;
@@ -52,6 +54,7 @@ namespace AvH {
   }
   public void Emit(Vector3 p,Color color,int count,float power=.8f,bool ring=true) {
    Initialize();if(ring)Spawn(p+Vector3.up*.08f,Vector3.zero,color,.55f,.3f,0,true);
+   count=count<=0?0:Mathf.Max(1,Mathf.RoundToInt(count*Mathf.Clamp01(Density)));
    for(int i=0;i<count;i++) {
     float angle=(i*2.39996f+Time.time)*1.7f;var direction=new Vector3(Mathf.Cos(angle),.3f+(i%4)*.25f,Mathf.Sin(angle));
     Spawn(p,direction*power,color,.3f+(i%4)*.09f,.045f+(i%3)*.022f,1.6f,false);

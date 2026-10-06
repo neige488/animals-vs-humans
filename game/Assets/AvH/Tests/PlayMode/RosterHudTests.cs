@@ -46,14 +46,14 @@ namespace AvH.Tests {
    yield return null;
   }
   [UnityTest] public IEnumerator RapidConfirmedTransformationsRetargetAndReachZeroHumans() {
-   string profile=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid()+".xml");var source=new PlaytestSession(42,profile);source.BeginSettingsEdit(0);var rules=source.ObserveSettings().Edit;rules.PreparationSeconds=1;rules.InitialAnimals=3;rules.InitialAttackGrace=0;source.UpdateSettingsEdit(0,rules);Assert.IsTrue(source.ApplySettings(0));
+   string profile=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid()+".xml");var source=new PlaytestSession(42,profile);source.BeginSettingsEdit(0);var rules=source.ObserveSettings().Edit;rules.PreparationSeconds=1;rules.InitialAnimals=3;rules.InitialAttackGrace=0;rules.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,rules);Assert.IsTrue(source.ApplySettings(0));
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");source.StartSolo("HUD",humans:catalog.Humans.Select(c=>c.Definition()).ToArray(),animals:catalog.Animals.Select(c=>c.Definition()).ToArray());
    var root=new GameObject("rapid births HUD");var hud=root.AddComponent<RosterHud>();var camera=new GameObject("HUD fixture camera").AddComponent<Camera>();hud.Initialize(camera);
    try {
     hud.Present(source.Observe(),0);source.Advance(1.01);hud.Present(source.Observe(),0);yield return null;
     var state=source.Observe();int attacker=state.Players.First(p=>p.Faction==Faction.Animal).Slot;
     foreach(var victim in state.Players.Where(p=>p.Faction==Faction.Human)) {
-     source.RecordWorldPosition(attacker,new WorldPosition(0,1,0));source.RecordWorldPosition(victim.Slot,new WorldPosition(0,1,0));Assert.IsTrue(source.TryMeleeHit(attacker,victim.Slot,state.Round));hud.Present(source.Observe(),0);yield return null;source.Advance(.6);
+     source.RecordWorldPosition(attacker,new WorldPosition(0,1,0));source.RecordWorldPosition(victim.Slot,new WorldPosition(0,1,0));Assert.IsTrue(source.TryStartAttack(attacker,state.Round)&&source.TryMeleeHit(attacker,victim.Slot,state.Round));hud.Present(source.Observe(),0);yield return null;source.Advance(.6);
     }
     yield return new WaitForSecondsRealtime(.35f);hud.Present(source.Observe(),0);Canvas.ForceUpdateCanvases();
     var texts=hud.GetComponentsInChildren<Text>();Assert.AreEqual("0",texts.Single(t=>t.name=="Human count").text);Assert.AreEqual("12",texts.Single(t=>t.name=="Animal count").text);Assert.AreEqual(-276,texts.Single(t=>t.name=="VS").rectTransform.anchoredPosition.x,.1f);

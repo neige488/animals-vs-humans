@@ -54,30 +54,36 @@ namespace AvH {
    Session.Advance(seconds);
    var state=Session.Observe();
    PrepareCombatWorld(state,before.Round);
+   if(state.Phase==RoundPhase.Results&&before.Phase!=RoundPhase.Results)CutTransformations();
    if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; }
-    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
+    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId)ChangeVisual(before,state,i,body.transform.position);
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
      if(guns[i]!=null&&input.RoundId==state.Round)guns[i].GetComponent<BubbleGunPose>().SetAim(input.Yaw,input.Pitch);
+     if(CharacterMotion.Frozen(p)) {
+      // Hit-stop holds only this body: no steering, gravity or knockback until it ends. Momentum resumes after.
+      Animate(i,new LocomotionState{Grounded=body.isGrounded,AimYaw=input.Yaw,Action=p.Action},seconds);
+      var held=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(held.x,held.y,held.z));inputs[i].Jump=false;continue;
+     }
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
      if(body.isGrounded && input.Jump){vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];
      var profile=CharacterMotion.Profile(rules,p);
-     motion[i]=CharacterMotion.Next(motion[i],new MotionIntent{DirectionX=direction.x,DirectionZ=direction.z,Grounded=wasGrounded},profile,seconds);
+     motion[i]=CharacterMotion.Next(motion[i],CharacterMotion.Restrain(new MotionIntent{DirectionX=direction.x,DirectionZ=direction.z,Grounded=wasGrounded},p),profile,seconds);
      var planar=new Vector3(motion[i].VelocityX,0,motion[i].VelocityZ);
      var from=body.transform.position;
      body.Move((planar+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
      // Animate what the body actually did: a wall-blocked body does not run at full cadence.
      var moved=body.transform.position-from;moved.y=0;float actual=moved.magnitude/seconds;
      var shown=planar.sqrMagnitude>actual*actual?planar.normalized*actual:planar;
-     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed},seconds);
-     if(!wasGrounded&&body.isGrounded&&fallingSpeed< -4)Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);
+     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed,Action=p.Action,ActionProgress=ActionProgress(p,rules)},seconds);
+     if(!wasGrounded&&body.isGrounded&&fallingSpeed< -PlaytestSession.HardLandingSpeed){Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);var landed=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(landed.x,landed.y,landed.z));Session.RecordLanding(i,-fallingSpeed);}
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
      if(body.transform.position.y < -12) {
       var closest=returns[0]; float distance=float.MaxValue;
@@ -87,18 +93,42 @@ namespace AvH {
     } else {motion[i]=default;Animate(i,new LocomotionState{Grounded=true,AimYaw=PresentationYaw(i)},seconds);}
     var pos=body.transform.position;
     Session.RecordWorldPosition(i,new WorldPosition(pos.x,pos.y,pos.z));
-    pushVelocity[i]=Vector3.MoveTowards(pushVelocity[i],Vector3.zero,20*seconds);
+    var push=pushVelocity[i];CharacterMotion.DecayKnockback(ref push.x,ref push.y,ref push.z,body.isGrounded,seconds);pushVelocity[i]=push;
     inputs[i].Jump=false;
    }
    StepCombatWorld(seconds,state);
+   PresentEvents(Session.Observe());
+  }
+  internal static float ActionProgress(PlayerState p,PlaytestValues rules) {
+   double left,total;
+   switch(p.Action) {
+    case ActionPhase.Windup:left=p.AttackWindupRemaining;total=rules.AttackWindupSeconds;break;
+    case ActionPhase.Swing:left=p.SwingRemaining;total=CombatRules.SwingSeconds;break;
+    case ActionPhase.Stunned:left=p.StunRemaining;total=rules.HitStunSeconds;break;
+    default:return 0;
+   }
+   return total<=0?1:Mathf.Clamp01(1-(float)(left/total));
   }
   internal void ResolveKnockbackContact(int slot,Vector3 normal) {
    float inward=Vector3.Dot(pushVelocity[slot],normal);
    if(inward<0)pushVelocity[slot]-=normal*inward;
   }
-  void PresentAnimalBirth(SessionState before,SessionState after,int slot,Vector3 position) {
-   if(before!=null&&before.Round==after.Round&&before.Players[slot].Faction==Faction.Human&&after.Players[slot].Faction==Faction.Animal)
-    Effects.Emit(position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);
+  readonly (int round,string id)[] presentedBirths=new (int,string)[12];
+  // One path for every faction/character change. A same-round human->animal change is a birth and is
+  // presented once per (round, animal): particles plus the short cosmetic pop. Joins and round resets swap silently.
+  void ChangeVisual(SessionState before,SessionState after,int slot,Vector3 position) {
+   var p=after.Players[slot];
+   // The hit that ends the round swaps the model without a new presentation.
+   bool birth=before!=null&&before.Round==after.Round&&after.Phase!=RoundPhase.Results&&before.Players[slot].Faction==Faction.Human&&p.Faction==Faction.Animal&&presentedBirths[slot]!=(after.Round,p.CharacterId);
+   if(birth){presentedBirths[slot]=(after.Round,p.CharacterId);Effects.Emit(position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);}
+   RefreshVisual(slot,p.Faction,birth);
+  }
+  /// <summary>Round end: every transformation pop settles and every shrinking ghost disappears at once.</summary>
+  void CutTransformations() {
+   foreach(var body in bodies) {
+    var animator=body.GetComponent<CharacterAnimator>();if(animator!=null)animator.EndTransform();
+    foreach(var ghost in body.GetComponentsInChildren<TransformGhost>(true)){ghost.gameObject.SetActive(false);Destroy(ghost.gameObject);}
+   }
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
   /// <summary>Locomotion animation currently shown for a slot (presentation only).</summary>
@@ -107,10 +137,11 @@ namespace AvH {
   internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
-  void RefreshVisual(int slot,Faction faction) {
+  void RefreshVisual(int slot,Faction faction,bool transformation=false) {
    var parent=bodies[slot].transform;
    if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Gun(parent):null;
-   var old=parent.Find("Visual"); if(old!=null){old.gameObject.SetActive(false);Destroy(old.gameObject);}
+   var old=parent.Find("Visual");
+   if(old!=null){if(transformation){old.name="Transform ghost";old.gameObject.AddComponent<TransformGhost>();}else{old.gameObject.SetActive(false);Destroy(old.gameObject);}}
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    var prefab=catalog==null?null:catalog.Character(Observe().Players[slot].CharacterId,faction);
    GameObject visual;
@@ -128,7 +159,14 @@ namespace AvH {
    if(gunPose!=null)gunPose.Bind(visual.transform);
    var locomotion=parent.GetComponent<CharacterAnimator>()??parent.gameObject.AddComponent<CharacterAnimator>();
    locomotion.Bind(visual.transform,faction,Observe().Players[slot].CharacterId,gunPose);
+   if(transformation)locomotion.PlayTransform();
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;
   }
+ }
+ /// <summary>The replaced model shrinks away quickly under the transformation burst. Presentation only.</summary>
+ public sealed class TransformGhost : MonoBehaviour {
+  const float Seconds=.15f;float age;Vector3 start;
+  void Awake(){start=transform.localScale;}
+  void Update(){age+=Time.deltaTime;if(age>=Seconds){Destroy(gameObject);return;}transform.localScale=start*(1-age/Seconds);}
  }
 }

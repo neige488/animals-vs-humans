@@ -10,10 +10,10 @@ namespace AvH.Tests {
  public class AnimationPlayTests {
   string profile;GameObject root;UnityPlaytestSession world;
   [TearDown] public void Cleanup(){if(root!=null)Object.Destroy(root);if(profile!=null&&File.Exists(profile))File.Delete(profile);}
-  IEnumerator Create(bool animals) {
+  IEnumerator Create(bool animals,float grace=30) {
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null)Assert.Ignore("Owned assets are required for animation integration");
    profile=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid()+".xml");
-   if(animals){var setup=new PlaytestSession(1,profile);setup.BeginSettingsEdit(0);var v=setup.ObserveSettings().Edit;v.PreparationSeconds=1;v.InitialAnimals=6;v.InitialAttackGrace=30;setup.UpdateSettingsEdit(0,v);setup.ApplySettingsNow(0,true);}
+   if(animals){var setup=new PlaytestSession(1,profile);setup.BeginSettingsEdit(0);var v=setup.ObserveSettings().Edit;v.PreparationSeconds=1;v.InitialAnimals=6;v.InitialAttackGrace=grace;setup.UpdateSettingsEdit(0,v);setup.ApplySettingsNow(0,true);}
    root=new GameObject("animation physics");world=root.AddComponent<UnityPlaytestSession>();world.AutomaticStep=false;world.BotAutomationEnabled=false;world.StartSolo("host",42,profile);
    var floor=GameObject.CreatePrimitive(PrimitiveType.Cube);floor.transform.SetParent(root.transform);floor.transform.position=new Vector3(100,-.5f,0);floor.transform.localScale=new Vector3(120,1,60);
    yield return new WaitForFixedUpdate();if(animals)world.Step(1.01f);
@@ -133,6 +133,24 @@ namespace AvH.Tests {
    Assert.Greater(pitch["animal-boar"],pitch["animal-bear_grizzly"],"Boar leans into its charge more than the bear");
    Assert.Greater(pitch["animal-wolf"],1,"Runners lean into acceleration");
    StringAssert.Contains("Jump",world.ObserveAnimation(animals.First(p=>p.CharacterId=="animal-rabbit_brown").Slot).AirClip,"Rabbit uses its own jump clip");
+  }
+
+  [UnityTest] public IEnumerator AnimalsTellAndSwingWithTheirOwnAttackClipOrACodeLunge() {
+   yield return Create(true,0);Tune(v=>{v.AttackWindupSeconds=.3f;v.HitStopSeconds=0;});
+   var animals=world.Observe().Players.Where(p=>p.Faction==Faction.Animal).ToArray();Assert.AreEqual(6,animals.Select(p=>p.CharacterId).Distinct().Count());
+   foreach(var p in animals) {
+    Drive(p.Slot,new PlayerInput{Attack=true},1);var tell=Drive(p.Slot,new PlayerInput(),5);
+    Assert.AreEqual(ActionPhase.Windup,tell.Action,p.CharacterId);
+    bool clipped=p.CharacterId!="animal-rabbit_brown";
+    if(clipped){Assert.Greater(tell.ActionWeight,.5f,p.CharacterId+" plays its tell");StringAssert.Contains(p.CharacterId=="animal-penguin"?"Shake":"Attack",tell.ActionClip,p.CharacterId);}
+    else Assert.Greater(tell.Squash,.02f,"Rabbit crouches for its tell");
+    float lunge=0,weight=0;bool swung=false;
+    for(int i=0;i<25;i++){var v=Drive(p.Slot,new PlayerInput(),1);if(v.Action==ActionPhase.Swing){swung=true;lunge=Mathf.Max(lunge,v.Lunge);weight=Mathf.Max(weight,v.ActionWeight);}}
+    Assert.IsTrue(swung,p.CharacterId+" swings after the tell (miss)");
+    if(p.CharacterId=="animal-penguin"||p.CharacterId=="animal-rabbit_brown")Assert.Greater(lunge,.2f,p.CharacterId+" lunges in code instead of a missing attack clip");
+    else Assert.Greater(weight,.5f,p.CharacterId+" swings with its attack clip");
+    var settled=Drive(p.Slot,new PlayerInput(),20);Assert.AreEqual(ActionPhase.None,settled.Action);Assert.Less(settled.ActionWeight,.05f);Assert.Less(settled.Lunge,.01f);
+   }
   }
 
   [UnityTest] public IEnumerator RemoteCharactersUseTheSameAnimatorFromInterpolatedMovement() {
