@@ -102,7 +102,8 @@ public class SettingsTests {
    ("HumanSpeed",.01f,20f),("AnimalSpeed",.01f,20f),("HumanJump",.01f,5f),("AnimalJump",.01f,5f),
    ("ReloadSeconds",.01f,30f),("BubbleRadius",.01f,2f),("BubbleSpeed",.01f,100f),
    ("BubbleRange",.01f,100f),("BubbleLifetime",.01f,10f),("FireInterval",.01f,30f),("PushForce",.01f,30f),
-   ("InertiaSeconds",0f,1f),("AirControl",.05f,1f)
+   ("InertiaSeconds",0f,1f),("AirControl",.05f,1f),
+   ("AttackWindupSeconds",0f,1f),("HitStopSeconds",0f,.3f),("HitStunSeconds",0f,1f)
   };
   foreach(var range in ranges) {
    var session=new PlaytestSession(1);session.StartSolo("host");
@@ -209,6 +210,23 @@ public class SettingsTests {
    foreach(var name in new[]{"InertiaSeconds","AirControl"})xml.DocumentElement.RemoveChild(xml.DocumentElement.SelectSingleNode(name));
    xml.Save(file);var old=new PlaytestSession(3,file).ObserveSettings();
    Assert.IsNull(old.Error);Assert.AreEqual(.12f,old.Current.InertiaSeconds);Assert.AreEqual(.45f,old.Current.AirControl);
+  }finally{if(System.IO.File.Exists(file))System.IO.File.Delete(file);}
+ }
+ [Test] public void ImpactTuningIsHostOnlyLiveSavedAndOlderXmlKeepsDefaults() {
+  var file=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml");
+  try {
+   var s=new PlaytestSession(1,file);s.StartSolo("host");var current=s.ObserveSettings().Current;
+   Assert.AreEqual(.15f,current.AttackWindupSeconds);Assert.AreEqual(.06f,current.HitStopSeconds);Assert.AreEqual(.2f,current.HitStunSeconds);
+   s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.AttackWindupSeconds=0;v.HitStopSeconds=0;v.HitStunSeconds=.5f;
+   Assert.IsFalse(s.UpdateSettingsEdit(2,v));Assert.IsFalse(s.ApplySettingsNow(2));
+   Assert.IsTrue(s.UpdateSettingsEdit(0,v));Assert.IsTrue(s.ApplySettingsNow(0));
+   Assert.AreEqual(0,s.ObserveSettings().Current.AttackWindupSeconds);Assert.AreEqual(1,s.Observe().Round,"Live impact tuning does not restart the round");
+   Assert.IsTrue(s.SaveCurrentSettings(0));
+   var restarted=new PlaytestSession(2,file).ObserveSettings().Current;Assert.AreEqual(0,restarted.AttackWindupSeconds);Assert.AreEqual(0,restarted.HitStopSeconds);Assert.AreEqual(.5f,restarted.HitStunSeconds);
+   var xml=new System.Xml.XmlDocument();xml.Load(file);
+   foreach(var name in new[]{"AttackWindupSeconds","HitStopSeconds","HitStunSeconds"})xml.DocumentElement.RemoveChild(xml.DocumentElement.SelectSingleNode(name));
+   xml.Save(file);var old=new PlaytestSession(3,file).ObserveSettings();
+   Assert.IsNull(old.Error);Assert.AreEqual(.15f,old.Current.AttackWindupSeconds);Assert.AreEqual(.06f,old.Current.HitStopSeconds);Assert.AreEqual(.2f,old.Current.HitStunSeconds);
   }finally{if(System.IO.File.Exists(file))System.IO.File.Delete(file);}
  }
  static float AdjacentPositiveFloat(float value,int step) {
