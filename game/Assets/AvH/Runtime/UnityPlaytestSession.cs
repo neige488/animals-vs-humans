@@ -97,7 +97,7 @@ namespace AvH {
     inputs[i].Jump=false;
    }
    StepCombatWorld(seconds,state);
-   var presented=Session.Observe();PresentEvents(presented);PresentStateAudio(presented,false);
+   var presented=Session.Observe();PresentEvents(presented);PresentStateAudio(presented,false);PresentMotionAudio(presented,seconds);
   }
   internal static float ActionProgress(PlayerState p,PlaytestValues rules) {
    double left,total;

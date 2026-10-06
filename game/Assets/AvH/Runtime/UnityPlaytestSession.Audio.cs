@@ -3,7 +3,9 @@ namespace AvH {
  // Sound for public events and public state, shared by the host and remote views. Presentation only.
  public sealed partial class UnityPlaytestSession {
   AudioDirector audioDirector;
-  readonly bool[] heardReloading=new bool[12];
+  readonly bool[] heardReloading=new bool[12],heardAirborne=new bool[12],wasAnimal=new bool[12];
+  readonly int[] heardFootfalls=new int[12];readonly float[] growlIn=new float[12];
+  readonly System.Random growlRandom=new System.Random(29);
   bool audioPrimed;
   /// <summary>This world's sound: 3D effects, music and ambience.</summary>
   public AudioDirector Audio {get {if(audioDirector==null){var go=new GameObject("Audio director");go.transform.SetParent(transform,false);audioDirector=go.AddComponent<AudioDirector>();}return audioDirector;}}
@@ -29,6 +31,20 @@ namespace AvH {
    }
    audioPrimed=true;
   }
-  void ForgetAudio(){audioDirector=null;audioPrimed=false;System.Array.Clear(heardReloading,0,heardReloading.Length);}
+  /// <summary>Footsteps on each footfall the animator shows, a touch-down after air time, and an occasional growl from chasing animals.</summary>
+  void PresentMotionAudio(SessionState state,float seconds) {
+   if(state?.Players==null)return;
+   for(int i=0;i<bodies.Count&&i<state.Players.Length;i++) {
+    var animator=bodies[i].GetComponent<CharacterAnimator>();if(animator==null)continue;
+    var view=animator.Observe();var p=state.Players[i];var species=AudioDirector.For(p.Faction,p.CharacterId);var feet=bodies[i].transform.position;
+    bool striding=view.Gait==LocomotionGait.Walk||view.Gait==LocomotionGait.Run;
+    if(view.Footfalls<heardFootfalls[i])heardFootfalls[i]=view.Footfalls; // a new model restarts its count
+    if(view.Footfalls>heardFootfalls[i]){heardFootfalls[i]=view.Footfalls;if(striding)Audio.Play(species.Step,feet,species.StepVolume*(view.Gait==LocomotionGait.Run?1:.6f),species.StepPitch);}
+    bool air=view.Gait==LocomotionGait.Airborne;if(heardAirborne[i]&&!air)Audio.Play(species.Step,feet,species.StepVolume*1.2f,species.StepPitch*.9f);heardAirborne[i]=air;
+    bool animal=p.Faction==Faction.Animal;if(animal&&!wasAnimal[i])growlIn[i]=2+(float)growlRandom.NextDouble()*5;wasAnimal[i]=animal;
+    if(animal&&state.Phase==RoundPhase.Chase&&striding){growlIn[i]-=seconds;if(growlIn[i]<=0){Audio.Play(species.Growl,feet+Vector3.up*.9f,1,species.GrowlPitch);growlIn[i]=7+(float)growlRandom.NextDouble()*7;}}
+   }
+  }
+  void ForgetAudio(){audioDirector=null;audioPrimed=false;System.Array.Clear(heardReloading,0,heardReloading.Length);System.Array.Clear(heardAirborne,0,12);System.Array.Clear(wasAnimal,0,12);System.Array.Clear(heardFootfalls,0,12);System.Array.Clear(growlIn,0,12);}
  }
 }

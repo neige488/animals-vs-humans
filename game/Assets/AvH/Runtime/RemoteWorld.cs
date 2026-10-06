@@ -35,6 +35,7 @@ namespace AvH {
      body.GetComponent<CharacterAnimator>().Apply(new LocomotionState{VelocityX=step.x,VelocityZ=step.z,VerticalSpeed=step.y,Grounded=Mathf.Abs(step.y)<1.5f,
       AimYaw=yaws?remoteVisuals.Yaws[p.Slot]:body.transform.eulerAngles.y},dt);}
    }
+   PresentMotionAudio(remoteSnapshot,dt);
   }
   public void ApplyRemoteVisuals(NetworkVisualState visual) {
    if(ReferenceEquals(remoteVisuals,visual))return;
