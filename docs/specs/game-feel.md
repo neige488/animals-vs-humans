@@ -2,7 +2,37 @@
 feature: game-feel
 milestone: 2
 slices:
-  []
+  - id: 1
+    issue: 29
+    title: "무게감 있는 이동과 속도 맞춤 동작"
+    type: feature-e2e
+    product_dod: [PA-1, PA-10, PA-11]
+  - id: 2
+    issue: 30
+    title: "공격 예비동작·피격 반응·변신 연출과 관련자 카메라"
+    type: feature-e2e
+    blocked_by: [1]
+    product_dod: [PA-2, PA-3, PA-10, PA-11]
+  - id: 3
+    issue: 31
+    title: "3D 공간음·발소리·울음·환경음·단계별 배경음악"
+    type: feature-e2e
+    blocked_by: [2]
+    product_dod: [PA-4, PA-5, PA-11]
+  - id: 4
+    issue: 32
+    title: "원격 캐릭터 보간·동작 동기화와 사람 같은 봇"
+    type: feature-e2e
+    blocked_by: [2]
+    product_dod: [PA-6, PA-7, PA-10, PA-11]
+  - id: 5
+    issue: 33
+    title: "밀리는 소품 동기화와 마을 분위기·품질 단계"
+    type: feature-e2e
+    blocked_by: [2]
+    product_dod: [PA-8, PA-9, PA-11]
+base_branch: autopilot/game-feel
+merge_strategy: batch
 ---
 
 # Animals vs Humans — 실감 개선 PRD
