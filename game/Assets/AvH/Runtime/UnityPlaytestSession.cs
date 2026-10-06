@@ -24,7 +24,7 @@ namespace AvH {
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity,
     catalog!=null&&catalog.Humans.Length>0?catalog.Humans.Select(c=>c.Definition()).ToArray():null,catalog!=null&&catalog.Animals.Length>0?catalog.Animals.Select(c=>c.Definition()).ToArray():null);
-   ShelterPoints=PrototypeVillage.Build(transform);
+   ShelterPoints=PrototypeVillage.Build(transform);props=PushProps.Adopt(transform.Find("Village"));
    foreach(var p in Session.Observe().Players) {
     var body = new GameObject("Slot " + p.Slot); body.transform.SetParent(transform);
     body.transform.position=ToVector(p.Position);
@@ -37,6 +37,9 @@ namespace AvH {
    }
   }
   public SessionState Observe() => remoteSnapshot ?? Session.Observe();
+  PushProps props;
+  /// <summary>Light crates, barrels and pots: where each one is now and where it starts every round.</summary>
+  public PropView[] ObserveProps()=>props==null?new PropView[0]:props.Observe();
   public BotNavigationDiagnostics ObserveBotNavigation()=>botDirector.ObserveNavigation();
   public void SubmitInput(int slot, PlayerInput input) {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
