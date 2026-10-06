@@ -27,6 +27,8 @@ namespace AvH {
   /// <summary>Weight of the attack/tell clip over locomotion, and the code lunge (metres forward of the body).</summary>
   public float ActionWeight, Lunge;
   public string ActionClip;
+  /// <summary>0..1 progress of the transformation pop (1 = settled) and how many times it has been presented on this body.</summary>
+  public float TransformProgress; public int TransformPlays;
  }
  /// <summary>
  /// Presentation-only locomotion. One public input (<see cref="LocomotionState"/>) drives speed-blended walk/run,
@@ -52,6 +54,8 @@ namespace AvH {
     default:return new Character(1,1,4,6,0,1,.6f);
    }
   }
+  /// <summary>Cosmetic transformation pop. Rules already treat the character as the new animal.</summary>
+  public const float TransformSeconds=.4f;
   const float StartSpeed=.25f,StopSpeed=.12f,StopHold=.1f,AirDelay=.08f,LandSeconds=.2f;
   // Share of an attack clip used as the tell; the rest is the swing.
   const float WindupShare=.35f;
@@ -60,10 +64,12 @@ namespace AvH {
   Transform visual;Vector3 baseScale,basePosition;Quaternion baseRotation;BubbleGunPose pose;Character character;float referenceSpeed;
   bool moving,airborne,lastGrounded=true;float stillTime,airTime,landTimer,phase,idleTime,lastSpeed,lastYaw,lastFall;
   float squash,squashVelocity,pitch,roll,actionPitch,actionRoll,actionSquash,actionTime,staggerClock;
-  CharacterAnimationView view;
+  CharacterAnimationView view;int transformPlays;float transformTime=TransformSeconds;
+  /// <summary>Presents a fresh transformation on the newly bound model once.</summary>
+  public void PlayTransform(){transformPlays++;transformTime=0;}
   public void Bind(Transform model,Faction faction,string characterId,BubbleGunPose gunPose) {
    Release();act=default;visual=model;pose=gunPose;character=For(faction,characterId);
-   baseScale=model.localScale;baseRotation=model.localRotation;basePosition=model.localPosition;actionSquash=0;
+   transformTime=TransformSeconds;baseScale=model.localScale;baseRotation=model.localRotation;basePosition=model.localPosition;actionSquash=0;
    referenceSpeed=Mathf.Max(.1f,CharacterMotion.Profile(new PlaytestValues(),new PlayerState{Faction=faction,CharacterId=characterId}).MaxSpeed);
    moving=airborne=false;lastGrounded=true;stillTime=airTime=landTimer=phase=idleTime=squash=squashVelocity=pitch=roll=actionPitch=actionRoll=0;lastYaw=transform.eulerAngles.y;lastSpeed=0;
    view=new CharacterAnimationView{Gait=LocomotionGait.Idle,StrideDirection=1};
@@ -99,10 +105,11 @@ namespace AvH {
    }
    return null;
   }
-  public CharacterAnimationView Observe(){var v=view;v.DrivesAnimator=graph.IsValid()&&graph.IsPlaying();return v;}
+  public CharacterAnimationView Observe(){var v=view;v.DrivesAnimator=graph.IsValid()&&graph.IsPlaying();v.TransformPlays=transformPlays;v.TransformProgress=Mathf.Clamp01(transformTime/TransformSeconds);return v;}
   public void Apply(LocomotionState state,float seconds) {
    if(seconds<=0||float.IsNaN(seconds)||float.IsInfinity(seconds))return;
    view.Action=state.Action;view.Frozen=state.Action==ActionPhase.HitStop;
+   transformTime=Mathf.Min(TransformSeconds,transformTime+seconds);
    if(view.Frozen){Present(state);return;}
    float dt=seconds;var velocity=new Vector3(state.VelocityX,0,state.VelocityZ);float speed=velocity.magnitude;
    // Gait hysteresis: start instantly, but only call it stopped after holding still briefly.
@@ -172,7 +179,8 @@ namespace AvH {
   }
   void Present(LocomotionState state) {
    if(visual!=null) {
-    float sq=view.Squash;visual.localScale=new Vector3(baseScale.x*(1+sq*.5f),baseScale.y*(1-sq),baseScale.z*(1+sq*.5f));
+    float sq=view.Squash,pop=Pop(transformTime/TransformSeconds);
+    visual.localScale=new Vector3(baseScale.x*(1+sq*.5f),baseScale.y*(1-sq),baseScale.z*(1+sq*.5f))*pop;
     visual.localPosition=basePosition+Vector3.forward*view.Lunge;
     if(pose==null)visual.localRotation=baseRotation*Quaternion.Euler(view.BodyPitch,0,view.BodyRoll);
    }
@@ -187,6 +195,8 @@ namespace AvH {
    float airPhase=airIsJump?Mathf.Lerp(.45f,.15f,Mathf.InverseLerp(-8,8,state.VerticalSpeed)):.3f;
    air.SetTime(airPhase*airClip.length);
   }
+  // Grows the new animal from a third of its size with a small overshoot (ease-out-back).
+  static float Pop(float p){if(p>=1)return 1;const float c1=1.70158f,c3=c1+1;float x=Mathf.Clamp01(p)-1;return .3f+.7f*(1+c3*x*x*x+c1*x*x);}
   void Weights(float a,float b,float c,float d,float e){mixer.SetInputWeight(0,a);mixer.SetInputWeight(1,b);mixer.SetInputWeight(2,c);mixer.SetInputWeight(3,d);mixer.SetInputWeight(4,e);}
   void Release(){if(graph.IsValid())graph.Destroy();if(pose!=null)pose.LegYaw=0;}
   void OnDestroy(){Release();}

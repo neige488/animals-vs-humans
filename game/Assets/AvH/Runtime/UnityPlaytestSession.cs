@@ -59,7 +59,7 @@ namespace AvH {
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; }
-    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
+    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId)ChangeVisual(before,state,i,body.transform.position);
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
      if(guns[i]!=null&&input.RoundId==state.Round)guns[i].GetComponent<BubbleGunPose>().SetAim(input.Yaw,input.Pitch);
@@ -111,9 +111,14 @@ namespace AvH {
    float inward=Vector3.Dot(pushVelocity[slot],normal);
    if(inward<0)pushVelocity[slot]-=normal*inward;
   }
-  void PresentAnimalBirth(SessionState before,SessionState after,int slot,Vector3 position) {
-   if(before!=null&&before.Round==after.Round&&before.Players[slot].Faction==Faction.Human&&after.Players[slot].Faction==Faction.Animal)
-    Effects.Emit(position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);
+  readonly (int round,string id)[] presentedBirths=new (int,string)[12];
+  // One path for every faction/character change. A same-round human->animal change is a birth and is
+  // presented once per (round, animal): particles plus the short cosmetic pop. Joins and round resets swap silently.
+  void ChangeVisual(SessionState before,SessionState after,int slot,Vector3 position) {
+   var p=after.Players[slot];
+   bool birth=before!=null&&before.Round==after.Round&&before.Players[slot].Faction==Faction.Human&&p.Faction==Faction.Animal&&presentedBirths[slot]!=(after.Round,p.CharacterId);
+   if(birth){presentedBirths[slot]=(after.Round,p.CharacterId);Effects.Emit(position+Vector3.up*.6f,new Color(1,.67f,.24f),18,2.4f);}
+   RefreshVisual(slot,p.Faction,birth);
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
   /// <summary>Locomotion animation currently shown for a slot (presentation only).</summary>
@@ -122,10 +127,11 @@ namespace AvH {
   internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
-  void RefreshVisual(int slot,Faction faction) {
+  void RefreshVisual(int slot,Faction faction,bool transformation=false) {
    var parent=bodies[slot].transform;
    if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Gun(parent):null;
-   var old=parent.Find("Visual"); if(old!=null){old.gameObject.SetActive(false);Destroy(old.gameObject);}
+   var old=parent.Find("Visual");
+   if(old!=null){if(transformation){old.name="Transform ghost";old.gameObject.AddComponent<TransformGhost>();}else{old.gameObject.SetActive(false);Destroy(old.gameObject);}}
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    var prefab=catalog==null?null:catalog.Character(Observe().Players[slot].CharacterId,faction);
    GameObject visual;
@@ -143,7 +149,14 @@ namespace AvH {
    if(gunPose!=null)gunPose.Bind(visual.transform);
    var locomotion=parent.GetComponent<CharacterAnimator>()??parent.gameObject.AddComponent<CharacterAnimator>();
    locomotion.Bind(visual.transform,faction,Observe().Players[slot].CharacterId,gunPose);
+   if(transformation)locomotion.PlayTransform();
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;
   }
+ }
+ /// <summary>The replaced model shrinks away quickly under the transformation burst. Presentation only.</summary>
+ public sealed class TransformGhost : MonoBehaviour {
+  const float Seconds=.15f;float age;Vector3 start;
+  void Awake(){start=transform.localScale;}
+  void Update(){age+=Time.deltaTime;if(age>=Seconds){Destroy(gameObject);return;}transform.localScale=start*(1-age/Seconds);}
  }
 }

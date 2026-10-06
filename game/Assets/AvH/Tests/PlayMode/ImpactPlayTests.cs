@@ -71,12 +71,12 @@ namespace AvH.Tests {
    Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction,"Judged an animal at the hit");
    var shown=world.ObserveAnimation(4);Assert.Less(shown.TransformProgress,.3f,"The transformation starts presenting");Assert.AreEqual(1,shown.TransformPlays);
    var start=At(4);Step(10,(4,new PlayerInput{Forward=1,Yaw=90}));
-   Assert.Greater(Vector3.Distance(start,At(4)),.5f,"The new animal moves during the presentation");
+   Assert.Greater(Vector3.Distance(start,At(4)),.3f,"The new animal moves during the presentation (inertia ramp, any species)");
    var mid=world.ObserveAnimation(4).TransformProgress;Assert.That(mid,Is.InRange(.2f,.99f),"Presentation lasts about 0.3~0.5s");
    Assert.IsFalse(world.Session.TryStartAttack(4,world.Observe().Round),"Attacks follow the transform attack grace");
    Step(15,(4,new PlayerInput()));
    Assert.AreEqual(1,world.ObserveAnimation(4).TransformProgress,1e-4);Assert.AreEqual(1,world.ObserveAnimation(4).TransformPlays,"Never replayed");
-   Assert.IsTrue(world.Session.TryStartAttack(4,world.Observe().Round),"Grace over");
+   Step(6,(4,new PlayerInput()));Assert.IsTrue(world.Session.TryStartAttack(4,world.Observe().Round),"Grace (0.6s) over");
   }
 
   [UnityTest] public IEnumerator RemoteViewsPresentEachTransformationOnceAndNotOnJoin() {

@@ -64,7 +64,7 @@ namespace AvH {
    // A swing is judged by physics at its strike moment: the click step at zero windup, otherwise one windup later.
    for(int slot=0;slot<bodies.Count;slot++)if(Session.AttackDue(slot))Melee(slot,beforeCombat.Round);
    var after=Session.Observe();
-   for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction){PresentAnimalBirth(beforeCombat,after,slot,bodies[slot].transform.position);RefreshVisual(slot,after.Players[slot].Faction);}
+   for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction)ChangeVisual(beforeCombat,after,slot,bodies[slot].transform.position);
   }
   void FireBubble(int slot,PlayerInput input) {
    var rules=Session.ObserveSettings().Current;

@@ -18,7 +18,7 @@ namespace AvH {
    if(!immediate&&ReferenceEquals(remoteSnapshot,state))return;
    var old=remoteSnapshot;remoteSnapshot=state;
    foreach(var p in state.Players){
-    if(old==null||old.Players[p.Slot].Faction!=p.Faction||old.Players[p.Slot].CharacterId!=p.CharacterId){if(!immediate)PresentAnimalBirth(old,state,p.Slot,ToVector(p.Position));RefreshVisual(p.Slot,p.Faction);}
+    if(old==null||old.Players[p.Slot].Faction!=p.Faction||old.Players[p.Slot].CharacterId!=p.CharacterId)ChangeVisual(immediate?null:old,state,p.Slot,ToVector(p.Position));
     if(immediate||old==null||state.Round!=old.Round||Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>6){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
     bodies[p.Slot].enabled=false;
    }
@@ -58,7 +58,7 @@ namespace AvH {
   public SettingsState ObserveActiveSettings()=>remoteVisuals==null?Session.ObserveSettings():new SettingsState{Current=remoteVisuals.CurrentRules.Copy(),Pending=remoteVisuals.HasPending?remoteVisuals.PendingRules.Copy():null,Version=remoteVisuals.SettingsVersion};
   public void ResetSession() {
    AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
-   seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;
+   seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;System.Array.Clear(presentedBirths,0,presentedBirths.Length);
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
    System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);
   }
