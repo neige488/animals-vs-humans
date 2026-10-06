@@ -14,26 +14,12 @@ namespace AvH.Tests {
    profile=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml");
    world.StartSolo("props",123,profile);yield return null;Physics.SyncTransforms();
    // Everyone else waits far from the market so only the tested body touches a prop.
-   foreach(var p in world.Observe().Players.Where(p=>p.Slot!=0))Warp(p.Slot,new Vector3(-36+p.Slot*2.5f,0,-40.5f));
-   Physics.SyncTransforms();
+   PropScene.Park(world);
   }
-  void Warp(int slot,Vector3 position){var body=world.PlayerTransform(slot).GetComponent<CharacterController>();body.enabled=false;body.transform.position=position;body.enabled=true;world.Session.RecordWorldPosition(slot,new WorldPosition(position.x,position.y,position.z));}
+  void Warp(int slot,Vector3 position)=>PropScene.Warp(world,slot,position);
   void Drive(int slot,PlayerInput input,int steps){for(int i=0;i<steps;i++){world.SubmitInput(slot,input);world.Step(.02f);}}
-  static float YawOf(Vector3 direction)=>Mathf.Atan2(direction.x,direction.z)*Mathf.Rad2Deg;
-  // A prop with a free straight run through it: from `start`, walking `-away` passes over the prop's home.
-  (PropView prop,Vector3 away) Open(float before,float after,float minHeight=0) {
-   foreach(var prop in world.ObserveProps().Where(p=>p.Height>=minHeight).OrderBy(p=>p.Home.sqrMagnitude))
-   for(int k=0;k<8;k++) {
-    var away=Quaternion.Euler(0,k*45,0)*Vector3.forward;var start=prop.Home+away*before;
-    if(world.ObserveProps().Any(o=>o.Index!=prop.Index&&Vector3.Distance(o.Home,prop.Home)<before+after))continue;
-    var bottom=start+Vector3.up*.45f;var top=start+Vector3.up*1.45f;
-    if(Physics.OverlapCapsule(bottom,top,.42f).Any(c=>!(c is CharacterController)))continue;
-    if(Physics.CapsuleCastAll(bottom,top,.42f,-away,before+after).Any(h=>!(h.collider is CharacterController)))continue;
-    if(!Physics.Raycast(start+Vector3.up,Vector3.down,1.3f))continue;
-    return (prop,away);
-   }
-   Assert.Fail("No market prop has an open approach");return default;
-  }
+  static float YawOf(Vector3 direction)=>PropScene.YawOf(direction);
+  (PropView prop,Vector3 away) Open(float before,float after,float minHeight=0)=>PropScene.Open(world,before,after,minHeight);
   PropView Now(int index)=>world.ObserveProps().Single(p=>p.Index==index);
 
   [UnityTest] public IEnumerator LightPropsStandAwayFromSheltersAndStartHome() {

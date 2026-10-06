@@ -10,6 +10,15 @@ namespace AvH {
   /// <summary>Host round the frame belongs to; a viewer drops frames from any other round than its snapshot's.</summary>
   public int Round;
   public NetworkBodyMotion[] Bodies=Array.Empty<NetworkBodyMotion>();
+  /// <summary>Light props that are moving (or just settled) at this host time, plus a periodic refresh of every displaced prop.</summary>
+  public NetworkPropMotion[] Props=Array.Empty<NetworkPropMotion>();
+ }
+ /// <summary>One pushed prop's pose for the wire (10 bytes): its index in the shared village order, centimetres and hundredths of a degree.</summary>
+ [Serializable] public struct NetworkPropMotion {
+  public short Index,X,Y,Z,Yaw;
+  public static NetworkPropMotion Encode(int index,WorldPosition position,float yaw)=>default;
+  public WorldPosition Position()=>default;
+  public float AimYaw()=>0;
  }
  /// <summary>
  /// One body's motion quantized for the wire (21 bytes): centimetres, centimetres per second, hundredths of a degree
