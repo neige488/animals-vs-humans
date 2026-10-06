@@ -104,7 +104,7 @@ namespace AvH {
    }
    var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
    if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=!debugOpen&&Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
-   network.SubmitInput(input);
+   network.SubmitInput(input);session.PresentTrigger(network.LocalSlot,input.Attack);
   }
   void LateUpdate() {
    if(session.Session==null||!network.CanPlay){following=false;feel.Reset();CameraShakeAngle=0;return;}
