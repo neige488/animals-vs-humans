@@ -126,5 +126,15 @@ namespace AvH.Tests {
    Assert.AreEqual(RoundPhase.Results,world.Observe().Phase);
    Assert.AreEqual(1,world.ObserveAnimation(4).TransformProgress,1e-4,"Pop settled at the round end");Assert.IsFalse(GhostShown(4),"Ghost removed at the round end");
   }
+
+  [UnityTest] public IEnumerator ZeroImpactValuesKeepSameStepChainTransformationsInSlotOrder() {
+   // Review F-4 regression. Expected value is the pre-game-feel behaviour (base 6bece7b): each slot's attack input
+   // was judged immediately in slot order, so 0 hits 4, then 4 (now an animal) hits 8 in the same step.
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.AttackWindupSeconds=0;v.HitStopSeconds=0;v.HitStunSeconds=0;v.TransformAttackGrace=0;});
+   Warp(8,new Vector3(100,0,2.4f));Physics.SyncTransforms();Step(1);
+   Step(1,(0,new PlayerInput{Attack=true,Yaw=0}),(4,new PlayerInput{Attack=true,Yaw=0}));
+   Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction);
+   Assert.AreEqual(Faction.Animal,world.Observe().Players[8].Faction,"Slot 4 attacks as an animal in the same step, as before");
+  }
  }
 }
