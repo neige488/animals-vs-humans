@@ -48,4 +48,25 @@ public class MotionTests {
   var side=Run(full,new MotionIntent{DirectionZ=1,Grounded=true},profile,m=>m.VelocityZ>=profile.MaxSpeed*.9f);
   Assert.Less(side.steps,stop.steps+5,"A 90 degree turn reaches the new heading without a long drift");
  }
+ [Test] public void SpeciesKeepTheirSpeedMultipliersButDifferInStartAndStopWeight() {
+  var s=Session();var rules=s.ObserveSettings().Current;
+  var profiles=Enumerable.Range(0,AnimalBalance.Count).ToDictionary(i=>AnimalBalance.Id(i),i=>Profile(s,AnimalBalance.Id(i),Faction.Animal));
+  var human=Profile(s,"human-default",Faction.Human);
+  Assert.AreEqual(rules.HumanSpeed,human.MaxSpeed);Assert.AreEqual(rules.InertiaSeconds,human.AccelerationSeconds);
+  foreach(var pair in profiles) {
+   var player=new PlayerState{Faction=Faction.Animal,CharacterId=pair.Key};
+   Assert.AreEqual(rules.AnimalSpeed*AnimalBalance.For(rules,player).Speed,pair.Value.MaxSpeed,1e-5,pair.Key+" keeps its speed multiplier");
+   Assert.That(pair.Value.AccelerationSeconds,Is.InRange(.05f,.25f),pair.Key+" stays responsive for young players");
+   Assert.That(pair.Value.DecelerationSeconds,Is.InRange(.05f,.25f),pair.Key);
+  }
+  var bear=profiles["animal-bear_grizzly"];var rabbit=profiles["animal-rabbit_brown"];var wolf=profiles["animal-wolf"];
+  Assert.Greater(bear.AccelerationSeconds,wolf.AccelerationSeconds*1.4f,"Bear starts heavily");
+  Assert.Greater(bear.DecelerationSeconds,wolf.DecelerationSeconds*1.4f,"Bear stops heavily");
+  Assert.Less(rabbit.AccelerationSeconds,wolf.AccelerationSeconds*.75f,"Rabbit springs off quickly");
+  Assert.Greater(profiles["animal-penguin"].DecelerationSeconds,profiles["animal-penguin"].AccelerationSeconds*1.3f,"Penguin slides to a stop");
+  Assert.Greater(profiles["animal-boar"].DecelerationSeconds,profiles["animal-boar"].AccelerationSeconds*1.3f,"Boar charges past its stop");
+  Assert.AreEqual(6,profiles.Values.Select(p=>(p.AccelerationSeconds,p.DecelerationSeconds)).Distinct().Count(),"Each species has its own curve");
+  var off=Session(v=>v.InertiaSeconds=0);
+  foreach(var id in profiles.Keys){var p=Profile(off,id,Faction.Animal);Assert.AreEqual(0,p.AccelerationSeconds);Assert.AreEqual(0,p.DecelerationSeconds);}
+ }
 }}
