@@ -46,11 +46,18 @@ namespace AvH {
        }
       }
      }
+     brain.Path=routes.Smooth(position,brain.Path);
      brain.Cursor=0;brain.Replan=.8f+player.Slot*.013f;
     }
     while(brain.Cursor<brain.Path.Count && Flat(brain.Path[brain.Cursor]-position).magnitude<.32f)brain.Cursor++;
     var move=brain.Cursor<brain.Path.Count?Flat(brain.Path[brain.Cursor]-position).normalized:Vector3.zero;
-    if(Flat(goal-position).magnitude<.4f)move=Vector3.zero;
+    // Round corners: close to a waypoint, start turning toward the one after it.
+    if(brain.Cursor+1<brain.Path.Count){float near=Flat(brain.Path[brain.Cursor]-position).magnitude;
+     if(near<CornerRadius)move=Vector3.Lerp(Flat(brain.Path[brain.Cursor+1]-position).normalized,move,near/CornerRadius).normalized;}
+    float remaining=Flat(goal-position).magnitude;
+    if(remaining<.4f)move=Vector3.zero;
+    // Ease into a fixed destination (shelter) like a person; CharacterMotion adds the body's own inertia. Animals keep charging.
+    else if(player.Faction==Faction.Human)move*=Mathf.Clamp(remaining/ArrivalRadius,MinArrivalInput,1);
     brain.ProgressTime+=seconds;
     if(brain.ProgressTime>=.75f) {
      float goalDistance=Vector3.Distance(position,goal);
@@ -81,6 +88,7 @@ namespace AvH {
      Reload=player.Faction==Faction.Human&&player.Ammo==0,RoundId=state.Round});
    }
   }
+  const float ArrivalRadius=1.6f,MinArrivalInput=.25f,CornerRadius=.6f;
   static Vector3 V(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   static Vector3 Flat(Vector3 p)=>new Vector3(p.x,0,p.z);
  }
@@ -121,6 +129,35 @@ namespace AvH {
    var delta=to-from;delta.y=0;
    return !Physics.CapsuleCastAll(from+Vector3.up*.42f,from+Vector3.up*1.42f,.36f,
     delta.normalized,delta.magnitude,~0,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
+  }
+  // String pulling: replace runs of grid cells with straight segments the full body can walk, so bots stop
+  // zigzagging between 8-direction cells. Only flat stretches are pulled; stairs and roof drops keep their cells.
+  // Only the next stretch is smoothed because routes are re-planned every 0.8 s.
+  const int SmoothedCells=18,LookAhead=12;
+  public List<Vector3> Smooth(Vector3 from,List<Vector3> path) {
+   if(path.Count<2)return path;
+   var result=new List<Vector3>();var anchor=from;int i=0,limit=Math.Min(path.Count,SmoothedCells);
+   while(i<limit) {
+    int reach=i;
+    for(int k=i+1;k<limit&&k<=i+LookAhead;k++){if(!Straight(anchor,path,i,k))break;reach=k;}
+    result.Add(path[reach]);anchor=path[reach];i=reach+1;
+   }
+   for(;i<path.Count;i++)result.Add(path[i]);
+   return result;
+  }
+  bool Straight(Vector3 anchor,List<Vector3> path,int first,int last) {
+   var end=path[last];var flat=end-anchor;flat.y=0;float length=flat.magnitude;if(length<.01f)return true;var heading=flat/length;
+   bool sloped=Mathf.Abs(end.y-anchor.y)>.15f;
+   for(int m=first;m<=last;m++){
+    var previous=m==first?anchor:path[m-1];if(Mathf.Abs(path[m].y-previous.y)>.36f)return false;
+    var offset=path[m]-anchor;offset.y=0;float along=Mathf.Clamp(Vector3.Dot(offset,heading),0,length);
+    // Stay on an even floor or a steady stair slope, and inside the corridor of walkable cells.
+    if(Mathf.Abs(path[m].y-Mathf.Lerp(anchor.y,end.y,along/length))>.2f)return false;
+    if(m<last&&(offset-heading*along).magnitude>.55f)return false;
+   }
+   // The body sweep uses the grid's own clearance radius; on a stair slope it rides above the step edges.
+   var direction=(end-anchor).normalized;float lift=sloped?.75f:.42f;
+   return !Physics.CapsuleCastAll(anchor+Vector3.up*lift,anchor+Vector3.up*1.42f,.33f,direction,Vector3.Distance(anchor,end),~0,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
   }
   public List<Vector3> Find(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false) {
    if(!rebuiltThisStep && (!built || rebuildRequested&&sinceBuild>=1))Build();

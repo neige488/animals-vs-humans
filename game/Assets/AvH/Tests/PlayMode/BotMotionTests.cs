@@ -18,23 +18,28 @@ namespace AvH.Tests {
     var track=new List<Vector3>[12];for(int i=0;i<12;i++)track[i]=new List<Vector3>();
     for(int step=0;step<950;step++){game.Step(.02f);if(step%5==0)foreach(var p in game.Observe().Players)track[p.Slot].Add(V(p.Position));if(step%100==0)yield return null;}
     Assert.AreEqual(RoundPhase.Preparation,game.Observe().Phase);
-    float turning=0,travelled=0;var approach=new List<float>();
+    float turning=0,travelled=0,zigzag=0;var approach=new List<float>();
     for(int slot=1;slot<12;slot++) {
      var points=track[slot];var rest=points[points.Count-1];
+     int lastTurn=-99;float lastSign=0;
      for(int i=2;i<points.Count;i++) {
       var a=points[i-1]-points[i-2];var b=points[i]-points[i-1];a.y=b.y=0;
       // Cruising headings only: a stop, a start or a shove is not a zigzag.
-      if(a.magnitude>top*.1f*.6f&&b.magnitude>top*.1f*.6f){turning+=Vector3.Angle(a,b);travelled+=b.magnitude;}
+      if(a.magnitude<=top*.1f*.6f||b.magnitude<=top*.1f*.6f)continue;
+      float turn=Vector3.SignedAngle(a,b,Vector3.up);travelled+=b.magnitude;turning+=Mathf.Abs(turn);
+      // A zigzag turns one way then straight back within a few tenths of a second; a corner keeps turning the same way.
+      if(Mathf.Abs(turn)>10){if(i-lastTurn<=4&&Mathf.Sign(turn)!=lastSign)zigzag+=Mathf.Abs(turn);lastTurn=i;lastSign=Mathf.Sign(turn);}
      }
      // Speed while closing the last stretch to where this bot finally stands.
      bool settled=points.Skip(points.Count-20).All(p=>Vector3.Distance(p,rest)<.3f);
      if(!settled||game.ShelterPoints.All(s=>Vector3.Distance(s,rest)>3))continue;
      for(int i=1;i<points.Count;i++){float d=Vector3.Distance(points[i],rest);if(d>.6f&&d<1.4f){var delta=points[i]-points[i-1];delta.y=0;approach.Add(delta.magnitude/.1f);}}
     }
-    float perMetre=turning/Mathf.Max(1,travelled),arrival=approach.Count==0?float.NaN:approach.Average();
-    Debug.Log($"BOT_MOTION turningDegreesPerMetre={perMetre:F1} travelled={travelled:F0} approachSpeed={arrival:F2} samples={approach.Count} top={top}");
+    float perMetre=turning/Mathf.Max(1,travelled),zigzagPerMetre=zigzag/Mathf.Max(1,travelled),arrival=approach.Count==0?float.NaN:approach.Average();
+    Debug.Log($"BOT_MOTION zigzagDegreesPerMetre={zigzagPerMetre:F2} turningDegreesPerMetre={perMetre:F1} travelled={travelled:F0} approachSpeed={arrival:F2} samples={approach.Count} top={top}");
     Assert.Greater(travelled,100,"Bots actually walked to their shelters");
-    Assert.Less(perMetre,6,"Smoothed paths: no repeated 45-degree zigzag between grid cells");
+    // Grid-cell following measured 4.2 deg/m; what remains after smoothing is jostling at spawn and shelter doors.
+    Assert.Less(zigzagPerMetre,2,"Smoothed paths: no back-and-forth 45-degree zigzag between grid cells");
     Assert.Greater(approach.Count,10);Assert.Less(arrival,top*.75f,"Bots ease into where they stop instead of braking at full speed");
    } finally {Object.Destroy(root);}
    yield return null;
