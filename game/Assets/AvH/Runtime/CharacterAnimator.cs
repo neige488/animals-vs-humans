@@ -29,6 +29,8 @@ namespace AvH {
   public string ActionClip;
   /// <summary>0..1 progress of the transformation pop (1 = settled) and how many times it has been presented on this body.</summary>
   public float TransformProgress; public int TransformPlays;
+  /// <summary>Feet put down since this model was bound (two per stride cycle, grounded only). Sound follows it.</summary>
+  public int Footfalls;
  }
  /// <summary>
  /// Presentation-only locomotion. One public input (<see cref="LocomotionState"/>) drives speed-blended walk/run,
@@ -64,7 +66,7 @@ namespace AvH {
   Transform visual;Vector3 baseScale,basePosition;Quaternion baseRotation;BubbleGunPose pose;Character character;float referenceSpeed;
   bool moving,airborne,lastGrounded=true;float stillTime,airTime,landTimer,phase,idleTime,lastSpeed,lastYaw,lastFall;
   float squash,squashVelocity,pitch,roll,actionPitch,actionRoll,actionSquash,actionTime,staggerClock;
-  CharacterAnimationView view;int transformPlays;float transformTime=TransformSeconds;
+  CharacterAnimationView view;float strideTravel;int transformPlays;float transformTime=TransformSeconds;
   /// <summary>Presents a fresh transformation on the newly bound model once.</summary>
   public void PlayTransform(){transformPlays++;transformTime=0;}
   /// <summary>Settles a transformation pop at once (round end).</summary>
@@ -75,7 +77,7 @@ namespace AvH {
    transformTime=TransformSeconds;baseScale=model.localScale;baseRotation=model.localRotation;basePosition=model.localPosition;actionSquash=0;
    referenceSpeed=Mathf.Max(.1f,CharacterMotion.Profile(new PlaytestValues(),new PlayerState{Faction=faction,CharacterId=characterId}).MaxSpeed);
    moving=airborne=false;lastGrounded=true;stillTime=airTime=landTimer=phase=idleTime=squash=squashVelocity=pitch=roll=actionPitch=actionRoll=0;lastYaw=transform.eulerAngles.y;lastSpeed=0;
-   view=new CharacterAnimationView{Gait=LocomotionGait.Idle,StrideDirection=1};
+   view=new CharacterAnimationView{Gait=LocomotionGait.Idle,StrideDirection=1};strideTravel=0;
    Animator animator=null;foreach(var a in model.GetComponentsInChildren<Animator>())if(a.runtimeAnimatorController!=null){animator=a;break;}
    var clips=animator==null?new AnimationClip[0]:animator.runtimeAnimatorController.animationClips;
    // Attack presentation: own attack clip; the penguin tells with Shake and lunges; the rabbit (no attack clip) crouches and lunges.
@@ -150,7 +152,7 @@ namespace AvH {
    float runCycles=runClip==null?0:character.RunRate/runClip.length*speed/referenceSpeed;
    float cycles=walkClip==null||runClip==null?1.6f*speed/referenceSpeed:Mathf.Lerp(walkCycles,runCycles,view.RunBlend);
    view.CyclesPerSecond=moving?cycles:0;
-   if(moving&&!airborne)phase=Mathf.Repeat(phase+direction*cycles*dt,1);
+   if(moving&&!airborne){phase=Mathf.Repeat(phase+direction*cycles*dt,1);strideTravel+=cycles*dt*2;while(strideTravel>=1){strideTravel-=1;view.Footfalls++;}}
    idleTime+=dt;
    // Body character: lean into acceleration, roll into turns, penguin waddle.
    float accel=(speed-lastSpeed)/dt;lastSpeed=speed;float yaw=transform.eulerAngles.y;float yawRate=Mathf.DeltaAngle(lastYaw,yaw)/dt;lastYaw=yaw;

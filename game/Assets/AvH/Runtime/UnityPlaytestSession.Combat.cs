@@ -74,10 +74,10 @@ namespace AvH {
    var position=bodies[slot].transform.position+Vector3.up*1.3f+Quaternion.Euler(0,input.Yaw,0)*Vector3.right*.1f;
    var visual=Effects.Bubble(transform,rules.BubbleRadius);visual.name="Bubble";visual.transform.position=position;
    Effects.Emit(position+direction*.6f,new Color(.63f,.93f,1,.7f),4,.65f,false);
-   Effects.Sound(position,true);
+   Audio.Play("fire",position);
    bubbles.Add(new Bubble{Id=++nextBubbleId,Owner=slot,Round=input.RoundId,Position=position,Direction=direction,Life=rules.BubbleLifetime,Radius=rules.BubbleRadius,Speed=rules.BubbleSpeed,Range=rules.BubbleRange,PushForce=rules.PushForce,FriendlyPush=rules.FriendlyPush,Visual=visual});
   }
-  void Pop(Bubble bubble){Destroy(bubble.Visual);var marker=new GameObject("Bubble impact");marker.transform.SetParent(transform,false);marker.transform.position=bubble.Position;bursts.Add((marker,.15f,bubble.Id));Effects.Emit(bubble.Position,new Color(.66f,.92f,1,.9f),12,1.9f);Effects.Sound(bubble.Position,false);}
+  void Pop(Bubble bubble){Destroy(bubble.Visual);var marker=new GameObject("Bubble impact");marker.transform.SetParent(transform,false);marker.transform.position=bubble.Position;bursts.Add((marker,.15f,bubble.Id));Effects.Emit(bubble.Position,new Color(.66f,.92f,1,.9f),12,1.9f);Audio.Play("pop",bubble.Position);}
   void Melee(int slot,int round) {
    var input=inputs[slot];float yaw=input.RoundId==round?input.Yaw:bodies[slot].transform.eulerAngles.y;
    var direction=Quaternion.Euler(0,yaw,0)*Vector3.forward;

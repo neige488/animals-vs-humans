@@ -99,7 +99,7 @@ namespace AvH {
     inputs[i].Jump=false;
    }
    StepCombatWorld(seconds,state);
-   PresentEvents(Session.Observe());
+   var presented=Session.Observe();PresentEvents(presented);PresentStateAudio(presented,false);PresentMotionAudio(presented,seconds);
   }
   internal static float ActionProgress(PlayerState p,PlaytestValues rules) {
    double left,total;
@@ -168,6 +168,8 @@ namespace AvH {
    locomotion.Bind(visual.transform,faction,Observe().Players[slot].CharacterId,gunPose);
    if(transformation)locomotion.PlayTransform();
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;
+   // Every sound goes through the AudioDirector; vendor model audio sources stay silent.
+   foreach(var vendor in visual.GetComponentsInChildren<AudioSource>(true))vendor.enabled=false;
   }
  }
  /// <summary>The replaced model shrinks away quickly under the transformation burst. Presentation only.</summary>

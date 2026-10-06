@@ -35,7 +35,7 @@ namespace AvH {
    }
    if(immediate||old==null||state.Round!=old.Round)remoteMotion.Clear();
    if(state.Phase==RoundPhase.Results&&(old==null||old.Phase!=RoundPhase.Results))CutTransformations();
-   if(immediate)ForgetPresentedEvents();PresentEvents(state);
+   if(immediate)ForgetPresentedEvents();PresentEvents(state);PresentStateAudio(state,immediate);
   }
   /// <summary>Adds one host presentation frame to the playback buffer (duplicates and stale frames are ignored).</summary>
   public void ReceiveRemoteMotion(NetworkMotionFrame frame) {
@@ -60,6 +60,8 @@ namespace AvH {
     var motion=pose.Motion;if(stalled){motion.VelocityX=motion.VelocityZ=motion.VerticalSpeed=0;}
     body.GetComponent<CharacterAnimator>().Apply(motion,dt);
    }
+   // Footsteps and growls follow the played-back animation (merged S3 audio with S4 playback).
+   PresentMotionAudio(remoteSnapshot,dt);
   }
   // Before the first host frame (joining): stand at the snapshot position with the snapshot's action.
   void HoldSnapshot(float dt) {
@@ -67,6 +69,7 @@ namespace AvH {
     body.transform.position=Vector3.Lerp(body.transform.position,ToVector(p.Position),Mathf.Min(1,dt*20));
     body.GetComponent<CharacterAnimator>().Apply(new LocomotionState{Grounded=true,AimYaw=body.transform.eulerAngles.y,Action=p.Action},dt);
    }
+   PresentMotionAudio(remoteSnapshot,dt);
   }
   public void ApplyRemoteVisuals(NetworkVisualState visual) {
    if(ReferenceEquals(remoteVisuals,visual))return;
@@ -76,7 +79,7 @@ namespace AvH {
    foreach(int id in remoteBubbles.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBubbles[id]);remoteBubbles.Remove(id);}
    foreach(var bubble in visual.Bubbles){GameObject obj;if(!remoteBubbles.TryGetValue(bubble.Id,out obj)){
     obj=Effects.Bubble(transform,visual.CurrentRules.BubbleRadius);obj.name="Remote Bubble";remoteBubbles[bubble.Id]=obj;
-    if(liveEffects&&bubble.OwnerSlot>=0&&bubble.OwnerSlot<bodies.Count){var direction=ToVector(bubble.Direction);var muzzle=bodies[bubble.OwnerSlot].transform.position+Vector3.up*1.3f+Vector3.Cross(Vector3.up,direction).normalized*.1f+direction*.6f;Effects.Emit(muzzle,new Color(.63f,.93f,1,.7f),4,.65f,false);Effects.Sound(muzzle,true);}
+    if(liveEffects&&bubble.OwnerSlot>=0&&bubble.OwnerSlot<bodies.Count){var direction=ToVector(bubble.Direction);var muzzle=bodies[bubble.OwnerSlot].transform.position+Vector3.up*1.3f+Vector3.Cross(Vector3.up,direction).normalized*.1f+direction*.6f;Effects.Emit(muzzle,new Color(.63f,.93f,1,.7f),4,.65f,false);Audio.Play("fire",muzzle);}
     if(bubble.OwnerSlot>=0&&bubble.OwnerSlot<guns.Length&&guns[bubble.OwnerSlot]!=null&&ToVector(bubble.Direction).sqrMagnitude>.001f){var direction=ToVector(bubble.Direction);guns[bubble.OwnerSlot].GetComponent<BubbleGunPose>().SetAim(Mathf.Atan2(direction.x,direction.z)*Mathf.Rad2Deg,-Mathf.Atan2(direction.y,new Vector2(direction.x,direction.z).magnitude)*Mathf.Rad2Deg);}
    }obj.transform.position=ToVector(bubble.Position);obj.transform.localScale=Vector3.one*visual.CurrentRules.BubbleRadius*2;}
    ApplyRemoteBursts(visual,liveEffects);
@@ -84,14 +87,14 @@ namespace AvH {
   void ApplyRemoteBursts(NetworkVisualState visual,bool liveEffects) {
    var incoming=new HashSet<int>(visual.Bursts.Select(b=>b.Id));
    foreach(int id in remoteBursts.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBursts[id]);remoteBursts.Remove(id);}
-   foreach(var burst in visual.Bursts){GameObject obj;if(!remoteBursts.TryGetValue(burst.Id,out obj)){obj=new GameObject("Remote impact");obj.transform.SetParent(transform,false);remoteBursts[burst.Id]=obj;if(seenRemoteImpacts.Add(burst.Id)){recentRemoteImpacts.Enqueue(burst.Id);if(recentRemoteImpacts.Count>256)seenRemoteImpacts.Remove(recentRemoteImpacts.Dequeue());if(liveEffects){Effects.Emit(ToVector(burst.Position),new Color(.66f,.92f,1,.9f),12,1.9f);Effects.Sound(ToVector(burst.Position),false);}}}
+   foreach(var burst in visual.Bursts){GameObject obj;if(!remoteBursts.TryGetValue(burst.Id,out obj)){obj=new GameObject("Remote impact");obj.transform.SetParent(transform,false);remoteBursts[burst.Id]=obj;if(seenRemoteImpacts.Add(burst.Id)){recentRemoteImpacts.Enqueue(burst.Id);if(recentRemoteImpacts.Count>256)seenRemoteImpacts.Remove(recentRemoteImpacts.Dequeue());if(liveEffects){Effects.Emit(ToVector(burst.Position),new Color(.66f,.92f,1,.9f),12,1.9f);Audio.Play("pop",ToVector(burst.Position));}}}
     obj.transform.position=ToVector(burst.Position);
    }
   }
   public SettingsState ObserveActiveSettings()=>remoteVisuals==null?Session.ObserveSettings():new SettingsState{Current=remoteVisuals.CurrentRules.Copy(),Pending=remoteVisuals.HasPending?remoteVisuals.PendingRules.Copy():null,Version=remoteVisuals.SettingsVersion};
   public void ResetSession() {
    AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
-   seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;System.Array.Clear(presentedBirths,0,presentedBirths.Length);ForgetPresentedEvents();
+   seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;ForgetAudio();System.Array.Clear(presentedBirths,0,presentedBirths.Length);ForgetPresentedEvents();
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
    System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);
   }
