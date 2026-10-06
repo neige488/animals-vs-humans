@@ -34,7 +34,7 @@ namespace AvH.Tests {
   }
   [Test] public void StarvedTimelineHoldsTheNewestFrameThenResumesWithoutJumping() {
    var timeline=new InterpolationTimeline<double[]>();double now=0,dt=1/60.0,host=0,previous=0;
-   for(;now<1;now+=dt){while(host<=now-.02){timeline.Add(host,now,new[]{host*Speed});host+=Send;}previous=Position(timeline,now);}
+   for(;now<1;now+=dt){while(host<=now-.02){timeline.Add(host,now,new[]{host*Speed});host+=Send;}if(timeline.Count>0)previous=Position(timeline,now);}
    double held=double.NaN;
    for(double stall=now+.4;now<stall;now+=dt){double position=Position(timeline,now);Assert.GreaterOrEqual(position,previous-1e-9);Assert.LessOrEqual(position,host*Speed);previous=position;held=position;}
    Assert.AreEqual((host-Send)*Speed,held,1e-6,"A stalled stream holds the newest host frame instead of guessing");
