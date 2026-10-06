@@ -129,6 +129,34 @@ namespace AvH.Tests {
    Assert.LessOrEqual(world.Audio.GetComponentsInChildren<AudioSource>().Count(s=>!s.loop),AudioDirector.MaxVoices);
   }
 
+  [UnityTest] public IEnumerator MissingSoundFilesFallBackToSynthesisKeepPlayingAndAreReported() {
+   root=new GameObject("missing sounds");var audio=root.AddComponent<AudioDirector>();audio.AutomaticUpdate=false;
+   audio.UseLoader(_=>null);
+   LogAssert.Expect(LogType.Warning,new System.Text.RegularExpressions.Regex("합성음 대체.*snarl"));
+   LogAssert.Expect(LogType.Warning,new System.Text.RegularExpressions.Regex("합성음 대체.*music-prepare"));
+   Assert.IsTrue(audio.Play("snarl",Vector3.zero),"A missing clip still sounds");
+   Assert.IsTrue(audio.Observe().Voices.Single().Synthesized);
+   audio.SetPhase(RoundPhase.Preparation,20);
+   var view=audio.Observe();Assert.AreEqual("music-prepare",view.Music,"Missing music is synthesized too");
+   CollectionAssert.IsSupersetOf(view.Fallbacks,new[]{"snarl","music-prepare","ambience"},"Every substituted cue is reported");
+   CollectionAssert.DoesNotContain(view.Fallbacks,"fire","Sounds that are synthesized by design are not a fallback");
+   audio.Play("snarl",Vector3.one);Assert.AreEqual(1,audio.Observe().Fallbacks.Count(c=>c=="snarl"),"Each fallback is reported once");
+   Object.Destroy(root);root=null;
+   // A whole round still plays with every file missing.
+   yield return Create(Faction.Animal,Faction.Human);world.Audio.UseLoader(_=>null);world.BotAutomationEnabled=true;
+   LogAssert.ignoreFailingMessages=false;
+   for(int i=0;i<100;i++){world.Step(.02f);world.Audio.Advance(.02f);}
+   Assert.AreEqual(RoundPhase.Chase,world.Observe().Phase,"Play is never blocked by missing sound");
+   Assert.Greater(world.Audio.Observe().Played.Values.Sum(),0);
+   // The committed CC0 files and, where the purchased assets are configured, the owned sounds load without fallback.
+   root.AddComponent<AudioDirector>();var real=root.GetComponents<AudioDirector>().Last();real.AutomaticUpdate=false;
+   foreach(var entry in AudioCatalog.Entries.Where(e=>e.Origin==SoundOrigin.Cc0))real.Play(entry.Cue,Vector3.zero);
+   real.SetPhase(RoundPhase.Chase,100);
+   CollectionAssert.IsEmpty(real.Observe().Fallbacks,"Committed CC0 sounds always load");
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   if(catalog!=null&&catalog.Sounds!=null&&catalog.Sounds.Length>0){foreach(var entry in AudioCatalog.Entries.Where(e=>e.Origin==SoundOrigin.Owned))real.Play(entry.Cue,Vector3.zero);CollectionAssert.IsEmpty(real.Observe().Fallbacks,"Configured owned sounds load");}
+  }
+
   [UnityTest] public IEnumerator RemoteViewersHearTheSamePublicEventsOnceAndNeverOnJoin() {
    var source=new PlaytestSession(123);source.StartSolo("source");source.BeginSettingsEdit(0);var v=source.ObserveSettings().Edit;v.InitialAttackGrace=0;v.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,v);Assert.IsTrue(source.ApplySettingsNow(0));
    source.Advance(20.01);var state=source.Observe();int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int other=state.Players.Last(p=>p.Faction==Faction.Animal).Slot;
