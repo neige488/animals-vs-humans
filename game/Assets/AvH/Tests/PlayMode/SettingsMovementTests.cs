@@ -20,6 +20,16 @@ namespace AvH.Tests {
     }
    }
   }
+  [Test] public void InertiaSlidersSitOnTheMovementTabAndCanReachZero() {
+   var flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;var panel=new SettingsPanel();
+   var keys=(string[][])typeof(SettingsPanel).GetField("keys",flags).GetValue(panel);var names=(string[][])typeof(SettingsPanel).GetField("names",flags).GetValue(panel);
+   var rangeMethod=typeof(SettingsPanel).GetMethod("Range",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
+   int inertia=System.Array.IndexOf(keys[1],"InertiaSeconds"),air=System.Array.IndexOf(keys[1],"AirControl");
+   Assert.GreaterOrEqual(inertia,0,"Movement tab exposes inertia");Assert.GreaterOrEqual(air,0,"Movement tab exposes air control");
+   Assert.AreEqual(keys[1].Length,names[1].Length);StringAssert.Contains("관성",names[1][inertia]);StringAssert.Contains("공중",names[1][air]);
+   var range=(Vector3)rangeMethod.Invoke(null,new object[]{"InertiaSeconds"});Assert.AreEqual(0,range.x,"Slider reaches 0 = original instant movement");Assert.AreEqual(1,range.y);
+   range=(Vector3)rangeMethod.Invoke(null,new object[]{"AirControl"});Assert.AreEqual(.05f,range.x,1e-6);Assert.AreEqual(1,range.y);
+  }
   [UnityTest] public IEnumerator DebugOverlayKeepsTheWorldRunningAndReleasesTheMouse() {
    var path=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid()+".xml");
    var root=new GameObject("debug overlay capture");var presentation=root.AddComponent<GamePresentation>();
