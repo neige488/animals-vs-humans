@@ -26,6 +26,7 @@ namespace AvH {
    if(!clientStarted)return;client.Pump();
    if(client.Snapshot!=null){
     if(!ReferenceEquals(lastAppliedState,client.Snapshot)){if(world.Session==null){world.StartRemote(client.Snapshot);client.Ready();}else world.ApplyRemoteSnapshot(client.Snapshot);lastAppliedState=client.Snapshot;}
+    world.LocalViewerSlot=client.Slot;foreach(var frame in client.TakeMotionFrames())world.ReceiveRemoteMotion(frame);
     if(!ReferenceEquals(lastAppliedVisual,client.Visuals)){world.ApplyRemoteVisuals(client.Visuals);lastAppliedVisual=client.Visuals;}
    }
    if(client.Status==ConnectionStatus.Interrupted||client.Status==ConnectionStatus.Failed){if(world.Session!=null)world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}

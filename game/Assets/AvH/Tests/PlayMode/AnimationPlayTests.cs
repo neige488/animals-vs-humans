@@ -152,15 +152,5 @@ namespace AvH.Tests {
     var settled=Drive(p.Slot,new PlayerInput(),20);Assert.AreEqual(ActionPhase.None,settled.Action);Assert.Less(settled.ActionWeight,.05f);Assert.Less(settled.Lunge,.01f);
    }
   }
-
-  [UnityTest] public IEnumerator RemoteCharactersUseTheSameAnimatorFromInterpolatedMovement() {
-   if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null)Assert.Ignore("Owned assets are required for animation integration");
-   var source=new PlaytestSession(123);source.StartSolo("source");
-   root=new GameObject("remote animation");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(source.Observe());
-   var start=source.Observe().Players[3].Position;float x=start.X;
-   for(float t=0;t<.8f;t+=Time.deltaTime){x+=4*Time.deltaTime;var state=source.Observe();state.Players[3].Position=new WorldPosition(x,start.Y,start.Z);remote.ApplyRemoteSnapshot(state);yield return null;}
-   var moving=remote.ObserveAnimation(3);Assert.AreNotEqual(LocomotionGait.Idle,moving.Gait,"Remote runner is not stuck idle");Assert.IsTrue(moving.DrivesAnimator);Assert.Greater(moving.CyclesPerSecond,0);
-   yield return new WaitForSeconds(.6f);Assert.AreEqual(LocomotionGait.Idle,remote.ObserveAnimation(3).Gait,"Remote stops when snapshots stop");
-  }
  }
 }

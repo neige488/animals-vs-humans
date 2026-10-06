@@ -47,8 +47,10 @@ namespace AvH {
    if(input.RoundId==0)input.RoundId=Session.Observe().Round;
    inputs[slot]=input;
   }
-  void Update() { if(remoteSnapshot!=null){InterpolateRemote();return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
+  void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
+  /// <summary>Advances the host simulation, or on a remote view advances frame playback by the same time.</summary>
   public void Step(float seconds) {
+   if(remoteSnapshot!=null){InterpolateRemote(seconds);return;}
    if(seconds<=0 || float.IsNaN(seconds) || float.IsInfinity(seconds)) return;
    var before=Session.Observe();
    Session.Advance(seconds);
