@@ -56,7 +56,7 @@ namespace AvH {
    AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
    seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
-   System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);
+   System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);
   }
  }
 }

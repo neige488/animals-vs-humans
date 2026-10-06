@@ -46,7 +46,7 @@ namespace AvH.Tests {
     var adapter=root.AddComponent<UnityPlaytestSession>();adapter.AutomaticStep=false;adapter.BotAutomationEnabled=false;
     adapter.StartSolo("host",123,Path.Combine(directory,"settings.xml"));yield return new WaitForFixedUpdate();
     var s=adapter.Session;s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;
-    v.HumanSpeed=2;v.FriendlyCollision=false;v.EnemyCollision=false;s.UpdateSettingsEdit(0,v);Assert.IsTrue(s.ApplySettingsNow(0));
+    v.HumanSpeed=2;v.InertiaSeconds=0;v.FriendlyCollision=false;v.EnemyCollision=false;s.UpdateSettingsEdit(0,v);Assert.IsTrue(s.ApplySettingsNow(0));
     adapter.Step(.02f);
     Assert.IsTrue(Physics.GetIgnoreCollision(adapter.PlayerTransform(0).GetComponent<CharacterController>(),adapter.PlayerTransform(1).GetComponent<CharacterController>()));
     float before=adapter.Observe().Players[0].Position.X;
@@ -65,7 +65,9 @@ namespace AvH.Tests {
     var adapter=root.AddComponent<UnityPlaytestSession>();adapter.AutomaticStep=false; adapter.BotAutomationEnabled=false;
     adapter.StartSolo("host",123,Path.Combine(directory,"settings.xml"));yield return null;
     var session=adapter.Session;session.BeginSettingsEdit(0);
-    var values=session.ObserveSettings().Edit;values.HumanSpeed=2;values.AnimalSpeed=2;
+    var values=session.ObserveSettings().Edit;values.InertiaSeconds=0;session.UpdateSettingsEdit(0,values);Assert.IsTrue(session.ApplySettingsNow(0));
+    // Exact speed x time checks run with inertia off; the speed change itself is reserved for the next round.
+    session.BeginSettingsEdit(0);values=session.ObserveSettings().Edit;values.HumanSpeed=2;values.AnimalSpeed=2;
     session.UpdateSettingsEdit(0,values);Assert.IsTrue(session.ApplySettings(0));
     for(int i=0;i<20;i++)adapter.Step(.02f);
     float before=adapter.Observe().Players[0].Position.X;
@@ -74,7 +76,7 @@ namespace AvH.Tests {
     // Advance the public clock up to the next-round boundary; the adapter consumes that boundary itself.
     session.Advance(session.Observe().SecondsRemaining+180+4.99);
     adapter.Step(.02f);Assert.AreEqual(2,adapter.Observe().Round);
-    Assert.AreEqual(2,session.ObserveSettings().Version);
+    Assert.AreEqual(3,session.ObserveSettings().Version,"Live inertia-off apply, then the reserved speed at the next round");
     for(int i=0;i<20;i++)adapter.Step(.02f);
     foreach(int slot in new[]{0,4,8}) {
      before=adapter.Observe().Players[slot].Position.X;

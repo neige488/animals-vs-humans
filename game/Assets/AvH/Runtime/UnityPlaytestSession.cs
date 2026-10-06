@@ -14,6 +14,7 @@ namespace AvH {
   readonly List<CharacterController> bodies = new List<CharacterController>();
   readonly PlayerInput[] inputs = new PlayerInput[12];
   readonly float[] vertical = new float[12];
+  readonly MotionState[] motion = new MotionState[12];
   readonly Transform[] guns=new Transform[12];
   readonly Vector3[] returns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
   public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
@@ -57,7 +58,7 @@ namespace AvH {
    var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
-    if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; }
+    if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; }
     if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId){PresentAnimalBirth(before,state,i,body.transform.position);RefreshVisual(i,p.Faction);}
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
@@ -67,7 +68,9 @@ namespace AvH {
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];
-     body.Move((direction*(p.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed*modifiers.Speed)+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
+     motion[i]=CharacterMotion.Next(motion[i],new MotionIntent{DirectionX=direction.x,DirectionZ=direction.z,Grounded=wasGrounded},CharacterMotion.Profile(rules,p),seconds);
+     var planar=new Vector3(motion[i].VelocityX,0,motion[i].VelocityZ);
+     body.Move((planar+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
      if(!wasGrounded&&body.isGrounded&&fallingSpeed< -4)Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
      foreach(var animator in body.GetComponentsInChildren<Animator>()) {
@@ -81,9 +84,9 @@ namespace AvH {
      if(body.transform.position.y < -12) {
       var closest=returns[0]; float distance=float.MaxValue;
       foreach(var point in returns) { var d=Vector2.SqrMagnitude(new Vector2(point.x-body.transform.position.x,point.z-body.transform.position.z)); if(d<distance) {distance=d;closest=point;} }
-      Warp(body,closest); vertical[i]=0;
+      Warp(body,closest); vertical[i]=0; motion[i]=default;
      }
-    }
+    } else motion[i]=default;
     var pos=body.transform.position;
     Session.RecordWorldPosition(i,new WorldPosition(pos.x,pos.y,pos.z));
     pushVelocity[i]=Vector3.MoveTowards(pushVelocity[i],Vector3.zero,20*seconds);
