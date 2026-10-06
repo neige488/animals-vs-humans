@@ -61,6 +61,29 @@ namespace AvH.Tests {
    Assert.IsNotEmpty(sources);foreach(var s in sources)Assert.AreEqual(1,s.spatialBlend,1e-4,"Every effect source is 3D: "+s.clip.name);
   }
 
+  [UnityTest] public IEnumerator FootstepsFollowTheStrideAndAnimalsGrowlWhileChasing() {
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.HitStopSeconds=0;});
+   world.Step(.02f);world.Step(1f);Spread();Warp(0,new Vector3(70,0,10));Warp(8,new Vector3(70,0,-10));Physics.SyncTransforms();Step(10);world.Audio.Advance(5);
+   var state=world.Observe();var animal=AudioDirector.For(Faction.Animal,state.Players[0].CharacterId);var human=AudioDirector.For(Faction.Human,state.Players[8].CharacterId);
+   Assert.AreNotEqual(human.Step,animal.Step,"Animals and humans have different footsteps");
+   int humanSteps=world.Audio.Observe().Count(human.Step),animalSteps=world.Audio.Observe().Count(animal.Step);
+   Step(25);
+   Assert.AreEqual(humanSteps,world.Audio.Observe().Count(human.Step),"Standing still makes no footsteps");
+   int heardHuman=0;float pitch=0;
+   for(int i=0;i<50;i++){Step(1,(8,new PlayerInput{Forward=1,Yaw=90}),(0,new PlayerInput{Forward=1,Yaw=90}));
+    foreach(var voice in world.Audio.Observe().Voices.Where(x=>x.Cue==animal.Step&&Vector3.Distance(x.Position,world.PlayerTransform(0).position)<1.5f))pitch=voice.Pitch;
+    if(world.Audio.Observe().Voices.Any(x=>x.Cue==human.Step&&Vector3.Distance(x.Position,world.PlayerTransform(8).position)<1.5f))heardHuman++;}
+   int walked=world.Audio.Observe().Count(human.Step)-humanSteps;
+   Assert.GreaterOrEqual(walked,3,"One second of running is several footfalls");Assert.LessOrEqual(walked,12,"...one per stride foot, not one per frame");
+   Assert.Greater(heardHuman,0,"The footstep is a 3D sound at the runner's feet");
+   Assert.GreaterOrEqual(world.Audio.Observe().Count(animal.Step)-animalSteps,3,"The animal's paws are heard too");
+   Assert.AreEqual(animal.StepPitch,pitch,.1f,"Footsteps carry the species' weight (pitch)");
+   int growls=world.Audio.Observe().Count(animal.Growl);
+   for(int i=0;i<900;i++){var dir=i/150%2==0?90:270;Step(1,(0,new PlayerInput{Forward=1,Yaw=dir}));world.Audio.Advance(.02f);}
+   Assert.Greater(world.Audio.Observe().Count(animal.Growl),growls,"A chasing animal growls now and then");
+   Assert.Less(world.Audio.Observe().Count(animal.Growl),growls+5,"...but only occasionally");
+  }
+
   [UnityTest] public IEnumerator RemoteViewersHearTheSamePublicEventsOnceAndNeverOnJoin() {
    var source=new PlaytestSession(123);source.StartSolo("source");source.BeginSettingsEdit(0);var v=source.ObserveSettings().Edit;v.InitialAttackGrace=0;v.AttackWindupSeconds=0;source.UpdateSettingsEdit(0,v);Assert.IsTrue(source.ApplySettingsNow(0));
    source.Advance(20.01);var state=source.Observe();int animal=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int other=state.Players.Last(p=>p.Faction==Faction.Animal).Slot;
