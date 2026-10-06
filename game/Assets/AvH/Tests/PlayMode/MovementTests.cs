@@ -59,12 +59,12 @@ namespace AvH.Tests {
   [UnityTest] public IEnumerator RemoteFacingSmoothlyCatchesUpAndSnapsAtWarp() {
    var source=new PlaytestSession(123);source.StartSolo("source");
    var root=new GameObject("remote facing");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(source.Observe());
-   var first=new NetworkVisualState();first.Yaws[0]=10;remote.ApplyRemoteVisuals(first);
+   var first=RemoteFrames.Facing(source.Observe(),0,0,10);remote.ApplyRemoteVisuals(first);
    Assert.Less(Mathf.Abs(Mathf.DeltaAngle(remote.PlayerTransform(0).eulerAngles.y,10)),.01f);
-   var next=new NetworkVisualState();next.Yaws[0]=123;remote.ApplyRemoteVisuals(next);yield return null;
+   var next=RemoteFrames.Facing(source.Observe(),.05,0,123);remote.ApplyRemoteVisuals(next);yield return null;
    float angle=remote.PlayerTransform(0).eulerAngles.y;Assert.Greater(angle,10);Assert.Less(angle,123);
    var reset=source.Observe();reset.Players[0].Position=new WorldPosition(12,1,0);remote.ApplyRemoteSnapshot(reset,true);
-   var resetVisual=new NetworkVisualState();resetVisual.Yaws[0]=270;remote.ApplyRemoteVisuals(resetVisual);
+   var resetVisual=RemoteFrames.Facing(reset,.1,0,270);remote.ApplyRemoteVisuals(resetVisual);
    Assert.Less(Mathf.Abs(Mathf.DeltaAngle(remote.PlayerTransform(0).eulerAngles.y,270)),.01f);
    Object.Destroy(root);yield return null;
   }

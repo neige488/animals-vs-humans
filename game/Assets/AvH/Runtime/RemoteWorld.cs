@@ -26,21 +26,21 @@ namespace AvH {
    if(immediate)ForgetPresentedEvents();PresentEvents(state);
   }
   void InterpolateRemote() {
-   float dt=Time.deltaTime;bool yaws=remoteVisuals!=null&&remoteVisuals.Yaws.Length==12;
+   float dt=Time.deltaTime;bool yaws=remoteVisuals!=null&&remoteVisuals.Motion.Bodies.Length==12;
    foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];var next=ToVector(p.Position);var from=body.transform.position;
     body.transform.position=Vector3.Lerp(from,next,Mathf.Min(1,dt*20));
-    if(yaws)body.transform.rotation=Quaternion.Slerp(body.transform.rotation,Quaternion.Euler(0,remoteVisuals.Yaws[p.Slot],0),1-Mathf.Exp(-24f*dt));
+    if(yaws)body.transform.rotation=Quaternion.Slerp(body.transform.rotation,Quaternion.Euler(0,remoteVisuals.Motion.Bodies[p.Slot].AimYaw(),0),1-Mathf.Exp(-24f*dt));
     // Until snapshots carry motion state (S4), the shared animator reads motion estimated from the interpolation.
     if(dt>0){var step=(body.transform.position-from)/dt;
      body.GetComponent<CharacterAnimator>().Apply(new LocomotionState{VelocityX=step.x,VelocityZ=step.z,VerticalSpeed=step.y,Grounded=Mathf.Abs(step.y)<1.5f,
-      AimYaw=yaws?remoteVisuals.Yaws[p.Slot]:body.transform.eulerAngles.y},dt);}
+      AimYaw=yaws?remoteVisuals.Motion.Bodies[p.Slot].AimYaw():body.transform.eulerAngles.y},dt);}
    }
   }
   public void ApplyRemoteVisuals(NetworkVisualState visual) {
    if(ReferenceEquals(remoteVisuals,visual))return;
    bool liveEffects=remoteVisuals!=null;remoteVisuals=visual;if(visual==null)return;
-   for(int i=0;i<bodies.Count&&i<visual.Yaws.Length;i++)if(snapRemoteFacing[i]){bodies[i].transform.rotation=Quaternion.Euler(0,visual.Yaws[i],0);snapRemoteFacing[i]=false;}
-   for(int i=0;i<guns.Length&&i<visual.Yaws.Length;i++)if(guns[i]!=null){var pose=guns[i].GetComponent<BubbleGunPose>();pose.SetAim(visual.Yaws[i],pose.AimPitch);}
+   for(int i=0;i<bodies.Count&&i<visual.Motion.Bodies.Length;i++)if(snapRemoteFacing[i]){bodies[i].transform.rotation=Quaternion.Euler(0,visual.Motion.Bodies[i].AimYaw(),0);snapRemoteFacing[i]=false;}
+   for(int i=0;i<guns.Length&&i<visual.Motion.Bodies.Length;i++)if(guns[i]!=null){var pose=guns[i].GetComponent<BubbleGunPose>();pose.SetAim(visual.Motion.Bodies[i].AimYaw(),pose.AimPitch);}
    var incoming=new HashSet<int>(visual.Bubbles.Select(b=>b.Id));
    foreach(int id in remoteBubbles.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBubbles[id]);remoteBubbles.Remove(id);}
    foreach(var bubble in visual.Bubbles){GameObject obj;if(!remoteBubbles.TryGetValue(bubble.Id,out obj)){
