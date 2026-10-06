@@ -45,7 +45,7 @@ namespace AvH {
     if(client.Status==ConnectionStatus.Failed)if(GUI.Button(new Rect(w/2-245,c+40,230,42),"재시도")){world.ResetSession();client.Connect(code,lastNickname);}
     if(GUI.Button(new Rect(w/2+15,c+40,230,42),"취소 · 시작 화면"))Leave();return;
    }
-   float extra=displayRows==null?0:DisplaySettingsMenu.Height;GUI.Box(new Rect(w/2-280,c+65,560,275+extra),"");
+   float extra=displayRows==null?0:DisplaySettingsMenu.Height;GUI.Box(StartScreenLayout.ConnectPanel(w,c,displayRows!=null),"");
    GUI.Label(new Rect(w/2-270,c+70,540,30),"같은 LAN 또는 기존 VPN에서 연결",label);
    GUI.Label(new Rect(w/2-270,c+101,175,25),"호스트 IPv4 주소");address=GUI.TextField(new Rect(w/2-85,c+100,345,28),address,45);
    IPAddress ip;bool validAddress=IPAddress.TryParse(address,out ip)&&ip.AddressFamily==AddressFamily.InterNetwork;GUI.enabled=!string.IsNullOrWhiteSpace(nickname)&&validAddress;

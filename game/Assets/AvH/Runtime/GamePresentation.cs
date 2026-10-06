@@ -163,9 +163,8 @@ namespace AvH {
     if(GUI.Button(new Rect(w-160,16,140,36),"게임 종료")){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;Application.Quit();return;}
    }
    if(session.Session==null||!network.CanPlay) {
-    // Lifted so the local display rows fit under the join controls at 1280x720.
-    float c=h/2-80;
-    GUI.Box(new Rect(w/2-220,c-145,440,290),"");
+    var layout=StartScreenLayout.For(w,h,true);float c=layout.Center;
+    GUI.Box(layout.Title,"");
     GUI.Label(new Rect(w/2-210,c-125,420,45),"Animals vs Humans",title);
     GUI.Label(new Rect(w/2-190,c-65,380,30),"닉네임 (1~20자)",label);
     nickname=GUI.TextField(new Rect(w/2-160,c-25,320,35),nickname,20);
