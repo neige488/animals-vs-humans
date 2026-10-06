@@ -1,6 +1,24 @@
 using NUnit.Framework;
 namespace AvH.Tests {
 public class SettingsTests {
+ [Test] public void BotAimReactionDefaultsAreSmallValidatedAndOlderSettingsFilesKeepThem() {
+  var defaults=new PlaytestValues();Assert.AreEqual(.2f,defaults.BotAimDelaySeconds);Assert.AreEqual(3f,defaults.BotAimErrorDegrees);
+  var session=new PlaytestSession(1);session.StartSolo("host");
+  bool Accepts(System.Action<PlaytestValues> change){session.BeginSettingsEdit(0);var v=session.ObserveSettings().Edit;change(v);session.UpdateSettingsEdit(0,v);return session.ApplySettingsNow(0);}
+  Assert.IsTrue(Accepts(v=>{v.BotAimDelaySeconds=0;v.BotAimErrorDegrees=0;}),"0 = the original exact aim");
+  Assert.IsTrue(Accepts(v=>{v.BotAimDelaySeconds=1;v.BotAimErrorDegrees=15;}));
+  foreach(var bad in new System.Action<PlaytestValues>[]{v=>v.BotAimDelaySeconds=1.01f,v=>v.BotAimDelaySeconds=-.01f,v=>v.BotAimDelaySeconds=float.NaN,v=>v.BotAimErrorDegrees=15.1f,v=>v.BotAimErrorDegrees=-1,v=>v.BotAimErrorDegrees=float.PositiveInfinity})
+   Assert.IsFalse(Accepts(bad));
+  Assert.IsFalse(session.BeginSettingsEdit(1),"Only the host tunes bots");
+  var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString());System.IO.Directory.CreateDirectory(dir);var path=System.IO.Path.Combine(dir,"settings.xml");
+  try {
+   var saved=new PlaytestSession(1,path);saved.StartSolo("host");saved.BeginSettingsEdit(0);var v=saved.ObserveSettings().Edit;v.RoundSeconds=90;saved.UpdateSettingsEdit(0,v);saved.ApplySettings(0);
+   var xml=System.IO.File.ReadAllText(path);StringAssert.Contains("<BotAimDelaySeconds>",xml);
+   xml=System.Text.RegularExpressions.Regex.Replace(xml,@"\s*<BotAim(DelaySeconds|ErrorDegrees)>[^<]*</BotAim\w+>","");System.IO.File.WriteAllText(path,xml);
+   var older=new PlaytestSession(2,path).ObserveSettings();
+   Assert.IsNull(older.Error);Assert.AreEqual(90,older.Current.RoundSeconds);Assert.AreEqual(.2f,older.Current.BotAimDelaySeconds);Assert.AreEqual(3f,older.Current.BotAimErrorDegrees);
+  } finally {System.IO.Directory.Delete(dir,true);}
+ }
  [Test] public void ValidXmlWithInvalidValuesFallsBackWithoutChangingOriginal() {
   var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString());
   System.IO.Directory.CreateDirectory(dir);var path=System.IO.Path.Combine(dir,"settings.xml");

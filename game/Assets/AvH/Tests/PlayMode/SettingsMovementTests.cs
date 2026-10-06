@@ -20,6 +20,17 @@ namespace AvH.Tests {
     }
    }
   }
+  [Test] public void BotAimSlidersSitOnTheirOwnTabAndCanReachZero() {
+   var flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;var panel=new SettingsPanel();
+   var tabs=(string[])typeof(SettingsPanel).GetField("tabs",flags).GetValue(panel);
+   var keys=(string[][])typeof(SettingsPanel).GetField("keys",flags).GetValue(panel);var names=(string[][])typeof(SettingsPanel).GetField("names",flags).GetValue(panel);
+   var rangeMethod=typeof(SettingsPanel).GetMethod("Range",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
+   int tab=System.Array.IndexOf(tabs,"봇");Assert.GreaterOrEqual(tab,0,"Debug panel has a bot tab");
+   CollectionAssert.AreEqual(new[]{"BotAimDelaySeconds","BotAimErrorDegrees"},keys[tab]);Assert.AreEqual(2,names[tab].Length);
+   StringAssert.Contains("반응",names[tab][0]);StringAssert.Contains("오차",names[tab][1]);
+   var delay=(Vector3)rangeMethod.Invoke(null,new object[]{"BotAimDelaySeconds"});Assert.AreEqual(0,delay.x,"0 = original instant aim");Assert.AreEqual(1,delay.y);
+   var error=(Vector3)rangeMethod.Invoke(null,new object[]{"BotAimErrorDegrees"});Assert.AreEqual(0,error.x,"0 = original exact aim");Assert.AreEqual(15,error.y);
+  }
   [Test] public void InertiaSlidersSitOnTheMovementTabAndCanReachZero() {
    var flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;var panel=new SettingsPanel();
    var keys=(string[][])typeof(SettingsPanel).GetField("keys",flags).GetValue(panel);var names=(string[][])typeof(SettingsPanel).GetField("names",flags).GetValue(panel);
