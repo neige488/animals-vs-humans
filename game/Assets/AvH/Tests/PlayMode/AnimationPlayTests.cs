@@ -97,7 +97,7 @@ namespace AvH.Tests {
    var landing=new Dictionary<string,(float squash,float rebound)>();var roll=new Dictionary<string,float>();var pitch=new Dictionary<string,float>();
    foreach(var p in animals) {
     float maxPitch=0;for(int i=0;i<8;i++)maxPitch=Mathf.Max(maxPitch,Drive(p.Slot,new PlayerInput{Forward=1},1).BodyPitch);pitch[p.CharacterId]=maxPitch;
-    float maxRoll=0;CharacterAnimationView run=default;for(int i=0;i<40;i++){run=Drive(p.Slot,new PlayerInput{Forward=1},1);maxRoll=Mathf.Max(maxRoll,Mathf.Abs(run.BodyRoll));}roll[p.CharacterId]=maxRoll;
+    float maxRoll=0;CharacterAnimationView run=default;for(int i=0;i<45;i++){run=Drive(p.Slot,new PlayerInput{Forward=1},1);if(i>=25)maxRoll=Mathf.Max(maxRoll,Mathf.Abs(run.BodyRoll));}roll[p.CharacterId]=maxRoll;// roll sampled after the heading settles
     Assert.AreEqual(LocomotionGait.Run,run.Gait,p.CharacterId);Assert.IsTrue(run.DrivesAnimator,p.CharacterId);Assert.Greater(run.CyclesPerSecond,0);
     StringAssert.Contains("Run",run.RunClip,p.CharacterId);StringAssert.Contains("Walk",run.WalkClip,p.CharacterId);
     Drive(p.Slot,new PlayerInput(),30);world.SubmitInput(p.Slot,new PlayerInput{Jump=true});world.Step(.02f);
@@ -113,6 +113,16 @@ namespace AvH.Tests {
    Assert.Greater(pitch["animal-boar"],pitch["animal-bear_grizzly"],"Boar leans into its charge more than the bear");
    Assert.Greater(pitch["animal-wolf"],1,"Runners lean into acceleration");
    StringAssert.Contains("Jump",world.ObserveAnimation(animals.First(p=>p.CharacterId=="animal-rabbit_brown").Slot).AirClip,"Rabbit uses its own jump clip");
+  }
+
+  [UnityTest] public IEnumerator RemoteCharactersUseTheSameAnimatorFromInterpolatedMovement() {
+   if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null)Assert.Ignore("Owned assets are required for animation integration");
+   var source=new PlaytestSession(123);source.StartSolo("source");
+   root=new GameObject("remote animation");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(source.Observe());
+   var start=source.Observe().Players[3].Position;float x=start.X;
+   for(float t=0;t<.8f;t+=Time.deltaTime){x+=4*Time.deltaTime;var state=source.Observe();state.Players[3].Position=new WorldPosition(x,start.Y,start.Z);remote.ApplyRemoteSnapshot(state);yield return null;}
+   var moving=remote.ObserveAnimation(3);Assert.AreNotEqual(LocomotionGait.Idle,moving.Gait,"Remote runner is not stuck idle");Assert.IsTrue(moving.DrivesAnimator);Assert.Greater(moving.CyclesPerSecond,0);
+   yield return new WaitForSeconds(.6f);Assert.AreEqual(LocomotionGait.Idle,remote.ObserveAnimation(3).Gait,"Remote stops when snapshots stop");
   }
  }
 }
