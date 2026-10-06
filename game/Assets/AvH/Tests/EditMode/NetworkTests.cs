@@ -111,7 +111,7 @@ namespace AvH.Tests {
   }
   [Test] public void SpeciesTuningIsSentLiveAndPreviousProtocolIsRejected() {
    var world=new PlaytestSession(2);world.StartSolo("host");
-   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient())using(var old=new PrivateRoomClient(protocolVersion:"avh-private-7")) {
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient())using(var old=new PrivateRoomClient(protocolVersion:"avh-private-8")) {
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.RabbitSpeedMultiplier=2.2f;rules.BearKnockbackMultiplier=.2f;
     world.UpdateSettingsEdit(0,rules);Assert.IsTrue(world.ApplySettingsNow(0));
@@ -167,10 +167,32 @@ namespace AvH.Tests {
     Assert.AreEqual(ActionPhase.HitStop,client.Snapshot.Players[slot].Action,"The action phase travels with the public state");
    }
   }
+  static NetworkMotionFrame Frame(int n)=>new NetworkMotionFrame{HostTime=n*.05,Bodies=Enumerable.Range(0,12).Select(slot=>NetworkBodyMotion.Encode(new WorldPosition(n*.1f+slot,1.234f,-3.21f),-170.004f,-12.5f,
+   new LocomotionState{VelocityX=4.987f,VelocityZ=-1.5f,VerticalSpeed=6.2f,Grounded=false,TopSpeed=5.6f,Action=ActionPhase.Windup,ActionProgress=.4f})).ToArray()};
+  [Test] public void HostMotionFramesReachTheClientInOrderQuantizedAndCompact() {
+   var world=new PlaytestSession(2);world.StartSolo("host");int captured=0;var frames=new System.Collections.Generic.List<NetworkMotionFrame>();
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
+    host.CaptureVisuals=()=>new NetworkVisualState{Motion=Frame(++captured)};
+    client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
+    client.TakeMotionFrames();
+    // Several host frames per client pump arrive together; every one is kept for the playback buffer.
+    for(int i=0;i<10;i++)host.Pump();Until(host,client,()=>{frames.AddRange(client.TakeMotionFrames());return frames.Count>=10;});
+    for(int i=1;i<frames.Count;i++)Assert.AreEqual(.05,frames[i].HostTime-frames[i-1].HostTime,1e-9,"No frame lost or reordered");
+    var body=frames[0].Bodies[3];var motion=body.Locomotion();var position=body.Position();
+    Assert.AreEqual(12,frames[0].Bodies.Length);
+    Assert.AreEqual(frames[0].HostTime/.05*.1+3,position.X,.006);Assert.AreEqual(1.234,position.Y,.006);Assert.AreEqual(-3.21,position.Z,.006);
+    Assert.AreEqual(-170.004,body.AimYaw(),.006);Assert.AreEqual(-12.5,body.AimPitch(),.006);
+    Assert.AreEqual(4.987,motion.VelocityX,.006);Assert.AreEqual(-1.5,motion.VelocityZ,.006);Assert.AreEqual(6.2,motion.VerticalSpeed,.006);Assert.AreEqual(5.6,motion.TopSpeed,.006);
+    Assert.IsFalse(motion.Grounded);Assert.AreEqual(ActionPhase.Windup,motion.Action);Assert.AreEqual(.4,motion.ActionProgress,1/255.0);
+    Assert.AreEqual(-170.004,motion.AimYaw,.006);
+    // Bandwidth: 12 bodies at 20 Hz must stay small next to the existing state snapshot.
+    Assert.LessOrEqual(RoomProtocol.EncodedBytes(frames[0]),12*21+16);
+   }
+  }
   [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
-   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-8"));
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-9"));
    Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("D0Gj7BkkgntgBieG046vbu1zoSHycg25RW+RN/58KaI="),"Schema changes require explicit protocol version and guard update");
-   foreach(var t in new[]{typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent)}) {
+   foreach(var t in new[]{typeof(NetworkMotionFrame),typeof(NetworkBodyMotion),typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent)}) {
     Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
     Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);
    }
