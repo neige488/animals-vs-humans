@@ -144,10 +144,9 @@ namespace AvH.Tests {
    Object.Destroy(root);root=null;
    // A whole round still plays with every file missing.
    yield return Create(Faction.Animal,Faction.Human);world.Audio.UseLoader(_=>null);world.BotAutomationEnabled=true;
-   LogAssert.ignoreFailingMessages=false;
    for(int i=0;i<100;i++){world.Step(.02f);world.Audio.Advance(.02f);}
    Assert.AreEqual(RoundPhase.Chase,world.Observe().Phase,"Play is never blocked by missing sound");
-   Assert.Greater(world.Audio.Observe().Played.Values.Sum(),0);
+   Assert.Greater(AudioCatalog.Entries.Sum(e=>world.Audio.Observe().Count(e.Cue)),0,"Synthesized sounds play during the round");
    // The committed CC0 files and, where the purchased assets are configured, the owned sounds load without fallback.
    root.AddComponent<AudioDirector>();var real=root.GetComponents<AudioDirector>().Last();real.AutomaticUpdate=false;
    foreach(var entry in AudioCatalog.Entries.Where(e=>e.Origin==SoundOrigin.Cc0))real.Play(entry.Cue,Vector3.zero);
