@@ -87,8 +87,10 @@ namespace AvH {
    if(seconds<=0||float.IsNaN(seconds)||float.IsInfinity(seconds))return;
    float dt=seconds;var velocity=new Vector3(state.VelocityX,0,state.VelocityZ);float speed=velocity.magnitude;
    // Gait hysteresis: start instantly, but only call it stopped after holding still briefly.
-   if(speed>StartSpeed){moving=true;stillTime=0;}
-   else if(speed<StopSpeed){stillTime+=dt;if(stillTime>=StopHold)moving=false;}
+   // Thresholds shrink with a very slow configured top speed so a slow walk never glides in the idle pose.
+   float start=state.TopSpeed>0?Mathf.Min(StartSpeed,state.TopSpeed*.5f):StartSpeed,stop=state.TopSpeed>0?Mathf.Min(StopSpeed,state.TopSpeed*.25f):StopSpeed;
+   if(speed>start){moving=true;stillTime=0;}
+   else if(speed<stop){stillTime+=dt;if(stillTime>=StopHold)moving=false;}
    else stillTime=0;
    float walkSpeed=referenceSpeed*.3f,runSpeed=referenceSpeed*.85f;
    float blend=Mathf.SmoothStep(0,1,Mathf.InverseLerp(walkSpeed,runSpeed,speed));
@@ -105,7 +107,7 @@ namespace AvH {
    view.AirWeight=Mathf.MoveTowards(view.AirWeight,airborne?1:0,dt/.06f);
    // Human stride: legs turn toward the move heading, reversing the cycle when backing away.
    int direction=1;float legTarget=0;
-   if(pose!=null&&moving&&speed>StopSpeed) {
+   if(pose!=null&&moving&&speed>stop) {
     float moveYaw=Mathf.Atan2(velocity.x,velocity.z)*Mathf.Rad2Deg;float relative=Mathf.DeltaAngle(state.AimYaw,moveYaw);
     float limit=view.StrideDirection<0?100:125;
     direction=Mathf.Abs(relative)<=limit?1:-1;

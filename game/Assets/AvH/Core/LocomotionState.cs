@@ -9,5 +9,7 @@ namespace AvH {
   /// <summary>Camera/aim heading in degrees; humans keep their upper body on it.</summary>
   public float AimYaw;
   public bool Grounded;
+  /// <summary>Current top ground speed for this character (m/s). 0 = unknown; gait thresholds fall back to fixed values.</summary>
+  public float TopSpeed;
  }
 }
