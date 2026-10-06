@@ -33,7 +33,7 @@ namespace AvH {
     if(reset||remoteMotion.Count==0&&Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>NetworkBodyMotion.TeleportDistance){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
     bodies[p.Slot].enabled=false;
    }
-   if(immediate||old==null||state.Round!=old.Round)remoteMotion.Clear();
+   if(immediate||old==null||state.Round!=old.Round){remoteMotion.Clear();props?.ForgetRemote();}
    if(state.Phase==RoundPhase.Results&&(old==null||old.Phase!=RoundPhase.Results))CutTransformations();
    if(immediate)ForgetPresentedEvents();PresentEvents(state);PresentStateAudio(state,immediate);
   }
@@ -62,6 +62,8 @@ namespace AvH {
     var motion=pose.Motion;if(stalled){motion.VelocityX=motion.VelocityZ=motion.VerticalSpeed=0;}
     body.GetComponent<CharacterAnimator>().Apply(motion,dt);
    }
+   // Pushed props play back on the same clock as the bodies that pushed them.
+   props?.Present(from,to,t);
    // Footsteps and growls follow the played-back animation (merged S3 audio with S4 playback).
    PresentMotionAudio(remoteSnapshot,dt);
   }

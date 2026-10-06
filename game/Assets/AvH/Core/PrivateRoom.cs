@@ -12,7 +12,7 @@ namespace AvH {
   public static string Create(){var bytes=new byte[16];using(var rng=System.Security.Cryptography.RandomNumberGenerator.Create())rng.GetBytes(bytes);return BitConverter.ToString(bytes).Replace("-","").ToLowerInvariant();}
  }
  public static class RoomProtocol {
-  public const string Version="avh-private-9";
+  public const string Version="avh-private-10";
   public static string SchemaFingerprint()=>BuildVersion();
   /// <summary>Encoded size of one wire value in bytes (bandwidth checks).</summary>
   public static int EncodedBytes(object value)=>RoomWire.Encode(value).Length;

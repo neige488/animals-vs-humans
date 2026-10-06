@@ -175,6 +175,44 @@ namespace AvH {
    p.Velocity+=new Vector2(velocity.x,velocity.z);p.Spin=Mathf.Clamp(p.Spin+(index%2==0?1:-1)*velocity.magnitude*12,-240,240);Wake(p);
   }
 
+  /// <summary>
+  /// Host frame payload: props moving now or settled within <see cref="SettleWindow"/>; with <paramref name="refresh"/>
+  /// also every prop away from home, so a late joiner learns where resting props lie.
+  /// </summary>
+  public NetworkPropMotion[] Capture(double hostTime,bool refresh) {
+   var result=new List<NetworkPropMotion>();
+   for(int i=0;i<props.Count&&result.Count<512;i++) {
+    var p=props[i];
+    bool recent=p.Moving||hostTime-p.SettledAt<SettleWindow;
+    bool displaced=p.Lost||(p.Position-p.Home).sqrMagnitude>1e-6f||Mathf.Abs(Mathf.DeltaAngle(p.Yaw,p.HomeYaw))>.05f;
+    if(recent||refresh&&displaced)result.Add(NetworkPropMotion.Encode(i,p.Lost?new WorldPosition(p.Position.x,LostDepth*2,p.Position.z):new WorldPosition(p.Position.x,p.Position.y,p.Position.z),p.Yaw));
+   }
+   return result.ToArray();
+  }
+  // Remote view: the last pose each prop was shown with, so frames that omit a resting prop keep it in place.
+  NetworkPropMotion?[] known;
+  /// <summary>Remote view: shows the props between two played-back host frames (a prop absent from a frame stays where it was).</summary>
+  public void Present(NetworkMotionFrame from,NetworkMotionFrame to,float t) {
+   if(props.Count==0||from==null)return;
+   if(known==null||known.Length!=props.Count)known=new NetworkPropMotion?[props.Count];
+   var a=new NetworkPropMotion?[props.Count];var b=new NetworkPropMotion?[props.Count];
+   foreach(var pose in from.Props)if(pose.Index<props.Count)a[pose.Index]=pose;
+   if(to!=null)foreach(var pose in to.Props)if(pose.Index<props.Count)b[pose.Index]=pose;
+   for(int i=0;i<props.Count;i++) {
+    var start=a[i]??known[i];var end=b[i]??start;if(!end.HasValue)continue;
+    var p=props[i];var from3=Vector(start??end.Value);var to3=Vector(end.Value);
+    bool warp=(to3-from3).sqrMagnitude>NetworkBodyMotion.TeleportDistance*NetworkBodyMotion.TeleportDistance;
+    p.Position=warp||t>=1?to3:Vector3.Lerp(from3,to3,t);
+    p.Yaw=Mathf.Repeat(warp||t>=1?end.Value.AimYaw():Mathf.LerpAngle((start??end.Value).AimYaw(),end.Value.AimYaw(),t),360);
+    p.Lost=p.Position.y<LostDepth;p.Moving=a[i].HasValue||b[i].HasValue;
+    if(a[i].HasValue)known[i]=a[i];if(t>=1&&b[i].HasValue)known[i]=b[i];
+    Show(p);
+   }
+  }
+  /// <summary>Remote view: forget what earlier frames said (new round, rejoin); every prop shows at home.</summary>
+  public void ForgetRemote(){known=null;ResetHome();}
+  static Vector3 Vector(NetworkPropMotion pose){var w=pose.Position();return new Vector3(w.X,w.Y,w.Z);}
+
   void Show(Prop p) {
    if(p.Visual==null)return;
    if(p.Visual.gameObject.activeSelf==p.Lost)p.Visual.gameObject.SetActive(!p.Lost);

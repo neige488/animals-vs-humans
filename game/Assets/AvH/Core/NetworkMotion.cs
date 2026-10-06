@@ -16,9 +16,10 @@ namespace AvH {
  /// <summary>One pushed prop's pose for the wire (10 bytes): its index in the shared village order, centimetres and hundredths of a degree.</summary>
  [Serializable] public struct NetworkPropMotion {
   public short Index,X,Y,Z,Yaw;
-  public static NetworkPropMotion Encode(int index,WorldPosition position,float yaw)=>default;
-  public WorldPosition Position()=>default;
-  public float AimYaw()=>0;
+  public static NetworkPropMotion Encode(int index,WorldPosition position,float yaw)=>new NetworkPropMotion{
+   Index=(short)Math.Max(0,Math.Min(short.MaxValue,index)),X=NetworkBodyMotion.Centi(position.X),Y=NetworkBodyMotion.Centi(position.Y),Z=NetworkBodyMotion.Centi(position.Z),Yaw=NetworkBodyMotion.Centi(NetworkBodyMotion.NormalizeAngle(yaw))};
+  public WorldPosition Position()=>new WorldPosition(X/100f,Y/100f,Z/100f);
+  public float AimYaw()=>Yaw/100f;
  }
  /// <summary>
  /// One body's motion quantized for the wire (21 bytes): centimetres, centimetres per second, hundredths of a degree
@@ -58,7 +59,7 @@ namespace AvH {
    return new RemoteBodyPose{Position=new WorldPosition(Lerp(pa.X,pb.X,t),Lerp(pa.Y,pb.Y,t),Lerp(pa.Z,pb.Z,t)),Yaw=yaw,Pitch=Lerp(from.AimPitch(),to.AimPitch(),t),Motion=motion};
   }
   static float Lerp(float a,float b,float t)=>a+(b-a)*t;
-  static short Centi(float value)=>(short)Math.Max(short.MinValue,Math.Min(short.MaxValue,Math.Round(Finite(value)*100)));
+  internal static short Centi(float value)=>(short)Math.Max(short.MinValue,Math.Min(short.MaxValue,Math.Round(Finite(value)*100)));
   static float Finite(float value)=>float.IsNaN(value)||float.IsInfinity(value)?0:value;
   static float Clamp01(float value)=>Math.Max(0,Math.Min(1,value));
   internal static float NormalizeAngle(float degrees){degrees=Finite(degrees)%360;if(degrees>=180)degrees-=360;if(degrees<-180)degrees+=360;return degrees;}

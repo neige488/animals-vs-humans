@@ -143,9 +143,14 @@ namespace AvH {
   readonly LocomotionState[] presented=new LocomotionState[12];
   void Animate(int slot,LocomotionState state,float seconds){presented[slot]=state;bodies[slot].GetComponent<CharacterAnimator>().Apply(state,seconds);}
   /// <summary>Host presentation frame for remote viewers: each body's position, facing, aim pitch and the motion it was animated with.</summary>
-  public NetworkMotionFrame CaptureMotion()=>new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
+  public NetworkMotionFrame CaptureMotion() {
+   // Resting displaced props ride a frame twice a second so late joiners learn where they lie.
+   bool refresh=Session.HostTime>=nextPropRefresh||Session.HostTime<nextPropRefresh-1;if(refresh)nextPropRefresh=Session.HostTime+.5;
+   return new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,Props=props==null?new NetworkPropMotion[0]:props.Capture(Session.HostTime,refresh),Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
    var p=bodies[i].transform.position;float pitch=guns[i]!=null?guns[i].GetComponent<BubbleGunPose>().AimPitch:0;
    return NetworkBodyMotion.Encode(new WorldPosition(p.x,p.y,p.z),PresentationYaw(i),pitch,presented[i]);}).ToArray()};
+  }
+  double nextPropRefresh;
   internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
