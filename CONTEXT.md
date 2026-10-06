@@ -609,3 +609,4 @@ Esc 메뉴 (플레이 중에도 매치는 계속 진행)
 | 부분 실패 | 품질 설정 저장 실패는 이번 실행에만 적용 안내 후 계속한다. CC0 소리 확보에 실패한 항목은 합성음으로 두고 해당 범위를 미완료로 보고한다. |
 | 자원 한계 | 저사양 PC는 그래픽 품질 선택으로 대응한다. 오디오 동시 재생 수와 물리 소품 수를 제한한다. 실제 기기 프레임 측정은 Windows 실기 검증 항목으로 남는다. |
 - PRD 합성(2026-10-06): `docs/specs/game-feel.md`, GitHub Milestone [game-feel #2](https://github.com/neige488/animals-vs-humans/milestone/2). 사용자 확인 모듈: CharacterMotion(신규 판정)·CharacterAnimator·FeelDirector·AudioDirector·LocalDisplaySettings(신규 표현·로컬 설정), MatchWorld·PlaytestSettings·PlaytestSession 네트워크·BotDirector·TownAtmosphere 확장. 테스트 경계는 기존 공개 세션·Play Mode·실제 소켓 세 곳을 재사용한다. PA-1~PA-11을 정의했으며 Issue 생성·구현은 아직 하지 않았다.
+- S1 판정·검수 방식 변경(2026-10-06): 사용자가 원격 검수 페이지(비교 영상·빌드)로 S1(#29, PR #34, bb48d57)을 통과 판정했다. 사용자는 이후 S2~S5를 Slice마다 직접 플레이 판정하지 않고 끝까지 진행한 뒤 한 번에 테스트하기로 했다. S2~S5의 Slice 검증은 자동 검사·리뷰·비교 영상·빌드까지로 하고, PA-11 사용자 판정은 최종 통합 빌드의 제품 검증에서 받는다. 원격 검수는 tailnet 전용 검수 페이지로 제공한다.
