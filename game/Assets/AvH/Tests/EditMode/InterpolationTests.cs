@@ -52,5 +52,21 @@ namespace AvH.Tests {
    Assert.AreEqual(7.0,timeline.Latest[0],"A host clock that went far back is a new session");
    Assert.AreEqual(7.0,Position(timeline,.1));
   }
+  static NetworkBodyMotion Body(float x,float yaw,LocomotionState motion)=>NetworkBodyMotion.Encode(new WorldPosition(x,1,0),yaw,0,motion);
+  [Test] public void BlendedBodyFollowsTheShortTurnAndSnapsAcrossATeleport() {
+   var a=Body(0,170,new LocomotionState{VelocityX=2,Grounded=true});var b=Body(1,-170,new LocomotionState{VelocityX=4,Grounded=false});
+   var mid=NetworkBodyMotion.Blend(a,b,.5f);
+   Assert.AreEqual(.5,mid.Position.X,.01);Assert.AreEqual(180,Math.Abs(mid.Yaw),.01,"Turns through 180, not back through 0");Assert.AreEqual(3,mid.Motion.VelocityX,.01);
+   Assert.IsFalse(NetworkBodyMotion.Blend(a,b,.6f).Motion.Grounded);Assert.IsTrue(NetworkBodyMotion.Blend(a,b,.4f).Motion.Grounded);
+   var far=NetworkBodyMotion.Blend(a,Body(NetworkBodyMotion.TeleportDistance+1,-170,default),.1f);
+   Assert.AreEqual(NetworkBodyMotion.TeleportDistance+1,far.Position.X,.01,"A warp is shown as a warp, never a slide through walls");
+  }
+  [Test] public void BlendedActionAdvancesWithinAPhaseAndChangesOnlyAtTheNextFrame() {
+   var windup=Body(0,0,new LocomotionState{Action=ActionPhase.Windup,ActionProgress=.2f});var later=Body(0,0,new LocomotionState{Action=ActionPhase.Windup,ActionProgress=.6f});
+   var swing=Body(0,0,new LocomotionState{Action=ActionPhase.Swing,ActionProgress=.1f});
+   var within=NetworkBodyMotion.Blend(windup,later,.5f).Motion;Assert.AreEqual(ActionPhase.Windup,within.Action);Assert.AreEqual(.4,within.ActionProgress,.01);
+   var across=NetworkBodyMotion.Blend(later,swing,.9f).Motion;Assert.AreEqual(ActionPhase.Windup,across.Action);Assert.AreEqual(.6,across.ActionProgress,.01);
+   Assert.AreEqual(ActionPhase.Swing,NetworkBodyMotion.Blend(later,swing,1).Motion.Action);
+  }
  }
 }
