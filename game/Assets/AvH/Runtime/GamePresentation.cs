@@ -19,6 +19,7 @@ namespace AvH {
   Vector3 cameraOffset=new Vector3(.6f,.3f,-5.5f);
   readonly SettingsPanel settingsPanel=new SettingsPanel();
   readonly FeelDirector feel=new FeelDirector();
+  readonly DisplaySettingsMenu displayMenu=new DisplaySettingsMenu();
   LocalDisplaySettings display;int appliedDisplay=-1;
   Vector3 follow,followVelocity;bool following;
   /// <summary>This PC's graphics quality and screen-shake preferences.</summary>
@@ -56,10 +57,26 @@ namespace AvH {
   // Development-only, isolated startup harness for capturing the real IMGUI overlay.
   void Start() {
    if(!Debug.isDebugBuild||Application.isBatchMode)return;
-   var args=System.Environment.GetCommandLineArgs();int capture=System.Array.IndexOf(args,"-avhDebugPreview");
+   var args=System.Environment.GetCommandLineArgs();
+   int menus=System.Array.IndexOf(args,"-avhMenuPreview");
+   if(menus>=0&&menus+1<args.Length){StartCoroutine(CaptureMenuPreview(args[menus+1]));return;}
+   int capture=System.Array.IndexOf(args,"-avhDebugPreview");
    if(capture<0||capture+1>=args.Length)return;
    session.StartSolo("디버그",123,System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml"));
    SetDebugPanelOpen(true);settingsPanel.SelectTab(3);StartCoroutine(CaptureDebugPreview(args[capture+1]));
+  }
+  // Development-only: start screen, Esc menu (with a failed display save) and the impact tuning tab, in an isolated profile.
+  System.Collections.IEnumerator CaptureMenuPreview(string folder) {
+   System.IO.Directory.CreateDirectory(folder);var temp=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString("N"));
+   UseDisplaySettings(new LocalDisplaySettings(System.IO.Path.Combine(temp,"display-settings.xml")));
+   System.Collections.IEnumerator Shot(string name){for(int i=0;i<20;i++)yield return null;yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(folder,name+".png"));yield return new WaitForSecondsRealtime(.3f);}
+   yield return Shot("start-first-run");
+   display.SetQuality(GraphicsQuality.Medium);display.SetScreenShake(false);yield return Shot("start-medium-shake-off");
+   session.StartSolo("미리보기",123,System.IO.Path.Combine(temp,"playtest.xml"));menu=true;SetCursor();yield return Shot("esc-menu");
+   System.IO.Directory.CreateDirectory(System.IO.Path.Combine(temp,"display-settings.xml.tmp"));
+   display.SetQuality(GraphicsQuality.Low);displayMenu.ShowNotice();yield return Shot("esc-menu-save-failed");
+   menu=false;SetDebugPanelOpen(true);settingsPanel.SelectTab(4);yield return Shot("debug-impact-tab");
+   Application.Quit();
   }
   System.Collections.IEnumerator CaptureDebugPreview(string folder) {
    System.IO.Directory.CreateDirectory(folder);
@@ -146,12 +163,14 @@ namespace AvH {
     if(GUI.Button(new Rect(w-160,16,140,36),"게임 종료")){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;Application.Quit();return;}
    }
    if(session.Session==null||!network.CanPlay) {
-    GUI.Box(new Rect(w/2-220,h/2-145,440,290),"");
-    GUI.Label(new Rect(w/2-210,h/2-125,420,45),"Animals vs Humans",title);
-    GUI.Label(new Rect(w/2-190,h/2-65,380,30),"닉네임 (1~20자)",label);
-    nickname=GUI.TextField(new Rect(w/2-160,h/2-25,320,35),nickname,20);
-    if(string.IsNullOrWhiteSpace(nickname))GUI.Label(new Rect(w/2-210,h/2+15,420,30),"닉네임을 입력해주세요.",label);
-    GUI.enabled=true;network.DrawStart(nickname,label);return;
+    // Lifted so the local display rows fit under the join controls at 1280x720.
+    float c=h/2-80;
+    GUI.Box(new Rect(w/2-220,c-145,440,290),"");
+    GUI.Label(new Rect(w/2-210,c-125,420,45),"Animals vs Humans",title);
+    GUI.Label(new Rect(w/2-190,c-65,380,30),"닉네임 (1~20자)",label);
+    nickname=GUI.TextField(new Rect(w/2-160,c-25,320,35),nickname,20);
+    if(string.IsNullOrWhiteSpace(nickname))GUI.Label(new Rect(w/2-210,c+15,420,30),"닉네임을 입력해주세요.",label);
+    GUI.enabled=true;network.DrawStart(nickname,label,c,area=>displayMenu.Draw(area,display,label));return;
    }
    var state=session.Observe();
    if(state.Phase==RoundPhase.Results) {
@@ -171,8 +190,11 @@ namespace AvH {
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
    network.DrawRoom(label);
    if(menu) {
-    if(!network.IsClient&&GUI.Button(new Rect(w/2-125,h/2-55,250,40),"테스트 설정 열기")){menu=false;SetDebugPanelOpen(true);return;}
-    if(GUI.Button(new Rect(w/2-125,h/2+(network.IsClient?-30:0),250,40),"계속하기")){menu=false;SetCursor();}
+    // Esc menu: the match keeps running underneath.
+    GUI.Box(new Rect(w/2-230,h/2-(network.IsClient?45:70),460,(network.IsClient?45:70)+70+DisplaySettingsMenu.Height),"메뉴");
+    if(!network.IsClient&&GUI.Button(new Rect(w/2-125,h/2-45,250,40),"테스트 설정 열기")){menu=false;SetDebugPanelOpen(true);return;}
+    if(GUI.Button(new Rect(w/2-125,h/2+(network.IsClient?-20:5),250,40),"계속하기")){menu=false;SetCursor();}
+    displayMenu.Draw(new Rect(w/2-215,h/2+60,430,DisplaySettingsMenu.Height),display,label);
     if(GUI.Button(new Rect(w-200,h-50,180,35),"방 나가기")){network.Leave();menu=false;return;}
    }
    if(!menu){
