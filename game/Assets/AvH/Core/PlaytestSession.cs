@@ -17,6 +17,9 @@ namespace AvH
         public bool IsBot;
         public int Ammo;
         public double ReloadRemaining, AttackGraceRemaining, FireCooldownRemaining;
+        // Impact timers (host rules): attack tell, presented swing, hit-stop freeze and bubble stun.
+        public double AttackWindupRemaining, SwingRemaining, HitStopRemaining, StunRemaining;
+        public ActionPhase Action;
         public Faction Faction;
         public WorldPosition Position;
         public PlayerState Copy() => (PlayerState)MemberwiseClone();
@@ -31,6 +34,8 @@ namespace AvH
         public Faction? Winner;
         public BirthNotice[] Births;
         public double BirthSecondsRemaining;
+        /// <summary>Recent public impact events (bounded window), oldest first.</summary>
+        public FeelEvent[] Events;
     }
     public sealed partial class PlaytestSession
     {
@@ -80,10 +85,11 @@ namespace AvH
                         AssignCharacter(players[slots[i]],animalRoster[nextAnimal++%animalRoster.Length]);
                         players[slots[i]].AttackGraceRemaining = settings.Current.InitialAttackGrace;
                     }
-                    PublishBirth(players.Where(p=>p.Faction==Faction.Animal).ToArray());
+                    var born=players.Where(p=>p.Faction==Faction.Animal).ToArray();
+                    PublishBirth(born);foreach(var p in born)Publish(FeelEventKind.Transform,-1,p.Slot,p.Position);
                     phase = RoundPhase.Chase; remaining = settings.Current.RoundSeconds;
                 } else if (phase == RoundPhase.Chase) {
-                    phase = RoundPhase.Results; remaining = settings.Current.ResultSeconds; winner = Faction.Human;
+                    phase = RoundPhase.Results; remaining = settings.Current.ResultSeconds; winner = Faction.Human; ClearActions();
                 } else BeginRound();
                 phaseStartedAt=hostTime; phaseDeadline=hostTime+remaining;
             }
@@ -104,9 +110,10 @@ namespace AvH
         }
         private static WorldPosition Spawn(int slot) => new WorldPosition((slot % 4 - 1.5f) * 3, 1, (slot / 4 - 1) * 3);
         public SessionState Observe() => new SessionState {
-            Players = players.Select(p => p.Copy()).ToArray(), Phase = phase, SecondsRemaining = remaining, Round = round, Winner = winner,
+            Players = players.Select(p => {var copy=p.Copy();copy.Action=ActionOf(p);return copy;}).ToArray(), Phase = phase, SecondsRemaining = remaining, Round = round, Winner = winner,
             BirthSecondsRemaining = birthSecondsRemaining,
-            Births = births.Select(b => new BirthNotice { Kind = b.Kind, Rarity = b.Rarity, Count = b.Count }).ToArray()
+            Births = births.Select(b => new BirthNotice { Kind = b.Kind, Rarity = b.Rarity, Count = b.Count }).ToArray(),
+            Events = events.Select(e => e.Copy()).ToArray()
         };
     }
 }

@@ -1,18 +1,39 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 namespace AvH {
- public static class CombatRules {public const float MeleeDistance=1.8f;}
+ public static class CombatRules {
+  public const float MeleeDistance=1.8f;
+  /// <summary>Presented swing after a judged attack. After a miss it is also the recovery before the next tell (only while a tell is configured).</summary>
+  public const double SwingSeconds=.25;
+  /// <summary>Public events stay observable this long so late snapshots still carry them.</summary>
+  public const double EventWindowSeconds=1.5;
+  public const int EventLimit=64;
+ }
  public sealed partial class PlaytestSession {
   double birthSecondsRemaining, birthBatchAge;
+  readonly List<FeelEvent> events=new List<FeelEvent>();
+  readonly HashSet<int> dueAttacks=new HashSet<int>();
+  int nextEventId;
   void ResetCombat() {
-   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;
+   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();ClearActions();
    foreach(var p in players){p.Ammo=settings.Current.Magazine;p.ReloadRemaining=0;p.AttackGraceRemaining=0;p.FireCooldownRemaining=0;}
+  }
+  // Round end cuts every tell, freeze and stun in progress.
+  void ClearActions(){dueAttacks.Clear();foreach(var p in players){p.AttackWindupRemaining=0;p.SwingRemaining=0;p.HitStopRemaining=0;p.StunRemaining=0;}}
+  static ActionPhase ActionOf(PlayerState p)=>p.HitStopRemaining>0?ActionPhase.HitStop:p.StunRemaining>0?ActionPhase.Stunned:p.AttackWindupRemaining>0?ActionPhase.Windup:p.SwingRemaining>0?ActionPhase.Swing:ActionPhase.None;
+  void Publish(FeelEventKind kind,int actor,int target,WorldPosition position,float strength=1) {
+   events.Add(new FeelEvent{Id=++nextEventId,Round=round,Kind=kind,Actor=actor,Target=target,Position=position,HostTime=hostTime,Strength=strength});
+   if(events.Count>CombatRules.EventLimit)events.RemoveRange(0,events.Count-CombatRules.EventLimit);
   }
   void AdvanceCombat(double elapsed) {
    birthSecondsRemaining=Math.Max(0,birthSecondsRemaining-elapsed);birthBatchAge+=elapsed;
+   double now=hostTime+elapsed;events.RemoveAll(e=>now-e.HostTime>CombatRules.EventWindowSeconds);
    foreach(var p in players) {
     p.FireCooldownRemaining=Math.Max(0,p.FireCooldownRemaining-elapsed);
     p.AttackGraceRemaining=Math.Max(0,p.AttackGraceRemaining-elapsed);
+    p.SwingRemaining=Math.Max(0,p.SwingRemaining-elapsed);
+    if(p.AttackWindupRemaining>0){p.AttackWindupRemaining=Math.Max(0,p.AttackWindupRemaining-elapsed);if(p.AttackWindupRemaining==0)dueAttacks.Add(p.Slot);}
     if(p.ReloadRemaining>0){p.ReloadRemaining=Math.Max(0,p.ReloadRemaining-elapsed);if(p.ReloadRemaining==0)p.Ammo=settings.Current.Magazine;}
    }
   }
@@ -33,18 +54,42 @@ namespace AvH {
    births=grouped.ToArray();
    birthSecondsRemaining=4;birthBatchAge=0;
   }
+  /// <summary>
+  /// An animal starts a swing. With a configured tell the swing is judged one windup later
+  /// (<see cref="AttackDue"/>); with zero windup it is due on this same step, as the click-frame rule.
+  /// </summary>
+  public bool TryStartAttack(int slot,int roundId) {
+   if(!CanAct(slot,roundId)||phase!=RoundPhase.Chase)return false;var p=players[slot];
+   if(p.Faction!=Faction.Animal||p.AttackGraceRemaining>0||p.FireCooldownRemaining>0||p.AttackWindupRemaining>0)return false;
+   if(dueAttacks.Contains(slot))return true;
+   double windup=settings.Current.AttackWindupSeconds;
+   if(windup<=0){dueAttacks.Add(slot);return true;}
+   if(p.SwingRemaining>0)return false;
+   p.AttackWindupRemaining=windup;Publish(FeelEventKind.AttackWindup,slot,-1,p.Position);return true;
+  }
+  /// <summary>True when this animal's swing reaches its strike moment and waits for host physics to judge it.</summary>
+  public bool AttackDue(int slot)=>dueAttacks.Contains(slot);
+  /// <summary>Host physics found no reachable human for a due swing.</summary>
+  public bool ResolveAttackMiss(int slot,int roundId) {
+   if(!CanAct(slot,roundId)||!dueAttacks.Remove(slot))return false;var p=players[slot];
+   // A held button re-swings every step at zero windup; publish one swing per presented swing.
+   if(p.SwingRemaining<=0){p.SwingRemaining=CombatRules.SwingSeconds;Publish(FeelEventKind.AttackMiss,slot,-1,p.Position);}
+   return true;
+  }
   // Host physics confirms reach and line of sight; clients submit input, never hit claims.
   public bool TryMeleeHit(int attackerSlot,int victimSlot,int roundId) {
-   if(!CanAct(attackerSlot,roundId)||phase!=RoundPhase.Chase||victimSlot<0||victimSlot>=players.Length)return false;
+   if(!CanAct(attackerSlot,roundId)||phase!=RoundPhase.Chase||victimSlot<0||victimSlot>=players.Length||!dueAttacks.Contains(attackerSlot))return false;
    var attacker=players[attackerSlot];var victim=players[victimSlot];
    if(attacker.Faction!=Faction.Animal||victim.Faction!=Faction.Human||attacker.AttackGraceRemaining>0||attacker.FireCooldownRemaining>0)return false;
    double x=attacker.Position.X-victim.Position.X,y=attacker.Position.Y-victim.Position.Y,z=attacker.Position.Z-victim.Position.Z;
    if(x*x+y*y+z*z>CombatRules.MeleeDistance*CombatRules.MeleeDistance)return false;
-   attacker.FireCooldownRemaining=.5;
+   dueAttacks.Remove(attackerSlot);
+   attacker.FireCooldownRemaining=.5;attacker.SwingRemaining=CombatRules.SwingSeconds;
    victim.Faction=Faction.Animal;victim.AttackGraceRemaining=settings.Current.TransformAttackGrace;
    AssignCharacter(victim,animalRoster[nextAnimal++%animalRoster.Length]);
    victim.ReloadRemaining=0;victim.FireCooldownRemaining=0;PublishBirth(new[]{victim});
-   if(players.All(p=>p.Faction==Faction.Animal)){phase=RoundPhase.Results;remaining=settings.Current.ResultSeconds;phaseStartedAt=hostTime;phaseDeadline=hostTime+remaining;winner=Faction.Animal;}
+   Publish(FeelEventKind.AttackHit,attackerSlot,victimSlot,victim.Position);Publish(FeelEventKind.Transform,attackerSlot,victimSlot,victim.Position);
+   if(players.All(p=>p.Faction==Faction.Animal)){phase=RoundPhase.Results;remaining=settings.Current.ResultSeconds;phaseStartedAt=hostTime;phaseDeadline=hostTime+remaining;winner=Faction.Animal;ClearActions();}
    return true;
   }
 

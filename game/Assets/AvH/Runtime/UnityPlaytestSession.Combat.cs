@@ -57,10 +57,12 @@ namespace AvH {
     if(input.Attack) {
      var state=Session.Observe();
      if(state.Players[slot].Faction==Faction.Human){if(Session.TryFire(slot,input.RoundId))FireBubble(slot,input);}
-     else Melee(slot,input);
+     else Session.TryStartAttack(slot,input.RoundId);
     }
     inputs[slot].Reload=false;
    }
+   // A swing is judged by physics at its strike moment: the click step at zero windup, otherwise one windup later.
+   for(int slot=0;slot<bodies.Count;slot++)if(Session.AttackDue(slot))Melee(slot,beforeCombat.Round);
    var after=Session.Observe();
    for(int slot=0;slot<bodies.Count;slot++)if(after.Players[slot].Faction!=beforeCombat.Players[slot].Faction){PresentAnimalBirth(beforeCombat,after,slot,bodies[slot].transform.position);RefreshVisual(slot,after.Players[slot].Faction);}
   }
@@ -74,16 +76,18 @@ namespace AvH {
    bubbles.Add(new Bubble{Id=++nextBubbleId,Owner=slot,Round=input.RoundId,Position=position,Direction=direction,Life=rules.BubbleLifetime,Radius=rules.BubbleRadius,Speed=rules.BubbleSpeed,Range=rules.BubbleRange,PushForce=rules.PushForce,FriendlyPush=rules.FriendlyPush,Visual=visual});
   }
   void Pop(Bubble bubble){Destroy(bubble.Visual);var marker=new GameObject("Bubble impact");marker.transform.SetParent(transform,false);marker.transform.position=bubble.Position;bursts.Add((marker,.15f,bubble.Id));Effects.Emit(bubble.Position,new Color(.66f,.92f,1,.9f),12,1.9f);Effects.Sound(bubble.Position,false);}
-  void Melee(int slot,PlayerInput input) {
-   var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.forward;
+  void Melee(int slot,int round) {
+   var input=inputs[slot];float yaw=input.RoundId==round?input.Yaw:bodies[slot].transform.eulerAngles.y;
+   var direction=Quaternion.Euler(0,yaw,0)*Vector3.forward;
    var origin=bodies[slot].transform.position+Vector3.up*.9f;
    foreach(var collider in Physics.OverlapSphere(origin,CombatRules.MeleeDistance-.1f,~0,QueryTriggerInteraction.Ignore).OrderBy(c=>(c.bounds.center-origin).sqrMagnitude)) {
     int victim=bodies.IndexOf(collider as CharacterController);if(victim<0||victim==slot)continue;
     var offset=bodies[victim].transform.position-bodies[slot].transform.position;
     if(offset.sqrMagnitude>.04f && Vector3.Dot(direction,offset.normalized)<.2f)continue;
     if(Physics.Linecast(origin,bodies[victim].transform.position+Vector3.up*.9f,out var obstruction,~0,QueryTriggerInteraction.Ignore) && obstruction.collider!=bodies[victim])continue;
-    if(Session.TryMeleeHit(slot,victim,input.RoundId))break;
+    if(Session.TryMeleeHit(slot,victim,round))return;
    }
+   Session.ResolveAttackMiss(slot,round);
   }
  }
 }

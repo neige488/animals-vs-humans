@@ -34,11 +34,11 @@ namespace AvH.Tests {
    }
   }
   [Test] public void RosterIdentitySurvivesTransformationDisconnectAndReconnect() {
-   var world=new PlaytestSession(2);world.StartSolo("host",humans:RosterTests.Definitions("human"),animals:RosterTests.Definitions("animal"));world.Advance(22);
+   var world=new PlaytestSession(2);world.StartSolo("host",humans:RosterTests.Definitions("human"),animals:RosterTests.Definitions("animal"));FeelTests.Instant(world);world.Advance(22);
    using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     int slot=client.Slot;Assert.AreEqual(Faction.Human,client.Snapshot.Players[slot].Faction);
-    var attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal);world.RecordWorldPosition(slot,attacker.Position);Assert.IsTrue(world.TryMeleeHit(attacker.Slot,slot,world.Observe().Round));
+    var attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal);world.RecordWorldPosition(slot,attacker.Position);Assert.IsTrue(FeelTests.Swing(world,attacker.Slot,slot,world.Observe().Round));
     var changed=world.Observe().Players[slot];Until(host,client,()=>client.Snapshot.Players[slot].Faction==Faction.Animal);
     Assert.AreEqual(changed.CharacterId,client.Snapshot.Players[slot].CharacterId);Assert.AreEqual(changed.CharacterName,client.Snapshot.Players[slot].CharacterName);
     client.Cancel();for(int i=0;i<20;i++){host.Pump();Thread.Sleep(2);}
@@ -124,11 +124,11 @@ namespace AvH.Tests {
   }
   [Test] public void AnimalBotFallbackKeepsFactionPositionAndAttackGrace() {
    int seed=Enumerable.Range(0,100).First(n=>{var w=new PlaytestSession(n);w.StartSolo("host");w.Advance(20);return w.Observe().Players[0].Faction==Faction.Human;});
-   var world=new PlaytestSession(seed);world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.TransformAttackGrace=30;world.UpdateSettingsEdit(0,rules);world.ApplySettings(0);world.StartSolo("host");
+   var world=new PlaytestSession(seed);world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.TransformAttackGrace=30;FeelTests.Instant(rules);world.UpdateSettingsEdit(0,rules);world.ApplySettings(0);world.StartSolo("host");
    using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient()) {
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);
     world.Advance(22);int attacker=world.Observe().Players.First(p=>p.Faction==Faction.Animal).Slot;
-    foreach(var victim in world.Observe().Players.Where(p=>p.IsBot&&p.Faction==Faction.Human)){world.RecordWorldPosition(victim.Slot,world.Observe().Players[attacker].Position);Assert.That(world.TryMeleeHit(attacker,victim.Slot,1),Is.True);world.Advance(.6);}
+    foreach(var victim in world.Observe().Players.Where(p=>p.IsBot&&p.Faction==Faction.Human)){world.RecordWorldPosition(victim.Slot,world.Observe().Players[attacker].Position);Assert.That(FeelTests.Swing(world,attacker,victim.Slot,1),Is.True);world.Advance(.6);}
     var before=world.Observe();client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     Assert.That(client.Snapshot.Players[client.Slot].Faction,Is.EqualTo(Faction.Animal));
     Assert.That(client.Snapshot.Players[client.Slot].AttackGraceRemaining,Is.EqualTo(before.Players[client.Slot].AttackGraceRemaining));

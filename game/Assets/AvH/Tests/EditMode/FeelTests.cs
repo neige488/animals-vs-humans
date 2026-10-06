@@ -9,6 +9,10 @@ namespace AvH.Tests {
    s.Advance(2.01);return s;
   }
   internal static void Instant(PlaytestValues v){v.AttackWindupSeconds=0;v.HitStopSeconds=0;v.HitStunSeconds=0;}
+  /// <summary>Restores the click-frame rule (all impact values 0) live, as the host panel does.</summary>
+  internal static void Instant(PlaytestSession s){s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;Instant(v);s.UpdateSettingsEdit(0,v);Assert.IsTrue(s.ApplySettingsNow(0));}
+  /// <summary>One click-frame swing judged by host physics against this victim.</summary>
+  internal static bool Swing(PlaytestSession s,int attacker,int victim,int round)=>s.TryStartAttack(attacker,round)&&s.TryMeleeHit(attacker,victim,round);
   static (int attacker,int victim) Pair(PlaytestSession s) {
    var state=s.Observe();int attacker=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int victim=state.Players.First(p=>p.Faction==Faction.Human).Slot;
    s.RecordWorldPosition(victim,state.Players[attacker].Position);return (attacker,victim);
