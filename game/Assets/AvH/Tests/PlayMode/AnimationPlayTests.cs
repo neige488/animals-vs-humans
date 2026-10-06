@@ -48,6 +48,17 @@ namespace AvH.Tests {
    Assert.AreEqual(1.2f/.9f,walk.CyclesPerSecond/slow.CyclesPerSecond,.1f,"Walk cadence follows ground speed");
   }
 
+  [UnityTest] public IEnumerator CadenceKeepsFollowingSpeedAcrossTheWholeSupportedRange() {
+   // Review F-2: stride rate must not freeze at the slow-walk or very-fast-run ends of the settings range.
+   yield return Create(false);int h=Human;Tune(v=>v.InertiaSeconds=0);
+   Tune(v=>v.HumanSpeed=20);float sprint=Drive(h,new PlayerInput{Forward=1},20).CyclesPerSecond;
+   Tune(v=>v.HumanSpeed=10);float run=Drive(h,new PlayerInput{Forward=1},20).CyclesPerSecond;
+   Assert.AreEqual(2f,sprint/run,.1f,"Doubling a fast run doubles the stride rate");
+   Tune(v=>v.HumanSpeed=.6f);var walk=Drive(h,new PlayerInput{Forward=1},25);Assert.AreEqual(LocomotionGait.Walk,walk.Gait);
+   Tune(v=>v.HumanSpeed=.3f);var crawl=Drive(h,new PlayerInput{Forward=1},25);
+   Assert.AreEqual(2f,walk.CyclesPerSecond/crawl.CyclesPerSecond,.1f,"Doubling a slow walk doubles the stride rate");
+  }
+
   [UnityTest] public IEnumerator TappingAndStoppingDoNotFlickerBetweenIdleAndRun() {
    yield return Create(false);int h=Human;
    foreach(float inertia in new[]{0f,.12f}) {

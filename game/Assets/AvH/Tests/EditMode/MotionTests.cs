@@ -48,6 +48,16 @@ public class MotionTests {
   var side=Run(full,new MotionIntent{DirectionZ=1,Grounded=true},profile,m=>m.VelocityZ>=profile.MaxSpeed*.9f);
   Assert.Less(side.steps,stop.steps+5,"A 90 degree turn reaches the new heading without a long drift");
  }
+ [Test] public void TurningNeverExceedsTheSpeciesTopSpeed() {
+  // Review F-1: accelerating along the new heading while the old heading decays must not add up past MaxSpeed.
+  var s=Session();
+  var ids=new[]{("human-default",Faction.Human)}.Concat(Enumerable.Range(0,AnimalBalance.Count).Select(i=>(AnimalBalance.Id(i),Faction.Animal)));
+  foreach(var (id,faction) in ids)foreach(bool grounded in new[]{true,false})foreach(var turn in new[]{(0f,1f),(-1f,0f),(-.7071f,.7071f)}) {
+   var profile=Profile(s,id,faction);var state=new MotionState{VelocityX=profile.MaxSpeed};
+   for(int i=0;i<100;i++){state=CharacterMotion.Next(state,new MotionIntent{DirectionX=turn.Item1,DirectionZ=turn.Item2,Grounded=grounded},profile,.02);
+    Assert.LessOrEqual(Speed(state),profile.MaxSpeed+1e-4f,$"{id} grounded={grounded} turn={turn} step={i}");}
+  }
+ }
  [Test] public void SpeciesKeepTheirSpeedMultipliersButDifferInStartAndStopWeight() {
   var s=Session();var rules=s.ObserveSettings().Current;
   var profiles=Enumerable.Range(0,AnimalBalance.Count).ToDictionary(i=>AnimalBalance.Id(i),i=>Profile(s,AnimalBalance.Id(i),Faction.Animal));
