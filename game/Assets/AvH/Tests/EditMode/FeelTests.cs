@@ -104,5 +104,14 @@ namespace AvH.Tests {
    Assert.AreEqual(RoundPhase.Results,s.Observe().Phase);
    Assert.IsTrue(s.Observe().Players.All(p=>p.HitStopRemaining==0&&p.StunRemaining==0&&p.Action==ActionPhase.None));
   }
+
+  [Test] public void HardLandingsArePublicEventsWithImpactStrength() {
+   var s=new PlaytestSession(1);s.StartSolo("tester");
+   Assert.IsFalse(s.RecordLanding(3,3.5f),"A soft step down is not an event");
+   Assert.IsTrue(s.RecordLanding(3,9));Assert.IsTrue(s.RecordLanding(5,30));
+   var landings=Events(s,FeelEventKind.Landing);Assert.AreEqual(2,landings.Length);
+   Assert.AreEqual(3,landings[0].Actor);Assert.That(landings[0].Strength,Is.InRange(.1f,.9f));Assert.AreEqual(1,landings[1].Strength,"Strength is capped");
+   Assert.Less(landings[0].Id,landings[1].Id);
+  }
  }
 }
