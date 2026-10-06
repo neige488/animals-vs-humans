@@ -74,7 +74,7 @@ namespace AvH {
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];
      var profile=CharacterMotion.Profile(rules,p);
-     motion[i]=CharacterMotion.Next(motion[i],new MotionIntent{DirectionX=direction.x,DirectionZ=direction.z,Grounded=wasGrounded},profile,seconds);
+     motion[i]=CharacterMotion.Next(motion[i],CharacterMotion.Restrain(new MotionIntent{DirectionX=direction.x,DirectionZ=direction.z,Grounded=wasGrounded},p),profile,seconds);
      var planar=new Vector3(motion[i].VelocityX,0,motion[i].VelocityZ);
      var from=body.transform.position;
      body.Move((planar+Vector3.up*vertical[i]+pushVelocity[i])*seconds);
@@ -92,7 +92,7 @@ namespace AvH {
     } else {motion[i]=default;Animate(i,new LocomotionState{Grounded=true,AimYaw=PresentationYaw(i)},seconds);}
     var pos=body.transform.position;
     Session.RecordWorldPosition(i,new WorldPosition(pos.x,pos.y,pos.z));
-    pushVelocity[i]=Vector3.MoveTowards(pushVelocity[i],Vector3.zero,20*seconds);
+    var push=pushVelocity[i];CharacterMotion.DecayKnockback(ref push.x,ref push.y,ref push.z,body.isGrounded,seconds);pushVelocity[i]=push;
     inputs[i].Jump=false;
    }
    StepCombatWorld(seconds,state);

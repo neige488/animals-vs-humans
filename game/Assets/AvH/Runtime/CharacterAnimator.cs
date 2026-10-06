@@ -22,6 +22,8 @@ namespace AvH {
   /// <summary>Hit-stop: the whole pose holds still until the freeze ends.</summary>
   public bool Frozen;
   public ActionPhase Action;
+  /// <summary>0..1 bubble-stun wobble currently shown.</summary>
+  public float Stagger;
  }
  /// <summary>
  /// Presentation-only locomotion. One public input (<see cref="LocomotionState"/>) drives speed-blended walk/run,
@@ -52,13 +54,13 @@ namespace AvH {
   AnimationClip idleClip,walkClip,runClip,airClip;bool airIsJump;
   Transform visual;Vector3 baseScale;Quaternion baseRotation;BubbleGunPose pose;Character character;float referenceSpeed;
   bool moving,airborne,lastGrounded=true;float stillTime,airTime,landTimer,phase,idleTime,lastSpeed,lastYaw,lastFall;
-  float squash,squashVelocity,pitch,roll;
+  float squash,squashVelocity,pitch,roll,actionPitch,actionRoll,staggerClock;
   CharacterAnimationView view;
   public void Bind(Transform model,Faction faction,string characterId,BubbleGunPose gunPose) {
    Release();visual=model;pose=gunPose;character=For(faction,characterId);
    baseScale=model.localScale;baseRotation=model.localRotation;
    referenceSpeed=Mathf.Max(.1f,CharacterMotion.Profile(new PlaytestValues(),new PlayerState{Faction=faction,CharacterId=characterId}).MaxSpeed);
-   moving=airborne=false;lastGrounded=true;stillTime=airTime=landTimer=phase=idleTime=squash=squashVelocity=pitch=roll=0;lastYaw=transform.eulerAngles.y;lastSpeed=0;
+   moving=airborne=false;lastGrounded=true;stillTime=airTime=landTimer=phase=idleTime=squash=squashVelocity=pitch=roll=actionPitch=actionRoll=0;lastYaw=transform.eulerAngles.y;lastSpeed=0;
    view=new CharacterAnimationView{Gait=LocomotionGait.Idle,StrideDirection=1};
    Animator animator=null;foreach(var a in model.GetComponentsInChildren<Animator>())if(a.runtimeAnimatorController!=null){animator=a;break;}
    if(animator==null)return;
@@ -137,14 +139,17 @@ namespace AvH {
    const float stiffness=300;float damping=2*Mathf.Sqrt(stiffness)*character.Bounce;
    for(float left=dt;left>0;left-=.005f){float h=Mathf.Min(.005f,left);squashVelocity+=(-stiffness*squash-damping*squashVelocity)*h;squash+=squashVelocity*h;}
    if(Mathf.Abs(squash)<.0005f&&Mathf.Abs(squashVelocity)<.01f){squash=0;squashVelocity=0;}
-   view.Squash=squash;view.BodyPitch=pitch;view.BodyRoll=roll;
+   // Bubble stun: a quick side-to-side totter that fades as control returns.
+   view.Stagger=Mathf.MoveTowards(view.Stagger,state.Action==ActionPhase.Stunned?1-state.ActionProgress:0,dt/.05f);
+   staggerClock+=dt;actionRoll=Mathf.Sin(staggerClock*26)*14*view.Stagger;actionPitch=-7*view.Stagger;
+   view.Squash=squash;view.BodyPitch=pitch+actionPitch;view.BodyRoll=roll+actionRoll;
    view.Gait=airborne?LocomotionGait.Airborne:landTimer>0?LocomotionGait.Landing:!moving?LocomotionGait.Idle:view.RunBlend>=.5f?LocomotionGait.Run:LocomotionGait.Walk;
    Present(state);
   }
   void Present(LocomotionState state) {
    if(visual!=null) {
     visual.localScale=new Vector3(baseScale.x*(1+squash*.5f),baseScale.y*(1-squash),baseScale.z*(1+squash*.5f));
-    if(pose==null)visual.localRotation=baseRotation*Quaternion.Euler(pitch,0,roll);
+    if(pose==null)visual.localRotation=baseRotation*Quaternion.Euler(view.BodyPitch,0,view.BodyRoll);
    }
    if(!graph.IsValid())return;
    float ground=1-view.AirWeight;

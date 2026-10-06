@@ -43,7 +43,7 @@ namespace AvH {
      if(target==bubble.Owner)continue;
      if(target>=0 && beforeCombat.Players[target].Faction==Faction.Human && !bubble.FriendlyPush)continue;
      bubble.Position+=bubble.Direction*hit.distance;
-     if(target>=0){bubbleHits[target]++;pushVelocity[target]+=(bubble.Direction*bubble.PushForce+Vector3.up*1.5f)*AnimalBalance.For(Session.ObserveSettings().Current,beforeCombat.Players[target]).Knockback;}
+     if(target>=0){bubbleHits[target]++;pushVelocity[target]+=(bubble.Direction*bubble.PushForce+Vector3.up*1.5f)*AnimalBalance.For(Session.ObserveSettings().Current,beforeCombat.Players[target]).Knockback;Session.RecordBubbleHit(target,bubble.Owner);}
      Pop(bubble);popped=true;break;
     }
     if(!popped){bubble.Position+=bubble.Direction*distance;bubble.Travelled+=distance;bubble.Life-=seconds;bubble.Visual.transform.position=bubble.Position;
