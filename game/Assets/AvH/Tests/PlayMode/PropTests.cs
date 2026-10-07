@@ -45,6 +45,8 @@ namespace AvH.Tests {
    Assert.Greater(Vector3.Distance(shoved.Position,prop.Home),.5f,"The body shoves the prop");
    Assert.Greater(Vector3.Dot(shoved.Position-prop.Home,-away),0,"The prop goes the way it was pushed");
    Assert.Greater(walked,5,"The prop never stops the body: it walked past the prop's spot");
+   Assert.IsTrue(world.Observe().Events.Any(e=>e.Kind==FeelEventKind.PropPushed&&e.Actor==0&&e.Target==prop.Index),"The shove is a public event");
+   Assert.Greater(world.Audio.Observe().Count("prop-knock"),0,"The shove knocks audibly");
    Drive(0,new PlayerInput(),150);
    Assert.IsFalse(Now(prop.Index).Moving,"A shoved prop slides to a rest");
   }
@@ -72,6 +74,7 @@ namespace AvH.Tests {
    var hit=Now(prop.Index);
    Assert.Greater(Vector3.Dot(hit.Position-prop.Home,-away),.3f,"The bubble pushes the prop along its flight");
    Assert.AreEqual(0,world.ObserveBubbles().Length,"The bubble pops on the prop");
+   Assert.IsTrue(world.Observe().Events.Any(e=>e.Kind==FeelEventKind.PropPushed&&e.Actor==0&&e.Target==prop.Index),"The shooter knocked the prop");
   }
 
   [UnityTest] public IEnumerator EveryRoundStartsWithEachPropBackHome() {
