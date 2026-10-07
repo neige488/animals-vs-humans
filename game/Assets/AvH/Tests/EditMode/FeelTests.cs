@@ -125,5 +125,17 @@ namespace AvH.Tests {
    s.Advance(.15);Assert.IsFalse(s.TryStartAttack(b,round),"Still frozen");
    s.Advance(.16);Assert.IsTrue(Swing(s,b,c,round),"The freeze over, the new animal plays on");
   }
+  [Test] public void TheSwingIsStillShownAfterALongHitStop() {
+   // Integration review F-5: the swing timer must not run out while its attacker is frozen.
+   var s=Chase(v=>{Instant(v);v.HitStopSeconds=.3f;});var state=s.Observe();int round=state.Round;
+   int a=state.Players.First(p=>p.Faction==Faction.Animal).Slot;int b=state.Players.First(p=>p.Faction==Faction.Human).Slot;
+   s.RecordWorldPosition(b,state.Players[a].Position);
+   Assert.IsTrue(Swing(s,a,b,round));Assert.AreEqual(ActionPhase.HitStop,s.Observe().Players[a].Action);
+   var phases=new System.Collections.Generic.List<ActionPhase>();double swingTime=0;
+   for(int i=0;i<40;i++){s.Advance(.02);var phase=s.Observe().Players[a].Action;phases.Add(phase);if(phase==ActionPhase.Swing)swingTime+=.02;}
+   Assert.Contains(ActionPhase.Swing,phases,"The swing plays once the freeze ends");
+   Assert.AreEqual(CombatRules.SwingSeconds,swingTime,.03,"The whole swing is shown, not the part left after the freeze");
+  }
  }
 }
+
