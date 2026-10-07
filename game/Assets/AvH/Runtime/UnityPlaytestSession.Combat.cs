@@ -49,7 +49,7 @@ namespace AvH {
      if(target>=0){bubbleHits[target]++;pushVelocity[target]+=(bubble.Direction*bubble.PushForce+Vector3.up*1.5f)*AnimalBalance.For(Session.ObserveSettings().Current,beforeCombat.Players[target]).Knockback;Session.RecordBubbleHit(target,bubble.Owner);}
      Pop(bubble);popped=true;break;
     }
-    if(!popped&&propHit){bubble.Position+=bubble.Direction*propAt;props.Push(prop,bubble.Direction*bubble.PushForce*PushProps.BubbleShare);Pop(bubble);popped=true;}
+    if(!popped&&propHit){bubble.Position+=bubble.Direction*propAt;props.Push(prop,bubble.Direction*bubble.PushForce*PushProps.BubbleShare,bubble.Owner);Pop(bubble);popped=true;}
     if(!popped){bubble.Position+=bubble.Direction*distance;bubble.Travelled+=distance;bubble.Life-=seconds;bubble.Visual.transform.position=bubble.Position;
      if(bubble.Life<=0 || bubble.Travelled>=bubble.Range || beforeCombat.Phase==RoundPhase.Results || bubble.Round!=beforeCombat.Round){Destroy(bubble.Visual);popped=true;}}
     if(popped)bubbles.RemoveAt(i);

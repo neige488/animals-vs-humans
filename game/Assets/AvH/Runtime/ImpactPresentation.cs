@@ -22,6 +22,7 @@ namespace AvH {
     case FeelEventKind.Stagger:if(target!=null)Effects.Emit(target.position+Vector3.up*1.4f,new Color(1,.9f,.35f,.9f),6,.9f,false);break;
     // The host already raised landing dust from its own physics step.
     case FeelEventKind.Landing:if(IsRemote&&actor!=null)Effects.Emit(actor.position,new Color(.9f,.83f,.64f,.6f),7,1);break;
+    case FeelEventKind.PropPushed:Effects.Emit(ToVector(e.Position)+Vector3.up*.1f,new Color(.9f,.83f,.64f,.5f),4,.7f,false);break;
    }
   }
   void ForgetPresentedEvents(){eventsPrimed=false;lastPresentedEvent=0;}

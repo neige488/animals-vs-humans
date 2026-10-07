@@ -104,6 +104,7 @@ namespace AvH {
    }
    props?.Simulate(bodies,seconds,Session.HostTime);
    StepCombatWorld(seconds,state);
+   if(props!=null)foreach(var knock in props.TakeKnocks()){var at=props.Observe()[knock.prop].Position;Session.RecordPropPush(knock.prop,knock.actor,new WorldPosition(at.x,at.y,at.z),knock.strength);}
    var presented=Session.Observe();PresentEvents(presented);PresentStateAudio(presented,false);PresentMotionAudio(presented,seconds);
   }
   internal static float ActionProgress(PlayerState p,PlaytestValues rules) {

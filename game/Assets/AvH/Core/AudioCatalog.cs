@@ -26,6 +26,7 @@ namespace AvH {
    new SoundEntry("dry-fire",SoundOrigin.Cc0,"Audio/dry-fire"),
    new SoundEntry("fire",SoundOrigin.Synthesized),
    new SoundEntry("pop",SoundOrigin.Synthesized),
+   new SoundEntry("prop-knock",SoundOrigin.Synthesized),
    new SoundEntry("snarl",SoundOrigin.Owned,"SFX_Bear_Calm"),
    new SoundEntry("growl-bear",SoundOrigin.Owned,"SFX_Bear_Growl_2"),
    new SoundEntry("growl-wolf",SoundOrigin.Owned,"SFX_Wolf_Howl"),

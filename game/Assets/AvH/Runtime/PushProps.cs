@@ -32,6 +32,12 @@ namespace AvH {
    public Vector2 Velocity;public float Spin,Fall;public bool Moving,Lost;public double SettledAt=double.NegativeInfinity;
   }
   readonly List<Prop> props=new List<Prop>();
+  readonly List<(int prop,int actor,float strength)> knocks=new List<(int,int,float)>();
+  /// <summary>Speed (m/s) at which a body or bubble knocking a prop from rest is a public knock.</summary>
+  public const float KnockSpeed=1;
+  /// <summary>Knocks since the last call: which prop, by which slot, and a 0..1 strength.</summary>
+  public (int prop,int actor,float strength)[] TakeKnocks(){var result=knocks.ToArray();knocks.Clear();return result;}
+  void Knock(int index,int actor,float before){var p=props[index];float speed=p.Velocity.magnitude;if(before<KnockSpeed*.5f&&speed>=KnockSpeed)knocks.Add((index,actor,Mathf.Clamp01(speed/MaxSpeed)));}
   readonly List<Vector3> lastBodies=new List<Vector3>();
   public int Count=>props.Count;
 
@@ -58,6 +64,7 @@ namespace AvH {
 
   /// <summary>Round start (and joining): every prop back at its own spot, at rest.</summary>
   public void ResetHome() {
+   knocks.Clear();
    foreach(var p in props){p.Position=p.Home;p.Yaw=p.HomeYaw;p.Velocity=Vector2.zero;p.Spin=p.Fall=0;p.Moving=p.Lost=false;p.SettledAt=double.NegativeInfinity;Show(p);}
    lastBodies.Clear();
   }
@@ -74,16 +81,16 @@ namespace AvH {
     if(!body.enabled)continue;
     // A warp (spawn, recovery) is not a shove.
     var velocity=delta.sqrMagnitude>9?Vector2.zero:new Vector2(delta.x,delta.z)/seconds;
-    foreach(var p in props)if(!p.Lost)Shove(p,now,velocity,seconds);
+    for(int k=0;k<props.Count;k++){var p=props[k];if(p.Lost)continue;float before=p.Moving?p.Velocity.magnitude:0;if(Shove(p,now,velocity,seconds))Knock(k,i,before);}
    }
    Collide();
    foreach(var p in props)if(p.Moving&&!p.Lost){Slide(p,seconds);if(!p.Moving)p.SettledAt=hostTime;Show(p);}
   }
-  void Shove(Prop p,Vector3 body,Vector2 velocity,float seconds) {
+  bool Shove(Prop p,Vector3 body,Vector2 velocity,float seconds) {
    // Feet ride a skin above the floor, so a low pot still meets the shins.
-   if(body.y>p.Position.y+p.Height+.2f||body.y+BodyHeight<p.Position.y)return;
+   if(body.y>p.Position.y+p.Height+.2f||body.y+BodyHeight<p.Position.y)return false;
    var offset=new Vector2(p.Position.x-body.x,p.Position.z-body.z);float reach=BodyRadius+p.Radius,distance=offset.magnitude;
-   if(distance>=reach)return;
+   if(distance>=reach)return false;
    var normal=distance>1e-4f?offset/distance:velocity.sqrMagnitude>1e-6f?velocity.normalized:Vector2.right;
    // Run ahead of the body, plus a gentle push out of the overlap.
    float wanted=Mathf.Max(0,Vector2.Dot(velocity,normal))*1.1f+(reach-distance)*6;
@@ -91,7 +98,7 @@ namespace AvH {
    if(along<wanted)p.Velocity+=normal*(wanted-along);
    // Off-centre shoves turn the prop a little.
    p.Spin=Mathf.Clamp(p.Spin+(normal.x*velocity.y-normal.y*velocity.x)*40*seconds,-240,240);
-   Wake(p);
+   Wake(p);return true;
   }
   void Collide() {
    for(int i=0;i<props.Count;i++)for(int j=i+1;j<props.Count;j++) {
@@ -170,9 +177,11 @@ namespace AvH {
    return index>=0;
   }
   /// <summary>Host: a bubble (or other impulse) knocks a prop along, in metres per second.</summary>
-  public void Push(int index,Vector3 velocity) {
-   if(index<0||index>=props.Count||props[index].Lost)return;var p=props[index];
+  public void Push(int index,Vector3 velocity,int actor=-1) {
+   if(index<0||index>=props.Count||props[index].Lost)return;var p=props[index];float before=p.Moving?p.Velocity.magnitude:0;
    p.Velocity+=new Vector2(velocity.x,velocity.z);p.Spin=Mathf.Clamp(p.Spin+(index%2==0?1:-1)*velocity.magnitude*12,-240,240);Wake(p);
+   // A bubble always lands a knock, even on a prop already sliding.
+   if(actor>=0&&p.Velocity.magnitude>=KnockSpeed)knocks.Add((index,actor,Mathf.Clamp01(velocity.magnitude/MaxSpeed)));else Knock(index,actor,before);
   }
 
   /// <summary>

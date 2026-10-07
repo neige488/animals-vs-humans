@@ -60,6 +60,7 @@ namespace AvH {
     case "pop":return new Profile(5,.45f,1.5f,28);
     case "fire":return new Profile(5,.3f,1.5f,28);
     case "land":return new Profile(3,.6f,2,30);
+    case "prop-knock":return new Profile(2,.5f,1.5f,24);
     default:
      if(cue.StartsWith("growl",StringComparison.Ordinal))return new Profile(4,.7f,4,45);
      if(cue.StartsWith("step",StringComparison.Ordinal))return new Profile(1,.35f,1.5f,25);

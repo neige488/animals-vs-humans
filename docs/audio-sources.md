@@ -39,6 +39,7 @@ EditMode 테스트 `AudioSourcesTests`가 이 표를 다시 읽어 (1) 커밋된
 | `SFX_Penguin` | growl-penguin | 보유 | Polyperfect Low Poly Animated Animals 4.1.1 / `Sounds/SFX_Penguin.ogg` | Unity Asset Store 구매 에셋 | 구매 에셋 라이선스(저장소 미포함) | 원본 그대로 참조, 펭귄 울음 |
 | `SFX_Ice_Squeels` | growl-rabbit | 보유 | Polyperfect Low Poly Animated Animals 4.1.1 / `Sounds/SFX_Ice_Squeels.ogg` | Unity Asset Store 구매 에셋 | 구매 에셋 라이선스(저장소 미포함) | 원본 그대로 참조, 토끼 찍찍 소리(높은 음) |
 | (합성) | fire | 합성 | 기존 `PrimitiveEffects` 버블 발사음 합성 코드를 `AudioDirector`로 옮김 | - | 자체 생성 | 22050Hz 노이즈 퍼프 |
+| (합성) | prop-knock | 합성 | 밀리는 소품(상자·통·항아리)이 몸·버블에 밀릴 때의 나무 두드림, `SoundSynth.Thump` 재사용 | - | 자체 생성 | 22050Hz 210Hz 짧은 둔탁음+노이즈 0.14초, 소품마다 음높이 조금 다름 |
 | (합성) | pop | 합성 | 기존 `PrimitiveEffects` 버블 파열음 합성 코드를 `AudioDirector`로 옮김 | - | 자체 생성 | 22050Hz 사인 스윕+노이즈 |
 
 ## 가져오기 설정
