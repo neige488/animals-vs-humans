@@ -95,12 +95,14 @@ namespace AvH.Tests {
    var medium=(shadows:QualitySettings.shadows,distance:QualitySettings.shadowDistance,effects:Burst(),shake:presentation.Feel.Scale);
    Assert.IsTrue(settings.SetQuality(GraphicsQuality.Low));yield return null;
    var low=(shadows:QualitySettings.shadows,distance:QualitySettings.shadowDistance,effects:Burst(),shake:presentation.Feel.Scale);
+   Assert.IsFalse(TownAtmosphere.Observe(Camera.main).PostProcessing,"Low drops the post stack on the gameplay camera at once");
    Assert.AreEqual(ShadowQuality.Disable,low.shadows,"Low turns shadows off");Assert.AreNotEqual(ShadowQuality.Disable,medium.shadows);
    Assert.Less(medium.distance,high.distance);
    Assert.Less(medium.effects,high.effects);Assert.Less(low.effects,medium.effects);Assert.Greater(low.effects,0,"Effects still show on low");
    Assert.Less(medium.shake,high.shake);Assert.Less(low.shake,medium.shake);Assert.Greater(low.shake,0);
    Assert.AreEqual(GraphicsQuality.Low,new LocalDisplaySettings(display).Quality,"Saved for the next run");
    Assert.IsTrue(settings.SetQuality(GraphicsQuality.High));yield return null;Assert.AreEqual(high.effects,Burst());Assert.AreEqual(ShadowQuality.All,QualitySettings.shadows);
+   Assert.IsTrue(TownAtmosphere.Observe(Camera.main).PostProcessing,"High brings the post stack back");
   }
  }
 }

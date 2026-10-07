@@ -31,7 +31,7 @@ namespace AvH {
   public Vector3 FollowPoint=>follow;
   /// <summary>Replaces the per-PC display preferences (tests and isolated profiles).</summary>
   public void UseDisplaySettings(LocalDisplaySettings settings){display=settings??new LocalDisplaySettings(null);appliedDisplay=-1;ApplyDisplay();}
-  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality);}
+  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality,view);}
   GUIStyle label, title;
   // Override the fullscreen preference saved by older playtest builds on every desktop launch.
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
