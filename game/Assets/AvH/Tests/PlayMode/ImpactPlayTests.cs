@@ -38,6 +38,15 @@ namespace AvH.Tests {
    Assert.IsTrue(world.Observe().Events.Any(e=>e.Kind==FeelEventKind.AttackHit&&e.Actor==0&&e.Target==4));
   }
 
+  [UnityTest] public IEnumerator AfterALongHitStopTheAnimatorStillPlaysTheSwing() {
+   // Integration review F-5: the real animator shows the swing once a 0.3 s freeze ends.
+   yield return Create(Faction.Animal,Faction.Human,v=>{v.AttackWindupSeconds=0;v.HitStopSeconds=.3f;});
+   Step(1,(0,new PlayerInput{Attack=true,Yaw=0}));Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction);
+   bool frozenSeen=false,swingAfter=false;
+   for(int i=0;i<30;i++){Step(1,(0,new PlayerInput{Yaw=0}));var view=world.ObserveAnimation(0);frozenSeen|=view.Frozen;if(frozenSeen&&!view.Frozen&&view.Action==ActionPhase.Swing)swingAfter=true;}
+   Assert.IsTrue(frozenSeen,"The pose holds during the hit-stop");Assert.IsTrue(swingAfter,"The swing plays on the real animator after the freeze");
+  }
+
   [UnityTest] public IEnumerator HitStopHoldsOnlyTheAttackerAndVictimInPlace() {
    yield return Create(Faction.Animal,Faction.Human,v=>{v.AttackWindupSeconds=0;v.HitStopSeconds=.2f;});
    Step(1,(0,new PlayerInput{Attack=true,Yaw=0}));Assert.AreEqual(Faction.Animal,world.Observe().Players[4].Faction);

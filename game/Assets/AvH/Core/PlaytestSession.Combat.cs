@@ -32,9 +32,9 @@ namespace AvH {
    foreach(var p in players) {
     p.FireCooldownRemaining=Math.Max(0,p.FireCooldownRemaining-elapsed);
     p.AttackGraceRemaining=Math.Max(0,p.AttackGraceRemaining-elapsed);
-    p.SwingRemaining=Math.Max(0,p.SwingRemaining-elapsed);
-    // A tell pauses while its character is frozen: the strike moment moves back by the freeze.
+    // A tell and a swing pause while their character is frozen: both resume after the freeze.
     double frozen=Math.Min(elapsed,p.HitStopRemaining);
+    p.SwingRemaining=Math.Max(0,p.SwingRemaining-(elapsed-frozen));
     p.HitStopRemaining=Math.Max(0,p.HitStopRemaining-elapsed);p.StunRemaining=Math.Max(0,p.StunRemaining-elapsed);
     if(p.AttackWindupRemaining>0){p.AttackWindupRemaining=Math.Max(0,p.AttackWindupRemaining-(elapsed-frozen));if(p.AttackWindupRemaining==0)dueAttacks.Add(p.Slot);}
     if(p.ReloadRemaining>0){p.ReloadRemaining=Math.Max(0,p.ReloadRemaining-elapsed);if(p.ReloadRemaining==0)p.Ammo=settings.Current.Magazine;}
