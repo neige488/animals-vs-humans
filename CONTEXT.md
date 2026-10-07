@@ -608,5 +608,15 @@ Esc 메뉴 (플레이 중에도 매치는 계속 진행)
 | 취소·중도 종료 | 연출·히트스톱 중 이탈하면 기존 규칙대로 봇이 상태를 이어받는다. 라운드 종료 시 진행 중 연출·히트스톱을 끊고 소품을 원래 자리로 되돌린다. |
 | 부분 실패 | 품질 설정 저장 실패는 이번 실행에만 적용 안내 후 계속한다. CC0 소리 확보에 실패한 항목은 합성음으로 두고 해당 범위를 미완료로 보고한다. |
 | 자원 한계 | 저사양 PC는 그래픽 품질 선택으로 대응한다. 오디오 동시 재생 수와 물리 소품 수를 제한한다. 실제 기기 프레임 측정은 Windows 실기 검증 항목으로 남는다. |
-- PRD 합성(2026-10-06): `docs/specs/game-feel.md`, GitHub Milestone [game-feel #2](https://github.com/neige488/animals-vs-humans/milestone/2). 사용자 확인 모듈: CharacterMotion(신규 판정)·CharacterAnimator·FeelDirector·AudioDirector·LocalDisplaySettings(신규 표현·로컬 설정), MatchWorld·PlaytestSettings·PlaytestSession 네트워크·BotDirector·TownAtmosphere 확장. 테스트 경계는 기존 공개 세션·Play Mode·실제 소켓 세 곳을 재사용한다. PA-1~PA-11을 정의했으며 Issue 생성·구현은 아직 하지 않았다.
+- PRD 합성(2026-10-06): `docs/specs/game-feel.md`, GitHub Milestone [game-feel #2](https://github.com/neige488/animals-vs-humans/milestone/2). 사용자 확인 모듈: CharacterMotion(신규 판정)·CharacterAnimator·FeelDirector·AudioDirector·LocalDisplaySettings(신규 표현·로컬 설정), MatchWorld·PlaytestSettings·PlaytestSession 네트워크·BotDirector·TownAtmosphere 확장. 테스트 경계는 기존 공개 세션·Play Mode·실제 소켓 세 곳을 재사용한다. PA-1~PA-11을 정의했다. 구현 현황은 아래 「실감 개선 구현 현황」을 따른다.
 - S1 판정·검수 방식 변경(2026-10-06): 사용자가 원격 검수 페이지(비교 영상·빌드)로 S1(#29, PR #34, bb48d57)을 통과 판정했다. 사용자는 이후 S2~S5를 Slice마다 직접 플레이 판정하지 않고 끝까지 진행한 뒤 한 번에 테스트하기로 했다. S2~S5의 Slice 검증은 자동 검사·리뷰·비교 영상·빌드까지로 하고, PA-11 사용자 판정은 최종 통합 빌드의 제품 검증에서 받는다. 원격 검수는 tailnet 전용 검수 페이지로 제공한다.
+
+### 실감 개선 구현 현황 (2026-10-07, Autopilot `20261006-animals-vs-humans-game-feel`)
+
+- 5개 Slice를 `autopilot/game-feel`에 통합했다: S1 무게감(#29, PR #34), S2 타격감(#30, PR #35), S3 소리(#31, PR #36), S4 원격·봇(#32, PR #37), S5 소품·분위기(#33, PR #38). 각 PR은 Codex 반대편 리뷰 Discovery·Final PASS, Slice 제품 검증 VERIFIED(자동 검사·비교 영상·빌드)를 거쳤다.
+- 에이전트가 정한 기본값(호스트 실시간 슬라이더로 조절, 0이면 기존 동작): 관성 0.12초·공중 조작 0.45, 공격 예비동작 0.15초, 히트스톱 0.06초, 피격 경직 0.2초(조작 35%), 변신 연출 0.4초, 봇 조준 반응 0.2초·오차 3°. 카메라 흔들림 최대 2.5°, 관련자만.
+- 소리는 Kenney·OpenGameArt CC0 18개 + 보유 Polyperfect 5개 + 합성음이며 출처는 `docs/audio-sources.md`에 기록한다. 동시 효과음 16개(발소리 6, 울음 3) 제한.
+- 원격 표시는 20Hz 프레임 0.1초 버퍼 보간, 프레임에 라운드 포함, 밀리는 소품 동기화(움직이는 소품만, 정지 소품 0.5초 재전송). 네트워크 버전은 `avh-private-10`이며 9 이하는 연결 전 거부한다.
+- 밀리는 소품은 자체 계산(Rigidbody 미사용)이라 넘어지거나 구르지 않으며 캐릭터·봇 길찾기를 막지 않는다. 쉘터 중심 8m·옥상 계단 4m 안 소품은 고정이다.
+- 그래픽 후처리는 Built-in 파이프라인의 PPv2(`com.unity.postprocessing` 3.5.4, Neutral 톤매핑)다. 품질 높음/보통/낮음이 후처리·흔들림·랜턴 광원·그림자를 줄인다.
+- 남은 검증: 최종 통합 빌드의 사용자 직접 플레이 판정(PA-11), 실제 두 기기 LAN·Windows 실기. 생성 마을 프리팹은 Git 밖이라 새 작업 폴더에서는 테스트 전에 `ConfigureOwnedAssets.Configure`를 실행해야 한다(빌드는 자동 재생성).
