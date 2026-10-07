@@ -40,6 +40,15 @@ namespace AvH.Tests {
    Assert.Greater(high.PixelLights,medium.PixelLights);Assert.Greater(medium.PixelLights,low.PixelLights);
   }
 
+  [UnityTest] public IEnumerator AtHighTheRenderedChangeComesFromThePostStackAlone() {
+   yield return Town();
+   DisplayQuality.Apply(GraphicsQuality.High,camera);yield return null;
+   var layer=camera.GetComponent<UnityEngine.Rendering.PostProcessing.PostProcessLayer>();Assert.IsNotNull(layer,"High gives the camera a post layer");Assert.IsTrue(layer.enabled);
+   // Same frame, same quality step, shadows, lantern lights and sway pose: only the post layer differs.
+   var graded=Render();layer.enabled=false;var plain=Render();layer.enabled=true;var again=Render();
+   Assert.Greater(Difference(plain,graded),.01f,"Tone mapping, grading, bloom and AO change the image on their own");
+   Assert.Less(Difference(graded,again),.002f,"The same view renders the same with the post stack back on");
+  }
   [UnityTest] public IEnumerator TreesAndFlagsSwayAndLanternsGlowLessAtLowerQuality() {
    yield return Town();
    var tree=root.GetComponentsInChildren<Transform>().First(t=>t.name.StartsWith("SM_Env_Tree"));
