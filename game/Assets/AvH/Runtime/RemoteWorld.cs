@@ -43,7 +43,7 @@ namespace AvH {
    // A receive can carry the next round's snapshot together with the previous round's last frames; those are never replayed.
    if(frame.Round!=remoteSnapshot.Round)return;
    int before=remoteMotion.Count;var newest=remoteMotion.Latest;remoteMotion.Add(frame.HostTime,remoteClock,frame);
-   if(remoteMotion.Latest!=newest||remoteMotion.Count!=before)lastFrameArrival=remoteClock;
+   if(remoteMotion.Latest!=newest||remoteMotion.Count!=before){lastFrameArrival=remoteClock;props?.Receive(frame);}
    for(int i=0;i<bodies.Count;i++)if(snapRemoteFacing[i]){var pose=frame.Bodies[i];bodies[i].transform.rotation=Quaternion.Euler(0,pose.AimYaw(),0);snapRemoteFacing[i]=false;}
   }
   void InterpolateRemote(float dt) {
@@ -63,7 +63,7 @@ namespace AvH {
     body.GetComponent<CharacterAnimator>().Apply(motion,dt);
    }
    // Pushed props play back on the same clock as the bodies that pushed them.
-   props?.Present(from,to,t);
+   props?.Present(from.HostTime+(to.HostTime-from.HostTime)*t);
    // Footsteps and growls follow the played-back animation (merged S3 audio with S4 playback).
    PresentMotionAudio(remoteSnapshot,dt);
   }

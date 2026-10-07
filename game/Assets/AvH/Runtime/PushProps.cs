@@ -198,28 +198,42 @@ namespace AvH {
    }
    return result.ToArray();
   }
-  // Remote view: the last pose each prop was shown with, so frames that omit a resting prop keep it in place.
-  NetworkPropMotion?[] known;
-  /// <summary>Remote view: shows the props between two played-back host frames (a prop absent from a frame stays where it was).</summary>
-  public void Present(NetworkMotionFrame from,NetworkMotionFrame to,float t) {
-   if(props.Count==0||from==null)return;
-   if(known==null||known.Length!=props.Count)known=new NetworkPropMotion?[props.Count];
-   var a=new NetworkPropMotion?[props.Count];var b=new NetworkPropMotion?[props.Count];
-   foreach(var pose in from.Props)if(pose.Index<props.Count)a[pose.Index]=pose;
-   if(to!=null)foreach(var pose in to.Props)if(pose.Index<props.Count)b[pose.Index]=pose;
+  // Remote view. Each prop keeps its received poses in host-time order, apart from the frame interpolation buffer
+  // (which drops frames it plays over): the newest pose at or before the playback time is the prop's confirmed state,
+  // so a sparse refresh the playback stepped over still lands.
+  List<(double time,NetworkPropMotion pose)>[] received;
+  /// <summary>Two received poses this close in host time are one continuous slide and are interpolated.</summary>
+  const double ContinuousGap=.15;
+  const int ReceivedLimit=64;
+  /// <summary>Remote view: records a received host frame's prop poses (call for every accepted frame, oldest first).</summary>
+  public void Receive(NetworkMotionFrame frame) {
+   if(props.Count==0||frame?.Props==null)return;
+   if(received==null||received.Length!=props.Count){received=new List<(double,NetworkPropMotion)>[props.Count];for(int i=0;i<received.Length;i++)received[i]=new List<(double,NetworkPropMotion)>();}
+   foreach(var pose in frame.Props) {
+    if(pose.Index<0||pose.Index>=props.Count)continue;var list=received[pose.Index];
+    if(list.Count>0&&list[list.Count-1].time>=frame.HostTime)continue;
+    list.Add((frame.HostTime,pose));if(list.Count>ReceivedLimit)list.RemoveAt(0);
+   }
+  }
+  /// <summary>Remote view: shows every prop at the host time being played back.</summary>
+  public void Present(double renderTime) {
+   if(received==null)return;
    for(int i=0;i<props.Count;i++) {
-    var start=a[i]??known[i];var end=b[i]??start;if(!end.HasValue)continue;
-    var p=props[i];var from3=Vector(start??end.Value);var to3=Vector(end.Value);
-    bool warp=(to3-from3).sqrMagnitude>NetworkBodyMotion.TeleportDistance*NetworkBodyMotion.TeleportDistance;
-    p.Position=warp||t>=1?to3:Vector3.Lerp(from3,to3,t);
-    p.Yaw=Mathf.Repeat(warp||t>=1?end.Value.AimYaw():Mathf.LerpAngle((start??end.Value).AimYaw(),end.Value.AimYaw(),t),360);
-    p.Lost=p.Position.y<LostDepth;p.Moving=a[i].HasValue||b[i].HasValue;
-    if(a[i].HasValue)known[i]=a[i];if(t>=1&&b[i].HasValue)known[i]=b[i];
+    var list=received[i];
+    // Poses older than the newest one already reached are settled history.
+    while(list.Count>=2&&list[1].time<=renderTime)list.RemoveAt(0);
+    if(list.Count==0||list[0].time>renderTime)continue;
+    var p=props[i];var from=list[0];var target=Vector(from.pose);float yaw=from.pose.AimYaw();bool moving=list.Count>=2;
+    if(list.Count>=2&&list[1].time-from.time<=ContinuousGap) {
+     var to=list[1];float t=(float)((renderTime-from.time)/(to.time-from.time));var end=Vector(to.pose);
+     if((end-target).sqrMagnitude<=NetworkBodyMotion.TeleportDistance*NetworkBodyMotion.TeleportDistance){target=Vector3.Lerp(target,end,t);yaw=Mathf.LerpAngle(yaw,to.pose.AimYaw(),t);}
+    }
+    p.Position=target;p.Yaw=Mathf.Repeat(yaw,360);p.Lost=p.Position.y<LostDepth;p.Moving=moving;
     Show(p);
    }
   }
   /// <summary>Remote view: forget what earlier frames said (new round, rejoin); every prop shows at home.</summary>
-  public void ForgetRemote(){known=null;ResetHome();}
+  public void ForgetRemote(){received=null;ResetHome();}
   static Vector3 Vector(NetworkPropMotion pose){var w=pose.Position();return new Vector3(w.X,w.Y,w.Z);}
 
   void Show(Prop p) {
