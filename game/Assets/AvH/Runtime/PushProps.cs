@@ -162,17 +162,29 @@ namespace AvH {
    if(best>float.NegativeInfinity){p.Position.y=best;p.Fall=0;return;}
    p.Fall-=Gravity*seconds;p.Position.y+=p.Fall*seconds;
   }
-  /// <summary>Earliest prop a bubble sweep meets within <paramref name="distance"/>, as an upright footprint cylinder.</summary>
+  /// <summary>
+  /// Earliest prop a bubble sweep meets within <paramref name="distance"/>. Each prop is an upright cylinder grown by
+  /// the bubble radius: the sweep's span inside the footprint circle is intersected with its span between the
+  /// grown bottom and top, so entries through the side, the top or the bottom all count.
+  /// </summary>
   public bool Hit(Vector3 origin,Vector3 direction,float bubbleRadius,float distance,out int index,out float at) {
    index=-1;at=float.MaxValue;var flat=new Vector2(direction.x,direction.z);float a=flat.sqrMagnitude;
    for(int i=0;i<props.Count;i++) {
     var p=props[i];if(p.Lost)continue;
-    var c=new Vector2(p.Position.x-origin.x,p.Position.z-origin.z);float reach=p.Radius+bubbleRadius,cc=c.sqrMagnitude-reach*reach,s;
-    if(cc<=0)s=0;
-    else {if(a<1e-8f)continue;float b=-2*Vector2.Dot(c,flat),disc=b*b-4*a*cc;if(disc<0)continue;s=(-b-Mathf.Sqrt(disc))/(2*a);if(s<0)continue;}
-    if(s>distance||s>=at)continue;
-    float y=origin.y+direction.y*s;if(y<p.Position.y-bubbleRadius||y>p.Position.y+p.Height+bubbleRadius)continue;
-    index=i;at=s;
+    float enter=0,leave=distance;
+    // Inside the footprint circle (radius grown by the bubble).
+    var c=new Vector2(p.Position.x-origin.x,p.Position.z-origin.z);float reach=p.Radius+bubbleRadius,cc=c.sqrMagnitude-reach*reach;
+    if(a<1e-8f){if(cc>0)continue;}
+    else {
+     float b=-2*Vector2.Dot(c,flat),disc=b*b-4*a*cc;if(disc<0)continue;float root=Mathf.Sqrt(disc);
+     enter=Mathf.Max(enter,(-b-root)/(2*a));leave=Mathf.Min(leave,(-b+root)/(2*a));
+    }
+    // Between the grown bottom and top.
+    float low=p.Position.y-bubbleRadius,high=p.Position.y+p.Height+bubbleRadius;
+    if(Mathf.Abs(direction.y)<1e-6f){if(origin.y<low||origin.y>high)continue;}
+    else {float s1=(low-origin.y)/direction.y,s2=(high-origin.y)/direction.y;enter=Mathf.Max(enter,Mathf.Min(s1,s2));leave=Mathf.Min(leave,Mathf.Max(s1,s2));}
+    if(enter>leave||enter>=at)continue;
+    index=i;at=enter;
    }
    return index>=0;
   }
