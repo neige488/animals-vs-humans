@@ -41,7 +41,7 @@ namespace AvH {
   /// <summary>Light crates, barrels and pots: where each one is now and where it starts every round.</summary>
   public PropView[] ObserveProps()=>props==null?new PropView[0]:props.Observe();
   /// <summary>This world's village dressing at the current graphics quality.</summary>
-  public TownDressingView ObserveTown()=>default;
+  public TownDressingView ObserveTown(){var village=transform.Find("Village");var dressing=village==null?null:village.GetComponent<TownDressing>();return dressing==null?default:dressing.Observe();}
   public BotNavigationDiagnostics ObserveBotNavigation()=>botDirector.ObserveNavigation();
   public void SubmitInput(int slot, PlayerInput input) {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));

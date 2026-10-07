@@ -19,20 +19,23 @@ namespace AvH.Tests {
    target=new RenderTexture(480,270,24){antiAliasing=1};camera.targetTexture=target;pixels=new Texture2D(480,270,TextureFormat.RGB24,false);
    yield return null;
   }
-  Color[] Render(){camera.Render();var old=RenderTexture.active;RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,480,270),0,0);pixels.Apply();RenderTexture.active=old;return pixels.GetPixels();}
+  Color[] Render(string evidence=null){camera.Render();var old=RenderTexture.active;RenderTexture.active=target;pixels.ReadPixels(new Rect(0,0,480,270),0,0);pixels.Apply();RenderTexture.active=old;
+   // -avhCapture keeps the compared frames as evidence.
+   if(evidence!=null&&System.Environment.GetCommandLineArgs().Contains("-avhCapture")){var folder=System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath,"../Builds/VisualAudit/Atmosphere"));System.IO.Directory.CreateDirectory(folder);System.IO.File.WriteAllBytes(System.IO.Path.Combine(folder,evidence+".png"),pixels.EncodeToPNG());}
+   return pixels.GetPixels();}
   static float Difference(Color[] a,Color[] b){double sum=0;for(int i=0;i<a.Length;i++)sum+=Mathf.Abs(a[i].r-b[i].r)+Mathf.Abs(a[i].g-b[i].g)+Mathf.Abs(a[i].b-b[i].b);return (float)(sum/(a.Length*3));}
 
   [UnityTest] public IEnumerator PostProcessingRendersOnBuiltInAtHighAndStepsDownWithQuality() {
    yield return Town();
    DisplayQuality.Apply(GraphicsQuality.Low,camera);yield return null;
-   var low=TownAtmosphere.Observe(camera);var plain=Render();
+   var low=TownAtmosphere.Observe(camera);var plain=Render("low");
    Assert.IsFalse(low.PostProcessing,"Low renders without post-processing");
    DisplayQuality.Apply(GraphicsQuality.High,camera);yield return null;
-   var high=TownAtmosphere.Observe(camera);var graded=Render();
+   var high=TownAtmosphere.Observe(camera);var graded=Render("high");
    Assert.IsTrue(high.PostProcessing&&high.ToneMapping&&high.ColorGrading&&high.Bloom&&high.AmbientOcclusion,"High: tone mapping, colour grading, bloom and ambient occlusion");
    Assert.Greater(Difference(plain,graded),.01f,"The post stack actually changes the rendered image on this Unity version");
    DisplayQuality.Apply(GraphicsQuality.Medium,camera);yield return null;
-   var medium=TownAtmosphere.Observe(camera);
+   var medium=TownAtmosphere.Observe(camera);Render("medium");
    Assert.IsTrue(medium.PostProcessing&&medium.ToneMapping&&medium.Bloom,"Medium keeps the grade and bloom");Assert.IsFalse(medium.AmbientOcclusion,"Medium drops ambient occlusion");
    Assert.Greater(high.PixelLights,medium.PixelLights);Assert.Greater(medium.PixelLights,low.PixelLights);
   }
