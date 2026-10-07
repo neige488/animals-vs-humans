@@ -1,6 +1,24 @@
 using NUnit.Framework;
 namespace AvH.Tests {
 public class SettingsTests {
+ [Test] public void BotAimReactionDefaultsAreSmallValidatedAndOlderSettingsFilesKeepThem() {
+  var defaults=new PlaytestValues();Assert.AreEqual(.2f,defaults.BotAimDelaySeconds);Assert.AreEqual(3f,defaults.BotAimErrorDegrees);
+  var session=new PlaytestSession(1);session.StartSolo("host");
+  bool Accepts(System.Action<PlaytestValues> change){session.BeginSettingsEdit(0);var v=session.ObserveSettings().Edit;change(v);session.UpdateSettingsEdit(0,v);return session.ApplySettingsNow(0);}
+  Assert.IsTrue(Accepts(v=>{v.BotAimDelaySeconds=0;v.BotAimErrorDegrees=0;}),"0 = the original exact aim");
+  Assert.IsTrue(Accepts(v=>{v.BotAimDelaySeconds=1;v.BotAimErrorDegrees=15;}));
+  foreach(var bad in new System.Action<PlaytestValues>[]{v=>v.BotAimDelaySeconds=1.01f,v=>v.BotAimDelaySeconds=-.01f,v=>v.BotAimDelaySeconds=float.NaN,v=>v.BotAimErrorDegrees=15.1f,v=>v.BotAimErrorDegrees=-1,v=>v.BotAimErrorDegrees=float.PositiveInfinity})
+   Assert.IsFalse(Accepts(bad));
+  Assert.IsFalse(session.BeginSettingsEdit(1),"Only the host tunes bots");
+  var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString());System.IO.Directory.CreateDirectory(dir);var path=System.IO.Path.Combine(dir,"settings.xml");
+  try {
+   var saved=new PlaytestSession(1,path);saved.StartSolo("host");saved.BeginSettingsEdit(0);var v=saved.ObserveSettings().Edit;v.RoundSeconds=90;saved.UpdateSettingsEdit(0,v);saved.ApplySettings(0);
+   var xml=System.IO.File.ReadAllText(path);StringAssert.Contains("<BotAimDelaySeconds>",xml);
+   xml=System.Text.RegularExpressions.Regex.Replace(xml,@"\s*<BotAim(DelaySeconds|ErrorDegrees)>[^<]*</BotAim\w+>","");System.IO.File.WriteAllText(path,xml);
+   var older=new PlaytestSession(2,path).ObserveSettings();
+   Assert.IsNull(older.Error);Assert.AreEqual(90,older.Current.RoundSeconds);Assert.AreEqual(.2f,older.Current.BotAimDelaySeconds);Assert.AreEqual(3f,older.Current.BotAimErrorDegrees);
+  } finally {System.IO.Directory.Delete(dir,true);}
+ }
  [Test] public void ValidXmlWithInvalidValuesFallsBackWithoutChangingOriginal() {
   var dir=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString());
   System.IO.Directory.CreateDirectory(dir);var path=System.IO.Path.Combine(dir,"settings.xml");
@@ -101,7 +119,9 @@ public class SettingsTests {
    ("InitialAttackGrace",0f,30f),("TransformAttackGrace",0f,30f),
    ("HumanSpeed",.01f,20f),("AnimalSpeed",.01f,20f),("HumanJump",.01f,5f),("AnimalJump",.01f,5f),
    ("ReloadSeconds",.01f,30f),("BubbleRadius",.01f,2f),("BubbleSpeed",.01f,100f),
-   ("BubbleRange",.01f,100f),("BubbleLifetime",.01f,10f),("FireInterval",.01f,30f),("PushForce",.01f,30f)
+   ("BubbleRange",.01f,100f),("BubbleLifetime",.01f,10f),("FireInterval",.01f,30f),("PushForce",.01f,30f),
+   ("InertiaSeconds",0f,1f),("AirControl",.05f,1f),
+   ("AttackWindupSeconds",0f,1f),("HitStopSeconds",0f,.3f),("HitStunSeconds",0f,1f)
   };
   foreach(var range in ranges) {
    var session=new PlaytestSession(1);session.StartSolo("host");
@@ -190,6 +210,41 @@ public class SettingsTests {
    xml.Save(file);var old=new PlaytestSession(3,file).ObserveSettings();Assert.IsNull(old.Error);Assert.AreEqual(1.1f,old.Current.FoxSpeedMultiplier);Assert.AreEqual(1.55f,old.Current.RabbitJumpMultiplier);
    var unknown=AnimalBalance.For(old.Current,new PlayerState{Faction=Faction.Animal,CharacterId="animal-default"});Assert.AreEqual(1,unknown.Speed);
    var human=AnimalBalance.For(old.Current,new PlayerState{Faction=Faction.Human,CharacterId=AnimalBalance.Id(0)});Assert.AreEqual(1,human.Knockback);
+  }finally{if(System.IO.File.Exists(file))System.IO.File.Delete(file);}
+ }
+ [Test] public void InertiaIsHostOnlyLiveSavedAndOlderXmlKeepsDefaults() {
+  var file=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml");
+  try {
+   var s=new PlaytestSession(1,file);s.StartSolo("host");
+   Assert.AreEqual(.12f,s.ObserveSettings().Current.InertiaSeconds);Assert.AreEqual(.45f,s.ObserveSettings().Current.AirControl);
+   Assert.IsFalse(s.BeginSettingsEdit(1),"Guests cannot open the tuning edit");
+   s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.InertiaSeconds=0;v.AirControl=.8f;
+   Assert.IsFalse(s.UpdateSettingsEdit(3,v));Assert.IsFalse(s.ApplySettingsNow(3));
+   Assert.IsTrue(s.UpdateSettingsEdit(0,v));Assert.IsTrue(s.ApplySettingsNow(0));Assert.AreEqual(0,s.ObserveSettings().Current.InertiaSeconds);
+   Assert.AreEqual(1,s.Observe().Round,"Live inertia does not restart the round");
+   Assert.IsTrue(s.SaveCurrentSettings(0));
+   var restarted=new PlaytestSession(2,file).ObserveSettings().Current;Assert.AreEqual(0,restarted.InertiaSeconds);Assert.AreEqual(.8f,restarted.AirControl);
+   var xml=new System.Xml.XmlDocument();xml.Load(file);
+   foreach(var name in new[]{"InertiaSeconds","AirControl"})xml.DocumentElement.RemoveChild(xml.DocumentElement.SelectSingleNode(name));
+   xml.Save(file);var old=new PlaytestSession(3,file).ObserveSettings();
+   Assert.IsNull(old.Error);Assert.AreEqual(.12f,old.Current.InertiaSeconds);Assert.AreEqual(.45f,old.Current.AirControl);
+  }finally{if(System.IO.File.Exists(file))System.IO.File.Delete(file);}
+ }
+ [Test] public void ImpactTuningIsHostOnlyLiveSavedAndOlderXmlKeepsDefaults() {
+  var file=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml");
+  try {
+   var s=new PlaytestSession(1,file);s.StartSolo("host");var current=s.ObserveSettings().Current;
+   Assert.AreEqual(.15f,current.AttackWindupSeconds);Assert.AreEqual(.06f,current.HitStopSeconds);Assert.AreEqual(.2f,current.HitStunSeconds);
+   s.BeginSettingsEdit(0);var v=s.ObserveSettings().Edit;v.AttackWindupSeconds=0;v.HitStopSeconds=0;v.HitStunSeconds=.5f;
+   Assert.IsFalse(s.UpdateSettingsEdit(2,v));Assert.IsFalse(s.ApplySettingsNow(2));
+   Assert.IsTrue(s.UpdateSettingsEdit(0,v));Assert.IsTrue(s.ApplySettingsNow(0));
+   Assert.AreEqual(0,s.ObserveSettings().Current.AttackWindupSeconds);Assert.AreEqual(1,s.Observe().Round,"Live impact tuning does not restart the round");
+   Assert.IsTrue(s.SaveCurrentSettings(0));
+   var restarted=new PlaytestSession(2,file).ObserveSettings().Current;Assert.AreEqual(0,restarted.AttackWindupSeconds);Assert.AreEqual(0,restarted.HitStopSeconds);Assert.AreEqual(.5f,restarted.HitStunSeconds);
+   var xml=new System.Xml.XmlDocument();xml.Load(file);
+   foreach(var name in new[]{"AttackWindupSeconds","HitStopSeconds","HitStunSeconds"})xml.DocumentElement.RemoveChild(xml.DocumentElement.SelectSingleNode(name));
+   xml.Save(file);var old=new PlaytestSession(3,file).ObserveSettings();
+   Assert.IsNull(old.Error);Assert.AreEqual(.15f,old.Current.AttackWindupSeconds);Assert.AreEqual(.06f,old.Current.HitStopSeconds);Assert.AreEqual(.2f,old.Current.HitStunSeconds);
   }finally{if(System.IO.File.Exists(file))System.IO.File.Delete(file);}
  }
  static float AdjacentPositiveFloat(float value,int step) {

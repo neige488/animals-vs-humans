@@ -7,6 +7,10 @@ namespace AvH.Editor {
   public static void Windows() => Build(BuildTarget.StandaloneWindows64,"Builds/Windows/AnimalsVsHumans.exe");
   static void Build(BuildTarget target,string path) {
    if(!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone,target)) throw new InvalidOperationException("빌드 모듈을 설치하세요: "+target);
+   // Owned sounds live in the Git-ignored catalog; refresh it so every build carries them when the assets exist.
+   ConfigureOwnedAssets.ConfigureSounds();
+   // A village generated before pushable props existed keeps every crate fixed; rebuild it from the owned assets.
+   if(ConfigureOwnedAssets.VillageNeedsRebuild())ConfigureOwnedAssets.Configure();
    var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions {scenes=new[]{"Assets/Scenes/SampleScene.unity"},locationPathName=path,target=target,options=BuildOptions.Development});
    if(report.summary.result!=BuildResult.Succeeded) throw new InvalidOperationException("빌드 실패: "+report.summary.result);
   }

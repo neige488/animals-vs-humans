@@ -6,12 +6,16 @@ namespace AvH {
   Transform rightFingers,leftFingers;
   public float AimYaw {get;private set;}
   public float AimPitch {get;private set;}
+  /// <summary>Leg heading relative to aim (degrees), set by CharacterAnimator for strafing and backpedalling.</summary>
+  public float LegYaw {get;set;}
+  Transform spine,chest;
   public void SetAim(float yaw,float pitch){AimYaw=yaw;AimPitch=pitch;}
   public void Bind(Transform model) {
    visual=model;SetAim(transform.eulerAngles.y,0);var animator=model.GetComponentInChildren<Animator>();
    if(animator==null||!animator.isHuman)return;
    rightUpper=animator.GetBoneTransform(HumanBodyBones.RightUpperArm);rightLower=animator.GetBoneTransform(HumanBodyBones.RightLowerArm);rightHand=animator.GetBoneTransform(HumanBodyBones.RightHand);
    leftUpper=animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);leftLower=animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);leftHand=animator.GetBoneTransform(HumanBodyBones.LeftHand);
+   spine=animator.GetBoneTransform(HumanBodyBones.Spine);chest=animator.GetBoneTransform(HumanBodyBones.Chest);
    rightFingers=animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal);leftFingers=animator.GetBoneTransform(HumanBodyBones.LeftMiddleProximal);
   }
   void LateUpdate(){ApplyPose();}
@@ -19,8 +23,12 @@ namespace AvH {
    if(rightUpper==null||rightLower==null||rightHand==null||leftUpper==null||leftLower==null||leftHand==null)return;
    var aim=Quaternion.Euler(AimPitch,AimYaw,0);transform.rotation=aim;var flat=Vector3.ProjectOnPlane(transform.forward,Vector3.up);
    if(flat.sqrMagnitude<.001f)flat=visual.forward;
-   // Aiming also turns the visible human, including when strafing or standing still.
-   visual.rotation=Quaternion.RotateTowards(visual.rotation,Quaternion.LookRotation(flat,Vector3.up),720*Time.deltaTime);
+   // Aiming also turns the visible human. Legs may point along a side step (LegYaw);
+   // the spine then counter-twists so the chest and arms stay on the aim.
+   var facing=Quaternion.LookRotation(flat,Vector3.up);
+   visual.rotation=Quaternion.RotateTowards(visual.rotation,facing*Quaternion.Euler(0,LegYaw,0),720*Time.deltaTime);
+   float twist=Mathf.Clamp(Mathf.DeltaAngle(visual.eulerAngles.y,facing.eulerAngles.y),-90,90);
+   if(spine!=null&&chest!=null&&Mathf.Abs(twist)>.01f){spine.rotation=Quaternion.AngleAxis(twist*.5f,Vector3.up)*spine.rotation;chest.rotation=Quaternion.AngleAxis(twist*.5f,Vector3.up)*chest.rotation;}
    var side=Quaternion.LookRotation(flat,Vector3.up)*Vector3.right;
    transform.position=(rightUpper.position+leftUpper.position)*.5f+side*.1f+transform.forward*.22f-Vector3.up*.14f;
    transform.rotation=aim;
