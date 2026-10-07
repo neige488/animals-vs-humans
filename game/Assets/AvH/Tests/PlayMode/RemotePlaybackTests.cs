@@ -51,6 +51,26 @@ namespace AvH.Tests {
    Assert.AreEqual(-20,remote.PlayerTransform(runner).GetComponentInChildren<BubbleGunPose>().AimPitch,.05,"Aim pitch follows the host, not only shots");
    Assert.AreEqual(LocomotionGait.Idle,remote.ObserveAnimation(runner).Gait);
   }
+  [UnityTest] public IEnumerator SparsePropRefreshesReachAViewerWhosePlaybackStepsAreLongerThanTheirSpacing() {
+   if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null)Assert.Ignore("The market props come from the owned village");
+   var source=new PlaytestSession(123);source.StartSolo("source");var state=source.Observe();
+   root=new GameObject("remote sparse props");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(state);remote.AutomaticRemotePlayback=false;yield return null;
+   var prop=remote.ObserveProps()[0];var moved=prop.Home+new Vector3(1.2f,0,-.7f);
+   // Every 20 Hz host frame arrives; only the twice-a-second refresh (0.1 + 0.5k s) carries the resting displaced prop.
+   // The viewer plays back in 0.25 s steps, longer than the refresh spacing seen through the buffer.
+   float host=0;
+   for(float now=0;now<4;now+=.25f) {
+    for(;host<now+.25f-1e-4f;host+=Send) {
+     var frame=RemoteFrames.Of(state,host);
+     if(Mathf.Abs(Mathf.Repeat(host-.1f,.5f))<1e-3f)frame.Props=new[]{NetworkPropMotion.Encode(prop.Index,new WorldPosition(moved.x,moved.y,moved.z),prop.HomeYaw+40)};
+     remote.ReceiveRemoteMotion(frame);
+    }
+    remote.Step(.25f);
+   }
+   var shown=remote.ObserveProps()[prop.Index];
+   Assert.Less(Vector3.Distance(shown.Position,moved),.02f,"Refreshes the playback stepped over still land: the late joiner sees the prop where it lies");
+   Assert.AreEqual(0,Mathf.DeltaAngle(shown.Yaw,prop.HomeYaw+40),.5f);
+  }
   [UnityTest] public IEnumerator FramesFromThePreviousRoundAreNotReplayedAfterARoundChange() {
    var source=new PlaytestSession(123);source.StartSolo("source");var first=source.Observe();
    root=new GameObject("remote round change");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(first);remote.AutomaticRemotePlayback=false;yield return null;
