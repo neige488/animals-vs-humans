@@ -5,6 +5,11 @@ namespace AvH.Editor {
  public static partial class ConfigureOwnedAssets {
   const string Adventure="Synty/PolygonAdventure/Prefabs/";
   static readonly Color Sand=new Color(.73f,.66f,.48f),Stone=new Color(.66f,.61f,.49f),Plaster=new Color(.86f,.78f,.59f),Wood=new Color(.28f,.21f,.14f),Teal=new Color(.12f,.39f,.42f),Clay=new Color(.63f,.29f,.16f);
+  /// <summary>True when the owned village prefab exists but predates the pushable prop container.</summary>
+  public static bool VillageNeedsRebuild() {
+   var catalog=AssetDatabase.LoadAssetAtPath<OwnedAssetCatalog>(Root+"Resources/OwnedAssetCatalog.asset");
+   return catalog!=null&&catalog.Village!=null&&catalog.Village.transform.Find(PushProps.Container)==null;
+  }
   static GameObject BuildVillage() {
    var map=new GameObject("Sunwash market town");
    Solid(map,"Town ground",new Vector3(0,-.6f,0),new Vector3(88,1.2f,88),Sand);
