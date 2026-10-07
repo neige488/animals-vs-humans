@@ -1,11 +1,12 @@
 using UnityEngine;
 namespace AvH {
  /// <summary>
- /// Applies a local graphics quality step. This slice scales shadows, effect particle counts and the
- /// camera shake amplitude; the environment slice (S5) adds post-processing and foliage sway to the same steps.
+ /// Applies a local graphics quality step: shadows, effect particle counts, camera shake amplitude and the
+ /// town atmosphere (post-processing, swaying trees and flags, lantern lights; see <see cref="TownAtmosphere"/>).
  /// </summary>
  public static class DisplayQuality {
-  public static void Apply(GraphicsQuality quality) {
+  public static void Apply(GraphicsQuality quality,Camera camera=null) {
+   TownAtmosphere.Apply(camera,quality);
    switch(quality) {
     case GraphicsQuality.Low:
      QualitySettings.shadows=ShadowQuality.Disable;QualitySettings.shadowDistance=40;QualitySettings.antiAliasing=0;PrimitiveEffects.Density=.4f;break;

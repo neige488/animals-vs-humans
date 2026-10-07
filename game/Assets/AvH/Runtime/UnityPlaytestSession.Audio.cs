@@ -19,6 +19,7 @@ namespace AvH {
     case FeelEventKind.Transform:Audio.Play("transform",SoundAt(target,e.Position));break;
     case FeelEventKind.Stagger:Audio.Play("stagger",SoundAt(target,e.Position,1.2f));break;
     case FeelEventKind.Landing:Audio.Play("land",SoundAt(actor,e.Position,0),.5f+.5f*Mathf.Clamp01(e.Strength));break;
+    case FeelEventKind.PropPushed:Audio.Play("prop-knock",ToVector(e.Position)+Vector3.up*.3f,.45f+.55f*Mathf.Clamp01(e.Strength),.9f+.25f*(e.Target%3));break;
    }
   }
   /// <summary>Sounds read from public state (reload starts). The first observation of a session only primes.</summary>

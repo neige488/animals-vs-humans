@@ -13,6 +13,7 @@ namespace AvH {
    if(cue=="pop")return Bubble(false);
    if(cue.StartsWith("step",StringComparison.Ordinal))return Thump(cue,.09f,140,.5f);
    if(cue=="land")return Thump(cue,.22f,90,.8f);
+   if(cue=="prop-knock")return Thump(cue,.14f,210,1.1f);
    if(cue=="hit")return Hit();
    if(cue=="swing")return Whoosh();
    if(cue=="transform")return Sweep(cue,.45f,300,1400,true);

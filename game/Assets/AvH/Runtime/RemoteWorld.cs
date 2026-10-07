@@ -33,7 +33,7 @@ namespace AvH {
     if(reset||remoteMotion.Count==0&&Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>NetworkBodyMotion.TeleportDistance){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
     bodies[p.Slot].enabled=false;
    }
-   if(immediate||old==null||state.Round!=old.Round)remoteMotion.Clear();
+   if(immediate||old==null||state.Round!=old.Round){remoteMotion.Clear();props?.ForgetRemote();}
    if(state.Phase==RoundPhase.Results&&(old==null||old.Phase!=RoundPhase.Results))CutTransformations();
    if(immediate)ForgetPresentedEvents();PresentEvents(state);PresentStateAudio(state,immediate);
   }
@@ -43,7 +43,7 @@ namespace AvH {
    // A receive can carry the next round's snapshot together with the previous round's last frames; those are never replayed.
    if(frame.Round!=remoteSnapshot.Round)return;
    int before=remoteMotion.Count;var newest=remoteMotion.Latest;remoteMotion.Add(frame.HostTime,remoteClock,frame);
-   if(remoteMotion.Latest!=newest||remoteMotion.Count!=before)lastFrameArrival=remoteClock;
+   if(remoteMotion.Latest!=newest||remoteMotion.Count!=before){lastFrameArrival=remoteClock;props?.Receive(frame);}
    for(int i=0;i<bodies.Count;i++)if(snapRemoteFacing[i]){var pose=frame.Bodies[i];bodies[i].transform.rotation=Quaternion.Euler(0,pose.AimYaw(),0);snapRemoteFacing[i]=false;}
   }
   void InterpolateRemote(float dt) {
@@ -62,6 +62,8 @@ namespace AvH {
     var motion=pose.Motion;if(stalled){motion.VelocityX=motion.VelocityZ=motion.VerticalSpeed=0;}
     body.GetComponent<CharacterAnimator>().Apply(motion,dt);
    }
+   // Pushed props play back on the same clock as the bodies that pushed them.
+   props?.Present(from.HostTime+(to.HostTime-from.HostTime)*t);
    // Footsteps and growls follow the played-back animation (merged S3 audio with S4 playback).
    PresentMotionAudio(remoteSnapshot,dt);
   }
@@ -95,7 +97,7 @@ namespace AvH {
   }
   public SettingsState ObserveActiveSettings()=>remoteVisuals==null?Session.ObserveSettings():new SettingsState{Current=remoteVisuals.CurrentRules.Copy(),Pending=remoteVisuals.HasPending?remoteVisuals.PendingRules.Copy():null,Version=remoteVisuals.SettingsVersion};
   public void ResetSession() {
-   AutomaticStep=true;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
+   AutomaticStep=true;props=null;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
    seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;ForgetAudio();System.Array.Clear(presentedBirths,0,presentedBirths.Length);ForgetPresentedEvents();
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
    System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);

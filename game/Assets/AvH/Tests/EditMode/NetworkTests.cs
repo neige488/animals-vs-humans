@@ -111,7 +111,7 @@ namespace AvH.Tests {
   }
   [Test] public void SpeciesTuningIsSentLiveAndPreviousProtocolIsRejected() {
    var world=new PlaytestSession(2);world.StartSolo("host");
-   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient())using(var old=new PrivateRoomClient(protocolVersion:"avh-private-8")) {
+   using(var host=new PrivateRoomHost(world,"127.0.0.1"))using(var client=new PrivateRoomClient())using(var old=new PrivateRoomClient(protocolVersion:"avh-private-9")) {
     client.Connect(host.RoomCode,"guest");Until(host,client,()=>client.Status==ConnectionStatus.Loading);client.Ready();Until(host,client,()=>client.Status==ConnectionStatus.Playing);
     world.BeginSettingsEdit(0);var rules=world.ObserveSettings().Edit;rules.RabbitSpeedMultiplier=2.2f;rules.BearKnockbackMultiplier=.2f;
     world.UpdateSettingsEdit(0,rules);Assert.IsTrue(world.ApplySettingsNow(0));
@@ -186,13 +186,21 @@ namespace AvH.Tests {
     Assert.IsFalse(motion.Grounded);Assert.AreEqual(ActionPhase.Windup,motion.Action);Assert.AreEqual(.4,motion.ActionProgress,1/255.0);
     Assert.AreEqual(-170.004,motion.AimYaw,.006);
     // Bandwidth: 12 bodies at 20 Hz must stay small next to the existing state snapshot.
-    Assert.LessOrEqual(RoomProtocol.EncodedBytes(frames[0]),12*21+16);
+    Assert.LessOrEqual(RoomProtocol.EncodedBytes(frames[0]),12*21+20,"Bodies plus an empty prop list (4 bytes) when no prop moves");
    }
   }
+  [Test] public void PushedPropPosesAreSmallOnTheWire() {
+   var pose=NetworkPropMotion.Encode(17,new WorldPosition(-31.554f,.2449f,24.004f),-170.004f);
+   Assert.AreEqual(17,pose.Index);Assert.AreEqual(-31.55,pose.Position().X,.006);Assert.AreEqual(.24,pose.Position().Y,.006);Assert.AreEqual(24,pose.Position().Z,.006);Assert.AreEqual(-170,pose.AimYaw(),.006);
+   Assert.AreEqual(350-360,NetworkPropMotion.Encode(0,new WorldPosition(0,0,0),350).AimYaw(),.006,"Facing is normalised");
+   var frame=new NetworkMotionFrame{Props=Enumerable.Range(0,12).Select(i=>NetworkPropMotion.Encode(i,new WorldPosition(i,0,i),i*10)).ToArray()};
+   // Only moving props ride the frame: twelve of them still cost about one body each.
+   Assert.LessOrEqual(RoomProtocol.EncodedBytes(frame)-RoomProtocol.EncodedBytes(new NetworkMotionFrame()),12*10);
+  }
   [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
-   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-9"));
-   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("hs+l0u5IqcN48EPxqIRrxXrcralnuH3rypueKAwzKSM="),"Schema changes require explicit protocol version and guard update");
-   foreach(var t in new[]{typeof(NetworkMotionFrame),typeof(NetworkBodyMotion),typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent)}) {
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-10"));
+   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("VLOf9ABgFxBhj8HnIh28+JjjF4dG/aTkXAyrgptG+jc="),"Schema changes require explicit protocol version and guard update");
+   foreach(var t in new[]{typeof(NetworkMotionFrame),typeof(NetworkBodyMotion),typeof(NetworkPropMotion),typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent)}) {
     Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
     Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);
    }

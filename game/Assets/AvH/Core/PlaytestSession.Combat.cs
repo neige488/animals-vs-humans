@@ -16,7 +16,7 @@ namespace AvH {
   readonly HashSet<int> dueAttacks=new HashSet<int>();
   int nextEventId;
   void ResetCombat() {
-   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();ClearActions();
+   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();propKnocks.Clear();ClearActions();
    foreach(var p in players){p.Ammo=settings.Current.Magazine;p.ReloadRemaining=0;p.AttackGraceRemaining=0;p.FireCooldownRemaining=0;}
   }
   // Round end cuts every tell, freeze and stun in progress.
@@ -67,6 +67,15 @@ namespace AvH {
    p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
    Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
+  /// <summary>Called only by the authoritative physics adapter when a body or bubble knocks a light prop (presentation event).</summary>
+  public bool RecordPropPush(int prop,int actor,WorldPosition position,float strength) {
+   if(prop<0||prop>=short.MaxValue||float.IsNaN(strength)||float.IsInfinity(strength)||phase==RoundPhase.Results)return false;
+   double last;if(propKnocks.TryGetValue(prop,out last)&&hostTime-last<PropKnockSeconds)return false;
+   propKnocks[prop]=hostTime;Publish(FeelEventKind.PropPushed,actor,prop,position,Math.Max(0,Math.Min(1,strength)));return true;
+  }
+  /// <summary>One prop knocks at most this often, so a body plowing a crate does not flood the event window.</summary>
+  public const double PropKnockSeconds=.25;
+  readonly Dictionary<int,double> propKnocks=new Dictionary<int,double>();
   /// <summary>Hard-landing threshold (m/s downward) shared with the landing dust.</summary>
   public const float HardLandingSpeed=4;
   /// <summary>Called only by the authoritative physics adapter when a body touches down hard.</summary>

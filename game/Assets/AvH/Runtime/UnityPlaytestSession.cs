@@ -24,7 +24,7 @@ namespace AvH {
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity,
     catalog!=null&&catalog.Humans.Length>0?catalog.Humans.Select(c=>c.Definition()).ToArray():null,catalog!=null&&catalog.Animals.Length>0?catalog.Animals.Select(c=>c.Definition()).ToArray():null);
-   ShelterPoints=PrototypeVillage.Build(transform);
+   ShelterPoints=PrototypeVillage.Build(transform);props=PushProps.Adopt(transform.Find("Village"));
    foreach(var p in Session.Observe().Players) {
     var body = new GameObject("Slot " + p.Slot); body.transform.SetParent(transform);
     body.transform.position=ToVector(p.Position);
@@ -37,6 +37,11 @@ namespace AvH {
    }
   }
   public SessionState Observe() => remoteSnapshot ?? Session.Observe();
+  PushProps props;
+  /// <summary>Light crates, barrels and pots: where each one is now and where it starts every round.</summary>
+  public PropView[] ObserveProps()=>props==null?new PropView[0]:props.Observe();
+  /// <summary>This world's village dressing at the current graphics quality.</summary>
+  public TownDressingView ObserveTown(){var village=transform.Find("Village");var dressing=village==null?null:village.GetComponent<TownDressing>();return dressing==null?default:dressing.Observe();}
   public BotNavigationDiagnostics ObserveBotNavigation()=>botDirector.ObserveNavigation();
   public void SubmitInput(int slot, PlayerInput input) {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
@@ -56,6 +61,7 @@ namespace AvH {
    Session.Advance(seconds);
    var state=Session.Observe();
    PrepareCombatWorld(state,before.Round);
+   if(state.Round!=before.Round)props?.ResetHome();
    if(state.Phase==RoundPhase.Results&&before.Phase!=RoundPhase.Results)CutTransformations();
    if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;
@@ -98,7 +104,9 @@ namespace AvH {
     var push=pushVelocity[i];CharacterMotion.DecayKnockback(ref push.x,ref push.y,ref push.z,body.isGrounded,seconds);pushVelocity[i]=push;
     inputs[i].Jump=false;
    }
+   props?.Simulate(bodies,seconds,Session.HostTime);
    StepCombatWorld(seconds,state);
+   if(props!=null)foreach(var knock in props.TakeKnocks()){var at=props.Observe()[knock.prop].Position;Session.RecordPropPush(knock.prop,knock.actor,new WorldPosition(at.x,at.y,at.z),knock.strength);}
    var presented=Session.Observe();PresentEvents(presented);PresentStateAudio(presented,false);PresentMotionAudio(presented,seconds);
   }
   internal static float ActionProgress(PlayerState p,PlaytestValues rules) {
@@ -138,9 +146,14 @@ namespace AvH {
   readonly LocomotionState[] presented=new LocomotionState[12];
   void Animate(int slot,LocomotionState state,float seconds){presented[slot]=state;bodies[slot].GetComponent<CharacterAnimator>().Apply(state,seconds);}
   /// <summary>Host presentation frame for remote viewers: each body's position, facing, aim pitch and the motion it was animated with.</summary>
-  public NetworkMotionFrame CaptureMotion()=>new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
+  public NetworkMotionFrame CaptureMotion() {
+   // Resting displaced props ride a frame twice a second so late joiners learn where they lie.
+   bool refresh=Session.HostTime>=nextPropRefresh||Session.HostTime<nextPropRefresh-1;if(refresh)nextPropRefresh=Session.HostTime+.5;
+   return new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,Props=props==null?new NetworkPropMotion[0]:props.Capture(Session.HostTime,refresh),Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
    var p=bodies[i].transform.position;float pitch=guns[i]!=null?guns[i].GetComponent<BubbleGunPose>().AimPitch:0;
    return NetworkBodyMotion.Encode(new WorldPosition(p.x,p.y,p.z),PresentationYaw(i),pitch,presented[i]);}).ToArray()};
+  }
+  double nextPropRefresh;
   internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);

@@ -38,14 +38,18 @@ namespace AvH {
    for(int i=bubbles.Count-1;i>=0;i--) {
     var bubble=bubbles[i];float distance=Mathf.Min(bubble.Speed*seconds,bubble.Range-bubble.Travelled,bubble.Speed*bubble.Life);
     bool popped=false;
+    // Light props have no colliders; the nearest one the sweep meets takes the bubble when nothing solid comes first.
+    int prop=-1;float propAt=float.MaxValue;bool propHit=props!=null&&props.Hit(bubble.Position,bubble.Direction,bubble.Radius,distance,out prop,out propAt);
     foreach(var hit in Physics.SphereCastAll(bubble.Position,bubble.Radius,bubble.Direction,distance,~0,QueryTriggerInteraction.Ignore).OrderBy(h=>h.distance)) {
      int target=bodies.IndexOf(hit.collider as CharacterController);
      if(target==bubble.Owner)continue;
      if(target>=0 && beforeCombat.Players[target].Faction==Faction.Human && !bubble.FriendlyPush)continue;
+     if(propHit&&propAt<=hit.distance)break;
      bubble.Position+=bubble.Direction*hit.distance;
      if(target>=0){bubbleHits[target]++;pushVelocity[target]+=(bubble.Direction*bubble.PushForce+Vector3.up*1.5f)*AnimalBalance.For(Session.ObserveSettings().Current,beforeCombat.Players[target]).Knockback;Session.RecordBubbleHit(target,bubble.Owner);}
      Pop(bubble);popped=true;break;
     }
+    if(!popped&&propHit){bubble.Position+=bubble.Direction*propAt;props.Push(prop,bubble.Direction*bubble.PushForce*PushProps.BubbleShare,bubble.Owner);Pop(bubble);popped=true;}
     if(!popped){bubble.Position+=bubble.Direction*distance;bubble.Travelled+=distance;bubble.Life-=seconds;bubble.Visual.transform.position=bubble.Position;
      if(bubble.Life<=0 || bubble.Travelled>=bubble.Range || beforeCombat.Phase==RoundPhase.Results || bubble.Round!=beforeCombat.Round){Destroy(bubble.Visual);popped=true;}}
     if(popped)bubbles.RemoveAt(i);

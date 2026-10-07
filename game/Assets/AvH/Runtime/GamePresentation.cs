@@ -31,7 +31,7 @@ namespace AvH {
   public Vector3 FollowPoint=>follow;
   /// <summary>Replaces the per-PC display preferences (tests and isolated profiles).</summary>
   public void UseDisplaySettings(LocalDisplaySettings settings){display=settings??new LocalDisplaySettings(null);appliedDisplay=-1;ApplyDisplay();}
-  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality);}
+  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality,view);}
   GUIStyle label, title;
   // Override the fullscreen preference saved by older playtest builds on every desktop launch.
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
@@ -60,6 +60,8 @@ namespace AvH {
    var args=System.Environment.GetCommandLineArgs();
    int menus=System.Array.IndexOf(args,"-avhMenuPreview");
    if(menus>=0&&menus+1<args.Length){StartCoroutine(CaptureMenuPreview(args[menus+1]));return;}
+   int qualities=System.Array.IndexOf(args,"-avhQualityPreview");
+   if(qualities>=0&&qualities+1<args.Length){StartCoroutine(CaptureQualityPreview(args[qualities+1]));return;}
    int capture=System.Array.IndexOf(args,"-avhDebugPreview");
    if(capture<0||capture+1>=args.Length)return;
    session.StartSolo("디버그",123,System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml"));
@@ -76,6 +78,18 @@ namespace AvH {
    System.IO.Directory.CreateDirectory(System.IO.Path.Combine(temp,"display-settings.xml.tmp"));
    display.SetQuality(GraphicsQuality.Low);displayMenu.ShowNotice();menu=true;yield return Shot("esc-menu-save-failed");
    menu=false;SetDebugPanelOpen(true);settingsPanel.SelectTab(4);yield return Shot("debug-impact-tab");
+   Application.Quit();
+  }
+  // Development-only: the same market view at high, medium and low quality, in an isolated profile.
+  System.Collections.IEnumerator CaptureQualityPreview(string folder) {
+   System.IO.Directory.CreateDirectory(folder);var temp=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString("N"));
+   UseDisplaySettings(new LocalDisplaySettings(System.IO.Path.Combine(temp,"display-settings.xml")));
+   session.StartSolo("품질",123,System.IO.Path.Combine(temp,"playtest.xml"));session.BotAutomationEnabled=false;yield return null;
+   SetLookAngles(15,12);
+   foreach(var quality in new[]{GraphicsQuality.High,GraphicsQuality.Medium,GraphicsQuality.Low}) {
+    display.SetQuality(quality);for(int i=0;i<45;i++)yield return null;yield return new WaitForEndOfFrame();
+    ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(folder,"quality-"+quality.ToString().ToLowerInvariant()+".png"));yield return new WaitForSecondsRealtime(.5f);
+   }
    Application.Quit();
   }
   System.Collections.IEnumerator CaptureDebugPreview(string folder) {
@@ -163,9 +177,8 @@ namespace AvH {
     if(GUI.Button(new Rect(w-160,16,140,36),"게임 종료")){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;Application.Quit();return;}
    }
    if(session.Session==null||!network.CanPlay) {
-    // Lifted so the local display rows fit under the join controls at 1280x720.
-    float c=h/2-80;
-    GUI.Box(new Rect(w/2-220,c-145,440,290),"");
+    var layout=StartScreenLayout.For(w,h,true);float c=layout.Center;
+    GUI.Box(layout.Title,"");
     GUI.Label(new Rect(w/2-210,c-125,420,45),"Animals vs Humans",title);
     GUI.Label(new Rect(w/2-190,c-65,380,30),"닉네임 (1~20자)",label);
     nickname=GUI.TextField(new Rect(w/2-160,c-25,320,35),nickname,20);
