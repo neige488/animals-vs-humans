@@ -18,6 +18,20 @@ namespace AvH {
   public void SetDebugPanelOpen(bool open){debugOpen=open;if(open)menu=false;if(!open&&session.Session!=null&&!network.IsClient)session.Session.CancelSettingsEdit(0);SetCursor();}
   Vector3 cameraOffset=new Vector3(.6f,.3f,-5.5f);
   readonly SettingsPanel settingsPanel=new SettingsPanel();
+  readonly FeelDirector feel=new FeelDirector();
+  readonly DisplaySettingsMenu displayMenu=new DisplaySettingsMenu();
+  LocalDisplaySettings display;int appliedDisplay=-1;
+  Vector3 follow,followVelocity;bool following;
+  /// <summary>This PC's graphics quality and screen-shake preferences.</summary>
+  public LocalDisplaySettings Display=>display;
+  public FeelDirector Feel=>feel;
+  /// <summary>Angle (degrees) the shake currently adds to the camera; 0 when this viewer is not involved.</summary>
+  public float CameraShakeAngle {get;private set;}
+  /// <summary>Spring-followed camera pivot.</summary>
+  public Vector3 FollowPoint=>follow;
+  /// <summary>Replaces the per-PC display preferences (tests and isolated profiles).</summary>
+  public void UseDisplaySettings(LocalDisplaySettings settings){display=settings??new LocalDisplaySettings(null);appliedDisplay=-1;ApplyDisplay();}
+  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality,view);}
   GUIStyle label, title;
   // Override the fullscreen preference saved by older playtest builds on every desktop launch.
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
@@ -38,14 +52,45 @@ namespace AvH {
    view.fieldOfView=65;view.farClipPlane=180;view.backgroundColor=new Color(.45f,.7f,.85f);view.clearFlags=CameraClearFlags.Skybox;
    if(Object.FindAnyObjectByType<Light>()==null) {var light=new GameObject("Sun").AddComponent<Light>();ownedSun=light;light.type=LightType.Directional;light.intensity=1.3f;light.transform.rotation=Quaternion.Euler(45,-35,0);}
    TownLighting.Apply(view,Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l=>l.type==LightType.Directional));
+   if(display==null)UseDisplaySettings(new LocalDisplaySettings(System.IO.Path.Combine(Application.persistentDataPath,"display-settings.xml")));
   }
   // Development-only, isolated startup harness for capturing the real IMGUI overlay.
   void Start() {
    if(!Debug.isDebugBuild||Application.isBatchMode)return;
-   var args=System.Environment.GetCommandLineArgs();int capture=System.Array.IndexOf(args,"-avhDebugPreview");
+   var args=System.Environment.GetCommandLineArgs();
+   int menus=System.Array.IndexOf(args,"-avhMenuPreview");
+   if(menus>=0&&menus+1<args.Length){StartCoroutine(CaptureMenuPreview(args[menus+1]));return;}
+   int qualities=System.Array.IndexOf(args,"-avhQualityPreview");
+   if(qualities>=0&&qualities+1<args.Length){StartCoroutine(CaptureQualityPreview(args[qualities+1]));return;}
+   int capture=System.Array.IndexOf(args,"-avhDebugPreview");
    if(capture<0||capture+1>=args.Length)return;
    session.StartSolo("디버그",123,System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid()+".xml"));
    SetDebugPanelOpen(true);settingsPanel.SelectTab(3);StartCoroutine(CaptureDebugPreview(args[capture+1]));
+  }
+  // Development-only: start screen, Esc menu (with a failed display save) and the impact tuning tab, in an isolated profile.
+  System.Collections.IEnumerator CaptureMenuPreview(string folder) {
+   System.IO.Directory.CreateDirectory(folder);var temp=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString("N"));
+   UseDisplaySettings(new LocalDisplaySettings(System.IO.Path.Combine(temp,"display-settings.xml")));
+   System.Collections.IEnumerator Shot(string name){for(int i=0;i<20;i++)yield return null;yield return new WaitForEndOfFrame();ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(folder,name+".png"));yield return new WaitForSecondsRealtime(.3f);}
+   yield return Shot("start-first-run");
+   display.SetQuality(GraphicsQuality.Medium);display.SetScreenShake(false);yield return Shot("start-medium-shake-off");
+   session.StartSolo("미리보기",123,System.IO.Path.Combine(temp,"playtest.xml"));yield return null;yield return null;menu=true;SetCursor();yield return Shot("esc-menu");
+   System.IO.Directory.CreateDirectory(System.IO.Path.Combine(temp,"display-settings.xml.tmp"));
+   display.SetQuality(GraphicsQuality.Low);displayMenu.ShowNotice();menu=true;yield return Shot("esc-menu-save-failed");
+   menu=false;SetDebugPanelOpen(true);settingsPanel.SelectTab(4);yield return Shot("debug-impact-tab");
+   Application.Quit();
+  }
+  // Development-only: the same market view at high, medium and low quality, in an isolated profile.
+  System.Collections.IEnumerator CaptureQualityPreview(string folder) {
+   System.IO.Directory.CreateDirectory(folder);var temp=System.IO.Path.Combine(System.IO.Path.GetTempPath(),System.Guid.NewGuid().ToString("N"));
+   UseDisplaySettings(new LocalDisplaySettings(System.IO.Path.Combine(temp,"display-settings.xml")));
+   session.StartSolo("품질",123,System.IO.Path.Combine(temp,"playtest.xml"));session.BotAutomationEnabled=false;yield return null;
+   SetLookAngles(15,12);
+   foreach(var quality in new[]{GraphicsQuality.High,GraphicsQuality.Medium,GraphicsQuality.Low}) {
+    display.SetQuality(quality);for(int i=0;i<45;i++)yield return null;yield return new WaitForEndOfFrame();
+    ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(folder,"quality-"+quality.ToString().ToLowerInvariant()+".png"));yield return new WaitForSecondsRealtime(.5f);
+   }
+   Application.Quit();
   }
   System.Collections.IEnumerator CaptureDebugPreview(string folder) {
    System.IO.Directory.CreateDirectory(folder);
@@ -60,6 +105,7 @@ namespace AvH {
    }
   }
   void Update() {
+   if(display!=null&&appliedDisplay!=display.Version)ApplyDisplay();
    if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;debugOpen=false;return;}
    rosterHud.Present(session.Observe(),network.LocalSlot);
    if(!wasPlaying){menu=false;SetCursor();wasPlaying=true;}
@@ -72,11 +118,16 @@ namespace AvH {
    }
    var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
    if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=!debugOpen&&Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
-   network.SubmitInput(input);
+   network.SubmitInput(input);session.PresentTrigger(network.LocalSlot,input.Attack);
   }
   void LateUpdate() {
-   if(session.Session==null||!network.CanPlay)return;
+   if(session.Session==null||!network.CanPlay){following=false;feel.Reset();CameraShakeAngle=0;return;}
+   if(appliedDisplay!=display.Version)ApplyDisplay();
    var target=session.PlayerTransform(network.LocalSlot).position+Vector3.up*1.35f;
+   // Spring follow softens steps and landings; spawns and recovery teleports snap.
+   if(!following||(target-follow).sqrMagnitude>9){follow=target;followVelocity=Vector3.zero;following=true;}
+   else follow=Vector3.SmoothDamp(follow,target,ref followVelocity,.07f,Mathf.Infinity,Time.unscaledDeltaTime);
+   target=follow;
    var rotation=Quaternion.Euler(pitch,yaw,0);
    var preferred=new Vector3(.6f,.3f,-5.5f);float length=preferred.magnitude;
    var chosen=preferred;float preferredClear=ClearDistance(target,rotation*preferred);
@@ -97,7 +148,9 @@ namespace AvH {
    bool hide=cameraDistance<1.2f;
    if(hide){foreach(var renderer in session.PlayerTransform(network.LocalSlot).GetComponentsInChildren<Renderer>()){if(!hiddenLocal.ContainsKey(renderer))hiddenLocal[renderer]=renderer.shadowCastingMode;renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;}}
    else RestoreLocalRenderers();
-   view.transform.rotation=Quaternion.LookRotation(target+rotation*Vector3.forward*8-view.transform.position);
+   var look=Quaternion.LookRotation(target+rotation*Vector3.forward*8-view.transform.position);
+   feel.Observe(session.Observe(),network.LocalSlot,Time.unscaledDeltaTime);
+   view.transform.rotation=look*feel.Shake();CameraShakeAngle=feel.LastShakeAngle;
   }
   static float ClearDistance(Vector3 target,Vector3 offset) {
    float distance=offset.magnitude;
@@ -124,12 +177,13 @@ namespace AvH {
     if(GUI.Button(new Rect(w-160,16,140,36),"게임 종료")){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;Application.Quit();return;}
    }
    if(session.Session==null||!network.CanPlay) {
-    GUI.Box(new Rect(w/2-220,h/2-145,440,290),"");
-    GUI.Label(new Rect(w/2-210,h/2-125,420,45),"Animals vs Humans",title);
-    GUI.Label(new Rect(w/2-190,h/2-65,380,30),"닉네임 (1~20자)",label);
-    nickname=GUI.TextField(new Rect(w/2-160,h/2-25,320,35),nickname,20);
-    if(string.IsNullOrWhiteSpace(nickname))GUI.Label(new Rect(w/2-210,h/2+15,420,30),"닉네임을 입력해주세요.",label);
-    GUI.enabled=true;network.DrawStart(nickname,label);return;
+    var layout=StartScreenLayout.For(w,h,true);float c=layout.Center;
+    GUI.Box(layout.Title,"");
+    GUI.Label(new Rect(w/2-210,c-125,420,45),"Animals vs Humans",title);
+    GUI.Label(new Rect(w/2-190,c-65,380,30),"닉네임 (1~20자)",label);
+    nickname=GUI.TextField(new Rect(w/2-160,c-25,320,35),nickname,20);
+    if(string.IsNullOrWhiteSpace(nickname))GUI.Label(new Rect(w/2-210,c+15,420,30),"닉네임을 입력해주세요.",label);
+    GUI.enabled=true;network.DrawStart(nickname,label,c,area=>displayMenu.Draw(area,display,label));return;
    }
    var state=session.Observe();
    if(state.Phase==RoundPhase.Results) {
@@ -149,8 +203,11 @@ namespace AvH {
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
    network.DrawRoom(label);
    if(menu) {
-    if(!network.IsClient&&GUI.Button(new Rect(w/2-125,h/2-55,250,40),"테스트 설정 열기")){menu=false;SetDebugPanelOpen(true);return;}
-    if(GUI.Button(new Rect(w/2-125,h/2+(network.IsClient?-30:0),250,40),"계속하기")){menu=false;SetCursor();}
+    // Esc menu: the match keeps running underneath.
+    GUI.Box(new Rect(w/2-230,h/2-(network.IsClient?45:70),460,(network.IsClient?45:70)+70+DisplaySettingsMenu.Height),"메뉴");
+    if(!network.IsClient&&GUI.Button(new Rect(w/2-125,h/2-45,250,40),"테스트 설정 열기")){menu=false;SetDebugPanelOpen(true);return;}
+    if(GUI.Button(new Rect(w/2-125,h/2+(network.IsClient?-20:5),250,40),"계속하기")){menu=false;SetCursor();}
+    displayMenu.Draw(new Rect(w/2-215,h/2+60,430,DisplaySettingsMenu.Height),display,label);
     if(GUI.Button(new Rect(w-200,h-50,180,35),"방 나가기")){network.Leave();menu=false;return;}
    }
    if(!menu){

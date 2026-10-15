@@ -21,5 +21,8 @@ namespace AvH {
   public string Rarity = "일반";
   public Color RarityColor = Color.white;
   public string HumanSource, AnimalSource, VillageSource;
+  /// <summary>Owned Polyperfect sounds, referenced by clip name from <see cref="AudioCatalog"/>.</summary>
+  public AudioClip[] Sounds=new AudioClip[0];
+  public AudioClip Sound(string name){if(Sounds!=null)foreach(var clip in Sounds)if(clip!=null&&clip.name==name)return clip;return null;}
  }
 }

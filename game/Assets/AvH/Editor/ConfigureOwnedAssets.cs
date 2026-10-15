@@ -41,7 +41,20 @@ namespace AvH.Editor {
    catalog.HumanSource="Polyperfect Low Poly Animated People 3.02 / man_casual";
    catalog.AnimalSource="Polyperfect Low Poly Animated Animals 4.1.1 / Fox";
    catalog.VillageSource="Synty POLYGON Adventure 1.8.2 / village 01/02, wall 01, tree 05 + Generic base floor 01";
-   EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();BuildPortraits.Generate();Debug.Log("Owned assets configured: six humans, six animals and Synty village; source assets remain Git ignored.");
+   EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();ConfigureSounds();BuildPortraits.Generate();Debug.Log("Owned assets configured: six humans, six animals and Synty village; source assets remain Git ignored.");
+  }
+  const string OwnedSounds=Root+"polyperfect/Low Poly Animated Animals/Sounds/";
+  /// <summary>
+  /// Points the generated catalog at the owned Polyperfect sounds named in <see cref="AudioCatalog"/>. Idempotent;
+  /// without the purchased assets (or catalog) it does nothing and the game synthesizes those cues instead.
+  /// </summary>
+  public static void ConfigureSounds() {
+   var catalog=AssetDatabase.LoadAssetAtPath<OwnedAssetCatalog>(Root+"Resources/OwnedAssetCatalog.asset");if(catalog==null)return;
+   var names=AudioCatalog.Entries.Where(e=>e.Origin==SoundOrigin.Owned).SelectMany(e=>e.Clips).Distinct().ToArray();
+   var clips=names.Select(n=>AssetDatabase.LoadAssetAtPath<AudioClip>(OwnedSounds+n+".ogg")).Where(c=>c!=null).ToArray();
+   if(catalog.Sounds!=null&&catalog.Sounds.SequenceEqual(clips))return;
+   catalog.Sounds=clips;EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();
+   Debug.Log($"Owned sounds configured: {clips.Length}/{names.Length} ({string.Join(", ",clips.Select(c=>c.name))}).");
   }
   static OwnedCharacter Owned(string file,string display,bool human) {
    var source=human?"polyperfect/Low Poly Animated People/- Prefabs/":"polyperfect/Low Poly Animated Animals/Prefabs/Animals/";

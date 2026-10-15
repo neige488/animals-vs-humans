@@ -10,8 +10,9 @@ namespace AvH {
   readonly Stack<Particle> pool=new Stack<Particle>();
   Material material,film;Mesh ringMesh;MaterialPropertyBlock properties;
   public int ActiveCount=>active.Count;
+  /// <summary>Local graphics quality share of particles per burst (1 = all). Rings and at least one particle always show.</summary>
+  public static float Density=1;
   public bool AutomaticUpdate=true;
-  AudioSource audioSource;AudioClip popSound,airSound;float nextSound;
   Material gunBody,gunTrim;
   public Transform Gun(Transform owner) {
    if(gunBody==null){gunBody=PrototypeVillage.Material(new Color(.08f,.38f,.43f));gunTrim=PrototypeVillage.Material(new Color(.92f,.66f,.23f));}
@@ -24,17 +25,6 @@ namespace AvH {
    return gun;
   }
   static void GunPart(Transform parent,PrimitiveType type,Vector3 p,Vector3 size,Quaternion rotation,Material mat) {var go=GameObject.CreatePrimitive(type);var c=go.GetComponent<Collider>();c.enabled=false;Dispose(c);go.transform.SetParent(parent,false);go.transform.localPosition=p;go.transform.localRotation=rotation;go.transform.localScale=size;go.GetComponent<Renderer>().sharedMaterial=mat;}
-  public void Sound(Vector3 position,bool shot) {
-   if(Application.isBatchMode||!Application.isPlaying||Time.time<nextSound)return;
-   var camera=Camera.main;if(camera==null)return;float distance=Vector3.Distance(camera.transform.position,position);if(distance>28)return;
-   if(audioSource==null){audioSource=gameObject.AddComponent<AudioSource>();audioSource.playOnAwake=false;popSound=MakeSound(false);airSound=MakeSound(true);}
-   nextSound=Time.time+.04f;audioSource.PlayOneShot(shot?airSound:popSound,(shot?.09f:.17f)/(1+distance*.12f));
-  }
-  static AudioClip MakeSound(bool air) {
-   const int rate=22050;int count=air?2205:3307;var samples=new float[count];var random=new System.Random(19);float phase=0;
-   for(int i=0;i<count;i++){float t=(float)i/count;phase+=(air?900:1600)*(1-t*.85f)*Mathf.PI*2/rate;float noise=(float)random.NextDouble()*2-1;samples[i]=(air?noise*.5f:Mathf.Sin(phase)*.6f+noise*.15f)*Mathf.Sin(Mathf.PI*Mathf.Min(1,t*8))*Mathf.Exp(-t*7);}
-   var clip=AudioClip.Create(air?"Air puff":"Bubble pop",count,1,rate,false);clip.SetData(samples,0);return clip;
-  }
   public void Initialize() {
    if(material!=null)return;
    properties=new MaterialPropertyBlock();
@@ -52,6 +42,7 @@ namespace AvH {
   }
   public void Emit(Vector3 p,Color color,int count,float power=.8f,bool ring=true) {
    Initialize();if(ring)Spawn(p+Vector3.up*.08f,Vector3.zero,color,.55f,.3f,0,true);
+   count=count<=0?0:Mathf.Max(1,Mathf.RoundToInt(count*Mathf.Clamp01(Density)));
    for(int i=0;i<count;i++) {
     float angle=(i*2.39996f+Time.time)*1.7f;var direction=new Vector3(Mathf.Cos(angle),.3f+(i%4)*.25f,Mathf.Sin(angle));
     Spawn(p,direction*power,color,.3f+(i%4)*.09f,.045f+(i%3)*.022f,1.6f,false);
@@ -77,7 +68,7 @@ namespace AvH {
    }
   }
   static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
-  void OnDestroy(){if(material!=null)Dispose(material);if(film!=null)Dispose(film);if(ringMesh!=null)Dispose(ringMesh);if(popSound!=null)Dispose(popSound);if(airSound!=null)Dispose(airSound);if(gunBody!=null)Dispose(gunBody);if(gunTrim!=null)Dispose(gunTrim);}
+  void OnDestroy(){if(material!=null)Dispose(material);if(film!=null)Dispose(film);if(ringMesh!=null)Dispose(ringMesh);if(gunBody!=null)Dispose(gunBody);if(gunTrim!=null)Dispose(gunTrim);}
  }
  public sealed class BubbleMotion:MonoBehaviour {
   public float Radius=.3f;

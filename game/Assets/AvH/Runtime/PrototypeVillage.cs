@@ -12,7 +12,7 @@ namespace AvH {
   public static IReadOnlyList<Vector3> Build(Transform parent, bool useOwned = true) {
    var map=new GameObject("Village");map.transform.SetParent(parent);
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
-   if(useOwned && catalog!=null && catalog.Village!=null) {UnityEngine.Object.Instantiate(catalog.Village,map.transform);
+   if(useOwned && catalog!=null && catalog.Village!=null) {UnityEngine.Object.Instantiate(catalog.Village,map.transform);TownDressing.Dress(map.transform);
     if(catalog.ShelterPoints==null||catalog.ShelterPoints.Length!=3||catalog.ShelterPoints.Distinct().Count()!=3||catalog.ShelterPoints.Any(p=>float.IsNaN(p.x)||float.IsNaN(p.y)||float.IsNaN(p.z)||float.IsInfinity(p.x)||float.IsInfinity(p.y)||float.IsInfinity(p.z)))throw new InvalidOperationException("보유 마을 쉘터 정의를 ConfigureOwnedAssets로 다시 생성하세요.");
     return Array.AsReadOnly((Vector3[])catalog.ShelterPoints.Clone());}
    var roof=DefaultShelters[0];var corner=DefaultShelters[1];var warehouse=DefaultShelters[2];

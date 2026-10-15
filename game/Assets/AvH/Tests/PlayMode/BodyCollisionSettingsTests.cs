@@ -36,7 +36,7 @@ namespace AvH.Tests {
     // The next round restores human factions and positions. The friendly switch must now win,
     // even if this exact pair previously had the opposite enemy-collision rule.
     world.SubmitInput(0,new PlayerInput());
-    var state=world.Observe();world.Step((float)state.SecondsRemaining+(state.Phase==RoundPhase.Preparation?180:0)+5);
+    var state=world.Observe();world.Step((float)state.SecondsRemaining+(state.Phase==RoundPhase.Preparation?180:0)+5.05f);
     Assert.That(world.Observe().Round,Is.EqualTo(2));
     Assert.That(world.Observe().Players[0].Faction,Is.EqualTo(Faction.Human));
     DriveIntoStationaryPlayer(world,rules.FriendlyCollision);
@@ -49,7 +49,8 @@ namespace AvH.Tests {
   }
   static void DriveIntoStationaryPlayer(UnityPlaytestSession world,bool shouldBlock) {
    float stationaryZ=world.Observe().Players[4].Position.Z;
-   for(int i=0;i<35;i++){world.SubmitInput(0,new PlayerInput{Forward=1,Yaw=0});world.Step(.02f);}
+   // 0.8s covers the default inertia ramp (about 0.3m lost to easing) and still reaches past the body.
+   for(int i=0;i<40;i++){world.SubmitInput(0,new PlayerInput{Forward=1,Yaw=0});world.Step(.02f);}
    var state=world.Observe();
    if(shouldBlock)Assert.That(state.Players[0].Position.Z,Is.LessThan(stationaryZ-.5f),"Enabled body collision blocks passage");
    else Assert.That(state.Players[0].Position.Z,Is.GreaterThan(stationaryZ+.2f),"Disabled body collision allows actual passage");

@@ -59,12 +59,16 @@ namespace AvH.Tests {
   [UnityTest] public IEnumerator RemoteFacingSmoothlyCatchesUpAndSnapsAtWarp() {
    var source=new PlaytestSession(123);source.StartSolo("source");
    var root=new GameObject("remote facing");var remote=root.AddComponent<UnityPlaytestSession>();remote.StartRemote(source.Observe());
-   var first=new NetworkVisualState();first.Yaws[0]=10;remote.ApplyRemoteVisuals(first);
+   remote.AutomaticRemotePlayback=false;
+   var first=RemoteFrames.Facing(source.Observe(),0,0,10);remote.ApplyRemoteVisuals(first);
    Assert.Less(Mathf.Abs(Mathf.DeltaAngle(remote.PlayerTransform(0).eulerAngles.y,10)),.01f);
-   var next=new NetworkVisualState();next.Yaws[0]=123;remote.ApplyRemoteVisuals(next);yield return null;
-   float angle=remote.PlayerTransform(0).eulerAngles.y;Assert.Greater(angle,10);Assert.Less(angle,123);
+   // Frames arrive on time 50 ms apart; playback passes through the angles between them.
+   bool between=false;for(int f=1;f<=12;f++){if(f%3==0)remote.ApplyRemoteVisuals(RemoteFrames.Facing(source.Observe(),f/60.0,0,123));remote.Step(1/60f);float angle=remote.PlayerTransform(0).eulerAngles.y;between|=angle>11&&angle<122;}
+   Assert.IsTrue(between,"Remote facing turns smoothly between frames");
+   for(int f=0;f<30;f++)remote.Step(1/60f);
+   Assert.Less(Mathf.Abs(Mathf.DeltaAngle(remote.PlayerTransform(0).eulerAngles.y,123)),.1f);yield return null;
    var reset=source.Observe();reset.Players[0].Position=new WorldPosition(12,1,0);remote.ApplyRemoteSnapshot(reset,true);
-   var resetVisual=new NetworkVisualState();resetVisual.Yaws[0]=270;remote.ApplyRemoteVisuals(resetVisual);
+   var resetVisual=RemoteFrames.Facing(reset,.1,0,270);remote.ApplyRemoteVisuals(resetVisual);
    Assert.Less(Mathf.Abs(Mathf.DeltaAngle(remote.PlayerTransform(0).eulerAngles.y,270)),.01f);
    Object.Destroy(root);yield return null;
   }

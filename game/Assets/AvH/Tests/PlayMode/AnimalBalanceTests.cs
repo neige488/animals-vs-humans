@@ -10,6 +10,8 @@ namespace AvH.Tests {
   void Create() {
    profile=Path.Combine(Path.GetTempPath(),System.Guid.NewGuid()+".xml");var setup=new PlaytestSession(1,profile);setup.BeginSettingsEdit(0);
    var values=setup.ObserveSettings().Edit;values.PreparationSeconds=1;values.InitialAnimals=6;values.InitialAttackGrace=30;
+   // Exact speed x time checks run with inertia off; eased movement is covered by MotionPlayTests.
+   values.InertiaSeconds=0;
    setup.UpdateSettingsEdit(0,values);setup.ApplySettingsNow(0,true);
    root=new GameObject("animal balance physics");world=root.AddComponent<UnityPlaytestSession>();world.AutomaticStep=false;world.BotAutomationEnabled=false;world.StartSolo("host",42,profile);
    var floor=GameObject.CreatePrimitive(PrimitiveType.Cube);floor.transform.SetParent(root.transform);floor.transform.position=new Vector3(100,-.5f,0);floor.transform.localScale=new Vector3(100,1,40);

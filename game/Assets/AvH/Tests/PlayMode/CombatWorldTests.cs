@@ -48,6 +48,8 @@ namespace AvH.Tests {
    for(;seed<1000;seed++){var probe=new PlaytestSession(seed);probe.StartSolo("seed");probe.Advance(20);var s=probe.Observe();if(s.Players[0].Faction==Faction.Animal&&s.Players[4].Faction==Faction.Human)break;}
    var root=new GameObject("melee");var session=root.AddComponent<UnityPlaytestSession>();session.AutomaticStep=false; session.BotAutomationEnabled=false;
    session.StartSolo("tester",seed,Profile());yield return new WaitForFixedUpdate();
+   // Zero attack tell: the original click-frame judgement through real physics.
+   session.Session.BeginSettingsEdit(0);var rules=session.Session.ObserveSettings().Edit;rules.AttackWindupSeconds=0;session.Session.UpdateSettingsEdit(0,rules);Assert.IsTrue(session.Session.ApplySettingsNow(0));
    for(int i=0;i<1001;i++)session.Step(.02f);
    for(int i=0;i<40;i++){session.SubmitInput(0,new PlayerInput{Forward=1,Attack=true});session.Step(.02f);}
    Assert.AreEqual(Faction.Human,session.Observe().Players[4].Faction,"Initial grace prevents attacks even while moving into contact");
@@ -56,7 +58,7 @@ namespace AvH.Tests {
    session.SubmitInput(0,new PlayerInput{Forward=-1});session.Step(.1f);
    Assert.Greater(Mathf.Abs(Mathf.DeltaAngle(session.PlayerTransform(0).eulerAngles.y,0)),45,"Body is still facing away from aim");
    session.SubmitInput(0,new PlayerInput{Attack=true,Yaw=0});session.Step(.02f);
-   Assert.AreEqual(Faction.Animal,session.Observe().Players[4].Faction);
+   Assert.AreEqual(Faction.Animal,session.Observe().Players[4].Faction,"Zero windup judges on the click step");
    Assert.Greater(session.Observe().Players[4].AttackGraceRemaining,0);
    Object.Destroy(root);yield return null;
   }
