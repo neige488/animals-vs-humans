@@ -47,6 +47,7 @@ namespace AvH.Editor {
    for(int i=0;i<20;i++){float a=i*Mathf.PI*2/20;Rock(map,new Vector3(Mathf.Cos(a)*37,-18,Mathf.Sin(a)*37),new Vector3(12,14,12),i*23);}
    for(int z=-32;z<=32;z+=16){Lamp(map,new Vector3(5,0,z));Lamp(map,new Vector3(-5,0,z+5));}
    Bunting(map,new Vector3(-10,5,2),new Vector3(10,5,2));Bunting(map,new Vector3(-11,4.8f,-8),new Vector3(11,4.8f,-8));
+   TownExtras(map,homes);
    return map;
   }
   static GameObject Solid(GameObject map,string name,Vector3 p,Vector3 size,Color color,bool collision=true) {

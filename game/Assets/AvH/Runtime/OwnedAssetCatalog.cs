@@ -18,6 +18,8 @@ namespace AvH {
   }
   /// <summary>Generated Synty dressing of the sand crossing (visual only) and the 1 m crate its pushable crates use.</summary>
   public GameObject Crossing, Crate;
+  /// <summary>Generated Synty dressing of the two-storey warehouse (visual only).</summary>
+  public GameObject Warehouse;
   public Vector3[] ShelterPoints;
   public string AnimalDisplayName = "동물 종류 입력 필요";
   public string Rarity = "일반";

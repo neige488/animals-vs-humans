@@ -33,11 +33,12 @@ namespace AvH.Editor {
    var map=BuildVillage();
    var village=PrefabUtility.SaveAsPrefabAsset(map,Generated+"Village.prefab");UnityEngine.Object.DestroyImmediate(map);
    var (crossing,crate)=BuildCrossing();
+   var warehouse=BuildWarehouse();
    var path=Root+"Resources/OwnedAssetCatalog.asset";
    var catalog=AssetDatabase.LoadAssetAtPath<OwnedAssetCatalog>(path);
    if(catalog==null){catalog=ScriptableObject.CreateInstance<OwnedAssetCatalog>();AssetDatabase.CreateAsset(catalog,path);}
    catalog.ShelterPoints=PrototypeVillage.DefaultShelters.ToArray();
-   catalog.Humans=humans;catalog.Animals=animals;catalog.Human=humans[0].Prefab;catalog.Animal=animals[0].Prefab;catalog.Village=village;catalog.Crossing=crossing;catalog.Crate=crate;
+   catalog.Humans=humans;catalog.Animals=animals;catalog.Human=humans[0].Prefab;catalog.Animal=animals[0].Prefab;catalog.Village=village;catalog.Crossing=crossing;catalog.Crate=crate;catalog.Warehouse=warehouse;
    catalog.AnimalDisplayName="여우";catalog.Rarity="일반";catalog.RarityColor=new Color(.85f,.95f,1);
    catalog.HumanSource="Polyperfect Low Poly Animated People 3.02 / man_casual";
    catalog.AnimalSource="Polyperfect Low Poly Animated Animals 4.1.1 / Fox";

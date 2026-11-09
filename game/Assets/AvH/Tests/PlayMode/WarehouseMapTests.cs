@@ -123,6 +123,22 @@ namespace AvH.Tests {
    yield return null;
   }
 
+  // With the owned Synty assets configured the timber-granary dressing replaces the Blender modules; colliders stay.
+  [UnityTest] public IEnumerator OwnedDressingReplacesTheBlenderModules() {
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   Assume.That(catalog!=null&&catalog.Warehouse!=null,"owned assets not configured in this checkout");
+   var root=new GameObject("warehouse dressed");
+   try {
+    var game=Warehouse(root);yield return null;
+    var map=root.transform.Find(WarehouseMap.RootName);var dressing=map.Find(WarehouseMap.DressingName);Assert.IsNotNull(dressing);
+    Assert.IsFalse(map.GetComponentsInChildren<Renderer>().Any(r=>r.enabled&&r.name.StartsWith("WH_")),"no Blender module is drawn");
+    Assert.IsFalse(dressing.GetComponentsInChildren<Collider>().Any(),"the dressing is visual only");
+    Assert.AreEqual(10,game.ObserveProps().Length);
+    Assert.Greater(dressing.GetComponent<TownDressing>().Observe().LanternLights,0,"hall lanterns are lit");
+   } finally {Object.Destroy(root);}
+   yield return null;
+  }
+
   [UnityTest] public IEnumerator HostMapChangeTakesEffectAtTheNextRound() {
    var root=new GameObject("map switch");
    try {

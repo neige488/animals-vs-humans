@@ -58,6 +58,38 @@ namespace AvH.Editor {
    Shot(camera,new Vector3(-44,2.4f,10),new Vector3(-44,4,26),"crossing-stair-a");
    Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
   }
+  /// <summary>The village as the game builds it, from player-height viewpoints.</summary>
+  public static void CaptureTown() {
+   Directory.CreateDirectory(Output);
+   var root=new GameObject("Town audit");PrototypeVillage.Build(root.transform);
+   var light=new GameObject("Audit sun").AddComponent<Light>();light.type=LightType.Directional;
+   var camera=new GameObject("Audit camera").AddComponent<Camera>();camera.fieldOfView=60;
+   TownLighting.Apply(camera,light);
+   Shot(camera,new Vector3(0,48,-62),new Vector3(0,0,2),"town-overview");
+   Shot(camera,new Vector3(3,2.6f,-24),new Vector3(0,2,0),"town-market");
+   Shot(camera,new Vector3(-30,2.6f,-12),new Vector3(-30,2,20),"town-west");
+   Shot(camera,new Vector3(30,2.6f,-26),new Vector3(33,2,20),"town-east");
+   Shot(camera,new Vector3(-20,2.6f,14),new Vector3(30,2,14),"town-north");
+   Shot(camera,new Vector3(46,22,46),new Vector3(0,0,0),"town-edge");
+   Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
+  }
+  /// <summary>The warehouse as the game builds it, from player-height viewpoints.</summary>
+  public static void CaptureWarehouse() {
+   Directory.CreateDirectory(Output);
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   var root=new GameObject("Warehouse audit");WarehouseMap.Build(root.transform);
+   var light=new GameObject("Audit sun").AddComponent<Light>();light.type=LightType.Directional;
+   var camera=new GameObject("Audit camera").AddComponent<Camera>();camera.fieldOfView=60;
+   TownLighting.Apply(camera,light);
+   if(catalog!=null){foreach(var p in WarehouseMap.Shelters)Pose(catalog.Human,root.transform,p);Pose(catalog.Animal,root.transform,WarehouseLayout.StairFoot);Pose(catalog.Human,root.transform,new Vector3(-1,0,-6));}
+   Shot(camera,new Vector3(0,40,-58),new Vector3(0,0,0),"warehouse-overview");
+   Shot(camera,new Vector3(2,2.6f,-11),new Vector3(-4,3,8),"warehouse-hall");
+   Shot(camera,new Vector3(-10,2.4f,-6),WarehouseLayout.StairHead,"warehouse-stair");
+   Shot(camera,new Vector3(-12,5.6f,9),new Vector3(14,3.5f,7),"warehouse-deck");
+   Shot(camera,new Vector3(4,2.6f,-22),new Vector3(-2,3,-14),"warehouse-yard");
+   Shot(camera,new Vector3(10,2.4f,-3),WarehouseLayout.RampHead,"warehouse-ramp");
+   Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
+  }
   static GameObject Pose(GameObject prefab,Transform parent,Vector3 position) {
    var model=Object.Instantiate(prefab,parent);model.transform.position=position;
    foreach(var a in model.GetComponentsInChildren<Animator>()){a.Rebind();a.Update(0);a.Play("Idle",0,0);a.Update(.1f);}return model;

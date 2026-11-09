@@ -43,8 +43,17 @@ namespace AvH {
   public static IReadOnlyList<Vector3> Shelters {get;}=Array.AsReadOnly(new[]{WarehouseLayout.StairShelter,WarehouseLayout.RampShelter,WarehouseLayout.YardShelter});
   static readonly Color Asphalt=new Color(.36f,.37f,.36f);
 
+  /// <summary>
+  /// With the owned Synty assets configured, a generated timber-granary dressing (Generated/Warehouse.prefab) replaces
+  /// every Blender module and plain box: they then leave only their colliders behind.
+  /// </summary>
+  static bool dressed;static GameObject crateModel;
+  public const string DressingName="Synty dressing";
   public static IReadOnlyList<Vector3> Build(Transform parent) {
    var root=new GameObject(RootName).transform;root.SetParent(parent,false);
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   dressed=catalog!=null&&catalog.Warehouse!=null;crateModel=catalog!=null?catalog.Crate:null;
+   if(dressed){var dressing=UnityEngine.Object.Instantiate(catalog.Warehouse,root);dressing.name=DressingName;TownDressing.Dress(dressing.transform);}
    // Ground: one collider for the whole yard, the warehouse floor tiles sit 2 cm above it (visual only).
    Solid(root,"Ground",new Vector3(0,-.5f,0),new Vector3(WarehouseLayout.YardHalfX*2+2,1,WarehouseLayout.YardHalfZ*2+2),Asphalt);
    for(float x=-WarehouseLayout.HalfX+2;x<WarehouseLayout.HalfX;x+=4)for(float z=-WarehouseLayout.HalfZ+2;z<WarehouseLayout.HalfZ;z+=4)
@@ -97,24 +106,27 @@ namespace AvH {
   }
 
   // 1 m railing along the deck edge with openings at the stair head, the ramp head and the two jump-down gaps.
-  static void Railings(Transform root) {
-   float edge=WarehouseLayout.DeckFront-.05f,half=WarehouseLayout.DeckHalfX;
+  static void Railings(Transform root){foreach(var (from,to) in RailSegments())Rail(root,from,to,WarehouseLayout.DeckFront-.05f);}
+  /// <summary>Every railing piece along the deck front (from, to in x). Shared with the editor dressing.</summary>
+  public static List<(float from,float to)> RailSegments() {
+   float half=WarehouseLayout.DeckHalfX;var segments=new List<(float,float)>();
    var openings=new List<(float a,float b)>{(WarehouseLayout.StairX-WarehouseLayout.StairWidth/2-.2f,WarehouseLayout.StairX+WarehouseLayout.StairWidth/2+.2f),(WarehouseLayout.RampX-WarehouseLayout.RampWidth/2-.2f,WarehouseLayout.RampX+WarehouseLayout.RampWidth/2+.2f)};
    foreach(var gap in WarehouseLayout.DropGaps)openings.Add((gap-2,gap+2));
    openings.Sort((p,q)=>p.a.CompareTo(q.a));
    float from=-half;
-   foreach(var (a,b) in openings){Rail(root,from,a,edge);from=b;}
-   Rail(root,from,half,edge);
+   foreach(var (a,b) in openings){if(a-from>=.3f)segments.Add((from,a));from=b;}
+   if(half-from>=.3f)segments.Add((from,half));
    // Side edges of the deck stay open: another (longer) way down.
+   return segments;
   }
   static void Rail(Transform root,float from,float to,float z) {
-   if(to-from<.3f)return;float length=to-from;
+   float length=to-from;
    var rail=Module(root,"WH_Railing",new Vector3((from+to)/2,WarehouseLayout.Upper,z),0);rail.localScale=new Vector3(length/4,1,1);
    Collider(rail.gameObject,new Vector3(0,.5f,0),new Vector3(4,1,.12f));
   }
 
   // Fixed crate stacks: cover on the ground floor and on the deck. Never on the stair, ramp, gaps or spawn.
-  static readonly (Vector3 p,int high)[] CoverStacks={
+  public static readonly (Vector3 p,int high)[] CoverStacks={
    (new Vector3(-9,0,-2),2),(new Vector3(8.5f,0,-8),1),(new Vector3(-3,0,-10.5f),2),(new Vector3(12,0,1),1),(new Vector3(-20,0,-10),2),
    (new Vector3(-1,WarehouseLayout.Upper,11),1),(new Vector3(17,WarehouseLayout.Upper,12),2),(new Vector3(-18,WarehouseLayout.Upper,12.5f),1)};
   public static IEnumerable<Vector3> CoverPositions(){foreach(var s in CoverStacks)yield return s.p;}
@@ -132,11 +144,20 @@ namespace AvH {
   public static IEnumerable<Vector3> LightCratePositions()=>Light;
   static void LightCrates(Transform root) {
    var container=new GameObject(PushProps.Container).transform;container.SetParent(root,false);
-   for(int i=0;i<Light.Length;i++){var crate=Module(container,"WH_Crate",Light[i],i*23%90);crate.name="Light crate "+i;crate.localScale=Vector3.one*.7f;}
+   for(int i=0;i<Light.Length;i++) {
+    Transform crate;
+    if(crateModel!=null){crate=UnityEngine.Object.Instantiate(crateModel,container).transform;crate.localPosition=Light[i];crate.localRotation=Quaternion.Euler(0,i*23%90,0);}
+    else crate=MapKit.Module(container,"Warehouse/WH_Crate",Light[i],i*23%90);
+    crate.name="Light crate "+i;crate.localScale=Vector3.one*.7f;
+   }
   }
 
-  static Transform Module(Transform parent,string name,Vector3 foot,float yaw)=>MapKit.Module(parent,"Warehouse/"+name,foot,yaw);
+  // In the dressed map a module is only an empty holder at the same place, so its colliders stay exactly where they were.
+  static Transform Module(Transform parent,string name,Vector3 foot,float yaw) {
+   if(!dressed)return MapKit.Module(parent,"Warehouse/"+name,foot,yaw);
+   var go=new GameObject(name);go.transform.SetParent(parent,false);go.transform.localPosition=foot;go.transform.localRotation=Quaternion.Euler(0,yaw,0);return go.transform;
+  }
   static void Collider(GameObject owner,Vector3 center,Vector3 size)=>MapKit.Collider(owner,center,size);
-  static void Solid(Transform parent,string name,Vector3 center,Vector3 size,Color color)=>MapKit.Solid(parent,name,center,size,color);
+  static void Solid(Transform parent,string name,Vector3 center,Vector3 size,Color color){var box=MapKit.Solid(parent,name,center,size,color);if(dressed)box.GetComponent<Renderer>().enabled=false;}
  }
 }

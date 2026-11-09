@@ -28,9 +28,10 @@ namespace AvH.Editor {
   }
   // Wall styles: four plaster tints for the town blocks, brick for the town wall and the sites.
   static readonly Color[] PlasterTints={Color.white,new Color(1,.87f,.68f),new Color(1,.83f,.78f),new Color(.9f,.9f,.86f)};
-  const int Brick=4;
+  const int Brick=4,Timber=5;
   static Material Styled(Material source,int style) {
    if(style==Brick){var brick=AssetDatabase.LoadAssetAtPath<Material>(Generated+"Generic_Brick_Builtin.mat");return brick??source;}
+   if(style==Timber){var wood=AssetDatabase.LoadAssetAtPath<Material>(Generated+"Generic_Wood_Builtin.mat");return wood??source;}
    if(style==0)return source;
    var path=Generated+$"Crossing_Plaster_{style}.mat";var mat=AssetDatabase.LoadAssetAtPath<Material>(path);
    if(mat==null){mat=new Material(source);AssetDatabase.CreateAsset(mat,path);}
@@ -41,13 +42,13 @@ namespace AvH.Editor {
   }
   public static bool CrossingNeedsRebuild() {
    var catalog=AssetDatabase.LoadAssetAtPath<OwnedAssetCatalog>(Root+"Resources/OwnedAssetCatalog.asset");
-   return catalog!=null&&(catalog.Crossing==null||catalog.Crate==null);
+   return catalog!=null&&(catalog.Crossing==null||catalog.Crate==null||catalog.Warehouse==null);
   }
   /// <summary>Builds and saves the crossing dressing and the pushable crate model; returns (dressing, crate).</summary>
   static (GameObject dressing,GameObject crate) BuildCrossing() {
    var map=new GameObject("Crossing dressing");
    Ground(map);Facades(map);Perimeter(map);Sites(map);Climbs(map);BridgeDressing(map);Parapets(map);PassageRoof(map);Cover(map);Market(map);Greenery(map);Horizon(map);
-   MergeStatic(map);
+   MergeStatic(map,"Crossing");
    var dressing=PrefabUtility.SaveAsPrefabAsset(map,Generated+"Crossing.prefab");Object.DestroyImmediate(map);
    var holder=new GameObject("Crate");var crate=Put(holder,Adventure+"Props/SM_Prop_Crate_01.prefab",Vector3.zero,0,1/.77f);crate.name="Crate model";
    var crateAsset=PrefabUtility.SaveAsPrefabAsset(holder,Generated+"CrossingCrate.prefab");Object.DestroyImmediate(holder);
@@ -100,18 +101,19 @@ namespace AvH.Editor {
     for(float z=lane.yMin;z<lane.yMax-.1f;z+=6)Fit(root,Env("Road_Straight_01"),new Vector3(lane.center.x,.03f,Mathf.Min(z+3,lane.yMax-3)),new Vector3(lane.width-.6f,.04f,6),0);
   }
   // Running-bond stone slabs in two shades over a darker grout bed; one mesh per shade.
-  static void Paving(GameObject root,Rect r,float y,string name) {
-   CrossSurface(root,name+" grout",new Vector3(r.center.x,y+.006f,r.center.y),new Vector3(r.width,.01f,r.height),new Color(.42f,.38f,.3f));
-   var shades=new[]{new Color(.74f,.68f,.55f),new Color(.66f,.6f,.48f)};
+  static void Paving(GameObject root,Rect r,float y,string name)=>Paving(root,r,y,name,1.1f,.8f,.07f,new Color(.42f,.38f,.3f),new Color(.74f,.68f,.55f),new Color(.66f,.6f,.48f));
+  /// <summary>Running-bond pieces W x D with a gap over a grout bed (slabs, or long floor boards).</summary>
+  static void Paving(GameObject root,Rect r,float y,string name,float W,float D,float Gap,Color grout,params Color[] shades) {
+   CrossSurface(root,name+" grout",new Vector3(r.center.x,y+.006f,r.center.y),new Vector3(r.width,.01f,r.height),grout);
    for(int shade=0;shade<2;shade++) {
-    var v=new List<Vector3>();var t=new List<int>();const float W=1.1f,D=.8f,Gap=.07f;int row=0;
+    var v=new List<Vector3>();var t=new List<int>();int row=0;
     for(float z=r.yMin;z<r.yMax-.05f;z+=D,row++)for(float x=r.xMin-(row%2)*W*.5f;x<r.xMax-.05f;x+=W) {
      int k=Mathf.FloorToInt(x*3.1f+z*7.3f);if(((k%3)==0?1:0)!=shade)continue;
      float x0=Mathf.Max(x,r.xMin)+Gap/2,x1=Mathf.Min(x+W,r.xMax)-Gap/2,z0=z+Gap/2,z1=Mathf.Min(z+D,r.yMax)-Gap/2;if(x1-x0<.1f||z1-z0<.1f)continue;
      float top=y+.02f+(k&1)*.004f;int n=v.Count;v.AddRange(new[]{new Vector3(x0,top,z0),new Vector3(x0,top,z1),new Vector3(x1,top,z1),new Vector3(x1,top,z0)});t.AddRange(new[]{n,n+1,n+2,n,n+2,n+3});
     }
     var mesh=new Mesh{name=name+" "+shade,indexFormat=IndexFormat.UInt32};mesh.SetVertices(v);mesh.SetTriangles(t,0);mesh.RecalculateNormals();mesh.RecalculateBounds();
-    var go=new GameObject(mesh.name);go.transform.SetParent(root.transform);go.AddComponent<MeshFilter>().sharedMesh=mesh;go.AddComponent<MeshRenderer>().sharedMaterial=VillageMaterial("Crossing_Slab_"+shade,shades[shade]);
+    var go=new GameObject(mesh.name);go.transform.SetParent(root.transform);go.AddComponent<MeshFilter>().sharedMesh=mesh;go.AddComponent<MeshRenderer>().sharedMaterial=VillageMaterial("Slab_"+ColorUtility.ToHtmlStringRGB(shades[shade]),shades[shade]);
    }
   }
   static bool Covered(Vector2 c) {
@@ -273,10 +275,11 @@ namespace AvH.Editor {
    // A grove outside the walls: treetops over the battlements.
    for(int k=0;k<36;k++){float a=k*Mathf.PI*2/36;var p=new Vector3(Mathf.Cos(a)*(CrossingLayout.HalfX+7+(k%3)*3),0,Mathf.Sin(a)*(CrossingLayout.HalfZ+7+(k%4)*3));Put(root,Env("Tree_0"+(k%3+1)),p,k*41,1.8f+(k%3)*.25f);}
   }
-  static void Horizon(GameObject map) {
+  static void Horizon(GameObject map)=>Horizon(map,165,150);
+  static void Horizon(GameObject map,float rx,float rz,float plain=-.05f) {
    var root=Group(map,"Horizon");
-   for(int k=0;k<8;k++){float a=k*Mathf.PI/4+.2f;var p=new Vector3(Mathf.Cos(a)*165,-6,Mathf.Sin(a)*150);var m=Put(root,Generic+"Environment/SM_Gen_Env_Background_Mountain_0"+(k%2+1)+".prefab",p,-a*Mathf.Rad2Deg-90,1.1f+(k%3)*.15f);m.transform.position+=Vector3.down*6;}
-   Surface(root,"Outer plain",new Vector3(0,-.05f,0),new Vector3(420,.05f,420),new Color(.62f,.58f,.4f));
+   for(int k=0;k<8;k++){float a=k*Mathf.PI/4+.2f;var p=new Vector3(Mathf.Cos(a)*rx,-6,Mathf.Sin(a)*rz);var m=Put(root,Generic+"Environment/SM_Gen_Env_Background_Mountain_0"+(k%2+1)+".prefab",p,-a*Mathf.Rad2Deg-90,1.1f+(k%3)*.15f);m.transform.position+=Vector3.down*6;}
+   Surface(root,"Outer plain",new Vector3(0,plain,0),new Vector3(420,.05f,420),new Color(.62f,.58f,.4f));
   }
 
   static GameObject Group(GameObject map,string name){var g=new GameObject(name);g.transform.SetParent(map.transform,false);return g;}
@@ -290,7 +293,7 @@ namespace AvH.Editor {
    for(;t!=null&&t!=root;t=t.parent)if(t.name.StartsWith("SM_Env_Tree")||t.name.StartsWith("SM_Env_Bush")||t.name.StartsWith("SM_Item_Lantern")||t.name=="District pennant")return true;
    return false;
   }
-  static void MergeStatic(GameObject map) {
+  static void MergeStatic(GameObject map,string asset) {
    const float Chunk=28;
    var groups=new Dictionary<(Material mat,int cx,int cz),List<CombineInstance>>();var merged=new List<MeshRenderer>();
    foreach(var r in map.GetComponentsInChildren<MeshRenderer>()) {
@@ -304,10 +307,10 @@ namespace AvH.Editor {
     }
     merged.Add(r);
    }
-   var path=Generated+"CrossingMeshes.asset";AssetDatabase.DeleteAsset(path);Mesh container=null;
+   var path=Generated+asset+"Meshes.asset";AssetDatabase.DeleteAsset(path);Mesh container=null;
    var parent=Group(map,"Merged");int n=0;
    foreach(var g in groups) {
-    var mesh=new Mesh{name=$"Crossing {g.Key.mat.name} {g.Key.cx},{g.Key.cz}",indexFormat=IndexFormat.UInt32};mesh.CombineMeshes(g.Value.ToArray(),true,true);mesh.RecalculateBounds();
+    var mesh=new Mesh{name=$"{asset} {g.Key.mat.name} {g.Key.cx},{g.Key.cz}",indexFormat=IndexFormat.UInt32};mesh.CombineMeshes(g.Value.ToArray(),true,true);mesh.RecalculateBounds();
     if(container==null){AssetDatabase.CreateAsset(mesh,path);container=mesh;}else AssetDatabase.AddObjectToAsset(mesh,container);
     var go=new GameObject(mesh.name);go.transform.SetParent(parent.transform,false);go.AddComponent<MeshFilter>().sharedMesh=mesh;go.AddComponent<MeshRenderer>().sharedMaterial=g.Key.mat;n++;
    }
@@ -315,7 +318,7 @@ namespace AvH.Editor {
    // Drop holders left with nothing to show.
    foreach(var t in map.GetComponentsInChildren<Transform>(true).Reverse())if(t!=map.transform&&t!=null&&t.childCount==0&&t.GetComponent<Renderer>()==null&&t.GetComponent<ParticleSystem>()==null)Object.DestroyImmediate(t.gameObject);
    AssetDatabase.SaveAssets();
-   Debug.Log($"Crossing dressing: {merged.Count} pieces merged into {n} chunk meshes.");
+   Debug.Log($"{asset} dressing: {merged.Count} pieces merged into {n} chunk meshes.");
   }
  }
 }
