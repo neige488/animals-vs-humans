@@ -70,6 +70,7 @@ namespace AvH.Tests {
     var clientWorld=c.AddComponent<UnityPlaytestSession>();var client=c.AddComponent<NetworkPresentation>();client.Initialize(clientWorld);client.JoinRoom(host.RoomCode,"guest");
     for(int n=0;n<180&&!client.CanPlay;n++)yield return new WaitForSecondsRealtime(.02f);
     Assert.IsTrue(client.CanPlay);int guest=client.LocalSlot;
+    yield return new WaitForSecondsRealtime(.8f);
     hostWorld.Session.Advance(1.01);
     var hostFeel=new FeelDirector();var clientFeel=new FeelDirector();
     for(int n=0;n<10;n++){yield return new WaitForSecondsRealtime(.02f);hostFeel.Observe(hostWorld.Observe(),0,.02f);clientFeel.Observe(clientWorld.Observe(),guest,.02f);}

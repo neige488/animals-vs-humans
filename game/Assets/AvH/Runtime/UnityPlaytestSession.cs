@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 namespace AvH {
- [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload; public int RoundId; }
+ [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload; public int RoundId,Sequence; }
  /// <summary>Public game execution boundary. Inputs flow through real CharacterControllers.</summary>
  public sealed partial class UnityPlaytestSession : MonoBehaviour {
   public bool AutomaticStep = true;
@@ -13,6 +13,7 @@ namespace AvH {
   public PlaytestSession Session { get; private set; }
   readonly List<CharacterController> bodies = new List<CharacterController>();
   readonly PlayerInput[] inputs = new PlayerInput[12];
+  readonly int[] simulatedInputSequences=new int[12];
   readonly float[] vertical = new float[12];
   readonly MotionState[] motion = new MotionState[12];
   readonly Transform[] guns=new Transform[12];
@@ -35,6 +36,8 @@ namespace AvH {
     var contacts=body.AddComponent<KnockbackContact>();contacts.World=this;contacts.Slot=p.Slot;
     RefreshVisual(p.Slot,p.Faction);
    }
+   // Separate in-process worlds (integration tests) must not collide with each other.
+   foreach(var other in UnityEngine.Object.FindObjectsByType<UnityPlaytestSession>(FindObjectsSortMode.None))if(other!=this)foreach(var a in bodies)foreach(var b in other.bodies)Physics.IgnoreCollision(a,b);
   }
   public SessionState Observe() => remoteSnapshot ?? Session.Observe();
   PushProps props;
@@ -51,6 +54,7 @@ namespace AvH {
    input.Pitch=Mathf.Clamp(input.Pitch,-80,80);
    if(input.RoundId==0)input.RoundId=Session.Observe().Round;
    inputs[slot]=input;
+   if(slot==0&&FishBridge!=null&&!IsRemote)FishBridge.QueueInput(slot,input);
   }
   void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
   /// <summary>Advances the host simulation, or on a remote view advances frame playback by the same time.</summary>
@@ -69,8 +73,10 @@ namespace AvH {
     var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; }
     if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId)ChangeVisual(before,state,i,body.transform.position);
+    if(FishControls(i)) continue;
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
+     simulatedInputSequences[i]=input.Sequence;
      if(guns[i]!=null&&input.RoundId==state.Round)guns[i].GetComponent<BubbleGunPose>().SetAim(input.Yaw,input.Pitch);
      if(CharacterMotion.Frozen(p)) {
       // Hit-stop holds only this body: no steering, gravity or knockback until it ends. Momentum resumes after.
@@ -141,15 +147,16 @@ namespace AvH {
    }
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
+  public Transform CameraFollowTransform(int slot) => FishControls(slot)&&fishMotors[slot].CameraAnchor!=null?fishMotors[slot].CameraAnchor:bodies[slot].transform;
   /// <summary>Locomotion animation currently shown for a slot (presentation only).</summary>
   public CharacterAnimationView ObserveAnimation(int slot)=>bodies[slot].GetComponent<CharacterAnimator>().Observe();
   readonly LocomotionState[] presented=new LocomotionState[12];
   void Animate(int slot,LocomotionState state,float seconds){presented[slot]=state;bodies[slot].GetComponent<CharacterAnimator>().Apply(state,seconds);}
   /// <summary>Host presentation frame for remote viewers: each body's position, facing, aim pitch and the motion it was animated with.</summary>
-  public NetworkMotionFrame CaptureMotion() {
+  public NetworkMotionFrame CaptureMotion(bool refreshAll=false) {
    // Resting displaced props ride a frame twice a second so late joiners learn where they lie.
-   bool refresh=Session.HostTime>=nextPropRefresh||Session.HostTime<nextPropRefresh-1;if(refresh)nextPropRefresh=Session.HostTime+.5;
-   return new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,Props=props==null?new NetworkPropMotion[0]:props.Capture(Session.HostTime,refresh),Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
+   bool refresh=refreshAll||Session.HostTime>=nextPropRefresh||Session.HostTime<nextPropRefresh-1;if(refresh)nextPropRefresh=Session.HostTime+.5;
+   return new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,InputSequences=(int[])simulatedInputSequences.Clone(),Props=props==null?new NetworkPropMotion[0]:props.Capture(Session.HostTime,refresh),Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
    var p=bodies[i].transform.position;float pitch=guns[i]!=null?guns[i].GetComponent<BubbleGunPose>().AimPitch:0;
    return NetworkBodyMotion.Encode(new WorldPosition(p.x,p.y,p.z),PresentationYaw(i),pitch,presented[i]);}).ToArray()};
   }
@@ -158,7 +165,7 @@ namespace AvH {
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   void RefreshVisual(int slot,Faction faction,bool transformation=false) {
-   var parent=bodies[slot].transform;
+   var body=bodies[slot].transform;var parent=body.Find("Predicted presentation")??body;
    if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Gun(parent):null;
    var old=parent.Find("Visual");
    if(old!=null){if(transformation){old.name="Transform ghost";old.gameObject.AddComponent<TransformGhost>();}else{old.gameObject.SetActive(false);Destroy(old.gameObject);}}
@@ -177,7 +184,7 @@ namespace AvH {
    foreach(var animator in visual.GetComponentsInChildren<Animator>()){animator.fireEvents=false;animator.applyRootMotion=false;animator.Rebind();animator.Update(0);}
    var gunPose=guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>():null;
    if(gunPose!=null)gunPose.Bind(visual.transform);
-   var locomotion=parent.GetComponent<CharacterAnimator>()??parent.gameObject.AddComponent<CharacterAnimator>();
+   var locomotion=body.GetComponent<CharacterAnimator>()??body.gameObject.AddComponent<CharacterAnimator>();
    locomotion.Bind(visual.transform,faction,Observe().Players[slot].CharacterId,gunPose);
    if(transformation)locomotion.PlayTransform();
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;

@@ -1,1 +1,9 @@
-{"name":"AvH.Runtime","references":["AvH.Core","Unity.ugui","Unity.Postprocessing.Runtime"]}
+{
+  "name": "AvH.Runtime",
+  "references": [
+    "AvH.Core",
+    "Unity.ugui",
+    "Unity.Postprocessing.Runtime",
+    "FishNet.Runtime"
+  ]
+}

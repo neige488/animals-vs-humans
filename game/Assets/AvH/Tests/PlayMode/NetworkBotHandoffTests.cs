@@ -17,13 +17,14 @@ namespace AvH.Tests {
     var moving=world.Observe();
     int expectedSlot=moving.Players.Where(p=>p.IsBot&&p.Faction==Faction.Human).OrderBy(p=>p.Slot).First().Slot;
     Assert.That(FlatDistance(initial.Players[expectedSlot].Position,moving.Players[expectedSlot].Position),Is.GreaterThan(.4f),"The claimed human bot was moving before Ready");
+    var inheritedBody=world.PlayerTransform(expectedSlot);
     var clientWorld=clientObject.AddComponent<UnityPlaytestSession>();
     var client=clientObject.AddComponent<NetworkPresentation>();client.Initialize(clientWorld);client.JoinRoom(host.RoomCode,"human guest");
     for(int n=0;n<180&&!client.CanPlay;n++)yield return new WaitForSecondsRealtime(.02f);
     Assert.That(client.CanPlay,Is.True);Assert.That(client.LocalSlot,Is.EqualTo(expectedSlot));
     int slot=client.LocalSlot;var owned=world.Observe().Players[slot];
     Assert.That(owned.IsBot,Is.False);Assert.That(owned.Faction,Is.EqualTo(Faction.Human));
-    Assert.That(FlatDistance(owned.Position,moving.Players[slot].Position),Is.LessThan(.001f),"Ready transfers the existing body, without respawning");
+    Assert.AreSame(inheritedBody,world.PlayerTransform(slot),"Ready retains the actual moving body");
     // A neutral input must halt the old bot path while every other bot continues.
     client.SubmitInput(new PlayerInput());yield return new WaitForSecondsRealtime(.15f);
     var stopped=world.Observe();
@@ -39,7 +40,7 @@ namespace AvH.Tests {
     for(int n=0;n<180&&!world.Observe().Players[slot].IsBot;n++)yield return new WaitForSecondsRealtime(.02f);
     var returned=world.Observe().Players[slot];
     Assert.That(returned.IsBot,Is.True);Assert.That(returned.Slot,Is.EqualTo(slot));Assert.That(returned.Faction,Is.EqualTo(afterInput.Faction));
-    Assert.That(FlatDistance(returned.Position,afterInput.Position),Is.LessThan(.001f),"Disconnect retains the current body");
+    Assert.AreSame(inheritedBody,world.PlayerTransform(slot),"Disconnect retains the current body");
     for(int n=0;n<60;n++){world.Step(.02f);if(n%10==0)yield return null;}
     var resumed=world.Observe().Players[slot];
     Assert.That(resumed.IsBot,Is.True);

@@ -14,6 +14,7 @@ namespace AvH {
   string nickname="플레이어";
   float yaw, pitch=20;
   bool menu,debugOpen;
+  public bool AutomatedProbeInput;
   public bool DebugPanelOpen=>debugOpen;
   public void SetDebugPanelOpen(bool open){debugOpen=open;if(open)menu=false;if(!open&&session.Session!=null&&!network.IsClient)session.Session.CancelSettingsEdit(0);SetCursor();}
   Vector3 cameraOffset=new Vector3(.6f,.3f,-5.5f);
@@ -58,6 +59,7 @@ namespace AvH {
   void Start() {
    if(!Debug.isDebugBuild||Application.isBatchMode)return;
    var args=System.Environment.GetCommandLineArgs();
+   if(NetworkFrameProbe.TryStart(this,network,session,args))return;
    int menus=System.Array.IndexOf(args,"-avhMenuPreview");
    if(menus>=0&&menus+1<args.Length){StartCoroutine(CaptureMenuPreview(args[menus+1]));return;}
    int qualities=System.Array.IndexOf(args,"-avhQualityPreview");
@@ -118,12 +120,12 @@ namespace AvH {
    }
    var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
    if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=!debugOpen&&Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
-   network.SubmitInput(input);session.PresentTrigger(network.LocalSlot,input.Attack);
+   if(!AutomatedProbeInput)network.SubmitInput(input);session.PresentTrigger(network.LocalSlot,input.Attack);
   }
   void LateUpdate() {
    if(session.Session==null||!network.CanPlay){following=false;feel.Reset();CameraShakeAngle=0;return;}
    if(appliedDisplay!=display.Version)ApplyDisplay();
-   var target=session.PlayerTransform(network.LocalSlot).position+Vector3.up*1.35f;
+   var target=session.CameraFollowTransform(network.LocalSlot).position+Vector3.up*1.35f;
    // Spring follow softens steps and landings; spawns and recovery teleports snap.
    if(!following||(target-follow).sqrMagnitude>9){follow=target;followVelocity=Vector3.zero;following=true;}
    else follow=Vector3.SmoothDamp(follow,target,ref followVelocity,.07f,Mathf.Infinity,Time.unscaledDeltaTime);

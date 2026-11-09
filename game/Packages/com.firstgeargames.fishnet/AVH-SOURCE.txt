@@ -1,0 +1,5 @@
+Upstream: https://github.com/FirstGearGames/FishNet
+Tag: 4.7.3
+Commit: 73f30cf2425dc808a4f463f0a233d386010810b3
+Embedded package manifest reports 4.7.2 at this tag.
+Upstream source is unmodified. Demos/Tutorials are omitted; LICENSE.md is included from repository root.

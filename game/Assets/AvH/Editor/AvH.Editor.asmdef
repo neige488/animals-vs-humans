@@ -1,1 +1,11 @@
-{"name":"AvH.Editor","references":["AvH.Core","AvH.Runtime"],"includePlatforms":["Editor"]}
+{
+  "name": "AvH.Editor",
+  "references": [
+    "AvH.Core",
+    "AvH.Runtime",
+    "FishNet.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}

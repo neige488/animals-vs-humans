@@ -9,6 +9,8 @@ namespace AvH {
   public double HostTime;
   /// <summary>Host round the frame belongs to; a viewer drops frames from any other round than its snapshot's.</summary>
   public int Round;
+  /// <summary>Last input actually simulated for each slot, not merely received by the socket.</summary>
+  public int[] InputSequences=Array.Empty<int>();
   public NetworkBodyMotion[] Bodies=Array.Empty<NetworkBodyMotion>();
   /// <summary>Light props that are moving (or just settled) at this host time, plus a periodic refresh of every displaced prop.</summary>
   public NetworkPropMotion[] Props=Array.Empty<NetworkPropMotion>();

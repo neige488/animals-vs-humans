@@ -41,6 +41,7 @@ namespace AvH {
     // Light props have no colliders; the nearest one the sweep meets takes the bubble when nothing solid comes first.
     int prop=-1;float propAt=float.MaxValue;bool propHit=props!=null&&props.Hit(bubble.Position,bubble.Direction,bubble.Radius,distance,out prop,out propAt);
     foreach(var hit in Physics.SphereCastAll(bubble.Position,bubble.Radius,bubble.Direction,distance,~0,QueryTriggerInteraction.Ignore).OrderBy(h=>h.distance)) {
+     var hitWorld=hit.collider.GetComponentInParent<UnityPlaytestSession>();if(hitWorld!=null&&hitWorld!=this)continue;
      int target=bodies.IndexOf(hit.collider as CharacterController);
      if(target==bubble.Owner)continue;
      if(target>=0 && beforeCombat.Players[target].Faction==Faction.Human && !bubble.FriendlyPush)continue;

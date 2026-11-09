@@ -30,8 +30,9 @@ namespace AvH {
     if(old==null||old.Players[p.Slot].Faction!=p.Faction||old.Players[p.Slot].CharacterId!=p.CharacterId)ChangeVisual(immediate?null:old,state,p.Slot,ToVector(p.Position));
     // With host frames flowing, the frames themselves show warps at the right moment; snapshots only reset on joins and new rounds.
     bool reset=immediate||old==null||state.Round!=old.Round;
-    if(reset||remoteMotion.Count==0&&Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>NetworkBodyMotion.TeleportDistance){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
-    bodies[p.Slot].enabled=false;
+    if(!FishControls(p.Slot)&&(reset||remoteMotion.Count==0&&Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>NetworkBodyMotion.TeleportDistance)){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
+    // Predicted movement must collide with remote players too, as it does on the server.
+    bodies[p.Slot].enabled=FishBridge!=null||FishControls(p.Slot)||p.Slot==LocalViewerSlot;
    }
    if(immediate||old==null||state.Round!=old.Round){remoteMotion.Clear();props?.ForgetRemote();}
    if(state.Phase==RoundPhase.Results&&(old==null||old.Phase!=RoundPhase.Results))CutTransformations();
@@ -52,6 +53,7 @@ namespace AvH {
    if(!remoteMotion.Sample(remoteClock,out var from,out var to,out float t)){HoldSnapshot(dt);return;}
    var newest=remoteMotion.Latest;bool stalled=remoteClock-lastFrameArrival>StalledSeconds;
    foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];bool own=p.Slot==LocalViewerSlot;
+    if(FishControls(p.Slot))continue;
     var pose=own?NetworkBodyMotion.Blend(newest.Bodies[p.Slot],newest.Bodies[p.Slot],1):NetworkBodyMotion.Blend(from.Bodies[p.Slot],to.Bodies[p.Slot],t);
     var target=ToVector(pose.Position);
     if(Vector3.Distance(body.transform.position,target)>NetworkBodyMotion.TeleportDistance)body.transform.position=target;
@@ -70,6 +72,7 @@ namespace AvH {
   // Before the first host frame (joining): stand at the snapshot position with the snapshot's action.
   void HoldSnapshot(float dt) {
    foreach(var p in remoteSnapshot.Players){var body=bodies[p.Slot];
+    if(FishControls(p.Slot))continue;
     body.transform.position=Vector3.Lerp(body.transform.position,ToVector(p.Position),Mathf.Min(1,dt*20));
     body.GetComponent<CharacterAnimator>().Apply(new LocomotionState{Grounded=true,AimYaw=body.transform.eulerAngles.y,Action=p.Action},dt);
    }
@@ -97,7 +100,7 @@ namespace AvH {
   }
   public SettingsState ObserveActiveSettings()=>remoteVisuals==null?Session.ObserveSettings():new SettingsState{Current=remoteVisuals.CurrentRules.Copy(),Pending=remoteVisuals.HasPending?remoteVisuals.PendingRules.Copy():null,Version=remoteVisuals.SettingsVersion};
   public void ResetSession() {
-   AutomaticStep=true;props=null;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
+   System.Array.Clear(fishMotors,0,fishMotors.Length);AutomaticStep=true;props=null;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
    seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;ForgetAudio();System.Array.Clear(presentedBirths,0,presentedBirths.Length);ForgetPresentedEvents();
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
    System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);
