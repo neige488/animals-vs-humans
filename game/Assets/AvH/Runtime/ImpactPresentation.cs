@@ -20,6 +20,8 @@ namespace AvH {
     case FeelEventKind.AttackMiss:if(actor!=null)Effects.Emit(actor.position+Vector3.up*.8f+actor.forward*.9f,new Color(1,1,1,.7f),6,1.2f,false);break;
     case FeelEventKind.AttackHit:if(target!=null)Effects.Emit(target.position+Vector3.up*.9f,new Color(1,.95f,.7f,.95f),14,2.2f);break;
     case FeelEventKind.Stagger:if(target!=null)Effects.Emit(target.position+Vector3.up*1.4f,new Color(1,.9f,.35f,.9f),6,.9f,false);break;
+    // A friend shoved by a shot: a yellow ring at the feet and sparks over the head, no stun.
+    case FeelEventKind.Shoved:if(target!=null){Effects.Emit(target.position+Vector3.up*.05f,new Color(1,.83f,.25f,.9f),0,0,true);Effects.Emit(target.position+Vector3.up*1.9f,new Color(1,.83f,.25f,.9f),5,.8f,false);}break;
     // The host already raised landing dust from its own physics step.
     case FeelEventKind.Landing:if(IsRemote&&actor!=null)Effects.Emit(actor.position,new Color(.9f,.83f,.64f,.6f),7,1);break;
     case FeelEventKind.PropPushed:Effects.Emit(ToVector(e.Position)+Vector3.up*.1f,new Color(.9f,.83f,.64f,.5f),4,.7f,false);break;

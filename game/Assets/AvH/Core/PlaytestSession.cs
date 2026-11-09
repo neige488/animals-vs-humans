@@ -36,6 +36,8 @@ namespace AvH
         public double BirthSecondsRemaining;
         /// <summary>Recent public impact events (bounded window), oldest first.</summary>
         public FeelEvent[] Events;
+        /// <summary>Map of the current round (GameMaps). Changes only at a round start.</summary>
+        public int Map;
     }
     public sealed partial class PlaytestSession
     {
@@ -43,18 +45,20 @@ namespace AvH
         private readonly Random random;
         private RoundPhase phase;
         private double remaining, hostTime, phaseDeadline, phaseStartedAt;
-        private int round;
+        private int round, map;
         private Faction? winner;
         private CharacterDefinition[] humanRoster,animalRoster;
         private int nextAnimal;
         private BirthNotice[] births = Array.Empty<BirthNotice>();
         public PlaytestSession(int randomSeed, string settingsPath = null) { random = new Random(randomSeed); settings.Load(settingsPath); }
-        public void StartSolo(string nickname, string animalKind = "임시 동물", string animalRarity = "일반", CharacterDefinition[] humans=null, CharacterDefinition[] animals=null)
+        /// <param name="map">Map for this run from the first round (start screen choice); null keeps the loaded settings' map.</param>
+        public void StartSolo(string nickname, string animalKind = "임시 동물", string animalRarity = "일반", CharacterDefinition[] humans=null, CharacterDefinition[] animals=null, int? map=null)
         {
             if (string.IsNullOrWhiteSpace(nickname) || nickname.Trim().Length > 20) throw new ArgumentException("닉네임은 1~20자입니다.");
             humanRoster=Roster(humans,new CharacterDefinition("human-default","인간"));
             animalRoster=Roster(animals,new CharacterDefinition("animal-default",animalKind,animalRarity));
             ResetParticipants();
+            if (map.HasValue) settings.Current.Map = GameMaps.Clamp(map.Value);
             round = 0; hostTime = 0;
             players = Enumerable.Range(0, 12).Select(i => new PlayerState {
                 Slot = i, Nickname = i == 0 ? nickname : "봇 " + i, IsBot = i != 0,
@@ -63,7 +67,7 @@ namespace AvH
             BeginRound();
         }
         private void BeginRound() {
-            settings.BeginRound(); round++; phase = RoundPhase.Preparation; remaining = settings.Current.PreparationSeconds; winner = null;
+            settings.BeginRound(); map = GameMaps.Clamp(settings.Current.Map); round++; phase = RoundPhase.Preparation; remaining = settings.Current.PreparationSeconds; winner = null;
             births = Array.Empty<BirthNotice>();
             nextAnimal=(round-1)*settings.Current.InitialAnimals;
             foreach (var player in players) { player.Faction = Faction.Human; AssignCharacter(player,humanRoster[player.Slot%humanRoster.Length]);player.Position = Spawn(player.Slot); }
@@ -112,9 +116,11 @@ namespace AvH
             if (slot < 0 || slot >= players.Length) throw new ArgumentOutOfRangeException(nameof(slot));
             players[slot].Position = position;
         }
-        private static WorldPosition Spawn(int slot) => new WorldPosition((slot % 4 - 1.5f) * 3, 1, (slot / 4 - 1) * 3);
+        private WorldPosition Spawn(int slot) => GameMaps.Spawn(map, slot);
+        /// <summary>Map of the current round.</summary>
+        public int Map => map;
         public SessionState Observe() => new SessionState {
-            Players = players.Select(p => {var copy=p.Copy();copy.Action=ActionOf(p);return copy;}).ToArray(), Phase = phase, SecondsRemaining = remaining, Round = round, Winner = winner,
+            Players = players.Select(p => {var copy=p.Copy();copy.Action=ActionOf(p);return copy;}).ToArray(), Phase = phase, SecondsRemaining = remaining, Round = round, Map = map, Winner = winner,
             BirthSecondsRemaining = birthSecondsRemaining,
             Births = births.Select(b => new BirthNotice { Kind = b.Kind, Rarity = b.Rarity, Count = b.Count }).ToArray(),
             Events = events.Select(e => e.Copy()).ToArray()

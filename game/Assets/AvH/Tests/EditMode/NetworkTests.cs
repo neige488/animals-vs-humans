@@ -198,8 +198,8 @@ namespace AvH.Tests {
    Assert.LessOrEqual(RoomProtocol.EncodedBytes(frame)-RoomProtocol.EncodedBytes(new NetworkMotionFrame()),12*10);
   }
   [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
-   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-11"));
-   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("WB5Pyp2OJO8YgK913Ut3v0hAbQWbgIkw3ExB6e6JU94="),"Schema changes require explicit protocol version and guard update");
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-12"));
+   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("icT6UqEvvBpXxDAO13m89fyXoK5gsgHjRPsLDnAEy2c="),"Schema changes require explicit protocol version and guard update");
    foreach(var t in new[]{typeof(NetworkMotionFrame),typeof(NetworkBodyMotion),typeof(NetworkPropMotion),typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent)}) {
     Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
     Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);

@@ -42,7 +42,12 @@ namespace AvH {
   public NetworkVisualState RemoteVisuals=>client.Visuals;
   public void Initialize(UnityPlaytestSession session){world=session;address=FindAddress();client=gameObject.AddComponent<FishRoomBridge>();client.Initialize(world);}
   static string FindAddress(){try{return NetworkInterface.GetAllNetworkInterfaces().Where(n=>n.OperationalStatus==OperationalStatus.Up&&n.NetworkInterfaceType!=NetworkInterfaceType.Loopback).SelectMany(n=>n.GetIPProperties().UnicastAddresses).Select(a=>a.Address).FirstOrDefault(a=>a.AddressFamily==AddressFamily.InterNetwork&&!IPAddress.IsLoopback(a))?.ToString()??"127.0.0.1";}catch{return "127.0.0.1";}}
-  public void StartHost(string nickname,string advertisedAddress=null){try{world.StartSolo(nickname);host=client;host.StartRoom(advertisedAddress??address);host.CaptureVisuals=()=>new NetworkVisualState{Bursts=world.ObserveBursts(),Motion=world.CaptureMotion(),Bubbles=world.ObserveBubbles().Select(b=>new NetworkBubble{Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray()};message="";}catch(Exception){host?.Dispose();host=null;world.ResetSession();message="방을 열지 못했습니다. 호스트 주소와 네트워크 상태를 확인하세요.";}}
+  /// <summary>Map the next hosted room starts on (start screen toggle; <c>-avhMap warehouse</c> preselects it).</summary>
+  public int HostMap=StartupMap();
+  /// <summary>Settings file for the next hosted room (development harnesses use an isolated one); null = this PC's saved settings.</summary>
+  public string HostSettingsPath;
+  static int StartupMap(){var args=System.Environment.GetCommandLineArgs();int i=System.Array.IndexOf(args,"-avhMap");return i>=0&&i+1<args.Length&&args[i+1]=="warehouse"?GameMaps.Warehouse:GameMaps.Town;}
+  public void StartHost(string nickname,string advertisedAddress=null){try{world.StartSolo(nickname,null,HostSettingsPath,HostMap);host=client;host.StartRoom(advertisedAddress??address);host.CaptureVisuals=()=>new NetworkVisualState{Bursts=world.ObserveBursts(),Motion=world.CaptureMotion(),Bubbles=world.ObserveBubbles().Select(b=>new NetworkBubble{Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray()};message="";}catch(Exception){host?.Dispose();host=null;world.ResetSession();message="방을 열지 못했습니다. 호스트 주소와 네트워크 상태를 확인하세요.";}}
   public void JoinRoom(string roomCode,string nickname){code=roomCode;Join(nickname);}
   public void Join(string nickname){lastNickname=nickname;clientStarted=true;message="";client.Connect(code,nickname);}
   void Update(){
@@ -77,7 +82,8 @@ namespace AvH {
    GUI.Label(new Rect(w/2-270,c+101,175,25),"호스트 IPv4 주소");address=GUI.TextField(new Rect(w/2-85,c+100,345,28),address,45);
    IPAddress ip;bool validAddress=IPAddress.TryParse(address,out ip)&&ip.AddressFamily==AddressFamily.InterNetwork;GUI.enabled=!string.IsNullOrWhiteSpace(nickname)&&validAddress;
    GUI.Label(new Rect(w/2-260,c+128,520,22),validAddress?"":"호스트 IPv4 주소를 확인하세요");
-   if(GUI.Button(new Rect(w/2-260,c+153,520,36),"비공개 방 만들기 · 11봇"))StartHost(nickname.Trim());GUI.enabled=true;
+   var enabled=GUI.enabled;GUI.enabled=true;if(GUI.Button(new Rect(w/2-260,c+153,170,36),"맵: "+GameMaps.Name(HostMap)+" ▸"))HostMap=(HostMap+1)%GameMaps.Count;GUI.enabled=enabled;
+   if(GUI.Button(new Rect(w/2-80,c+153,340,36),"비공개 방 만들기 · 11봇"))StartHost(nickname.Trim());GUI.enabled=true;
    GUI.Label(new Rect(w/2-270,c+196,90,25),"방 코드");code=GUI.TextField(new Rect(w/2-175,c+194,435,28),code,256);
    string endpoint,key;int port;GUI.enabled=!string.IsNullOrWhiteSpace(nickname)&&PrivateRoomCode.TryParse(code,out endpoint,out port,out key);
    GUI.Label(new Rect(w/2-260,c+224,520,22),string.IsNullOrWhiteSpace(code)?"방 코드를 입력해주세요.":PrivateRoomCode.TryParse(code,out endpoint,out port,out key)?"":"방 코드 형식을 확인하세요");

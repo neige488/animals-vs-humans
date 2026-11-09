@@ -58,7 +58,7 @@ namespace AvH {
     case "reload":return new Profile(6,.6f,1.5f,22);
     case "stagger":return new Profile(6,.55f,2,30);
     case "pop":return new Profile(5,.45f,1.5f,28);
-    case "fire":return new Profile(5,.3f,1.5f,28);
+    case "fire":return new Profile(5,.42f,1.5f,28);
     case "land":return new Profile(3,.6f,2,30);
     case "prop-knock":return new Profile(2,.5f,1.5f,24);
     default:

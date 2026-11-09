@@ -9,8 +9,8 @@ namespace AvH {
   const int Rate=22050;
   public static AudioClip Make(string cue) {
    if(cue==null)return null;
-   if(cue=="fire")return Bubble(true);
-   if(cue=="pop")return Bubble(false);
+   if(cue=="fire")return CorkShot();
+   if(cue=="pop")return CorkKnock();
    if(cue.StartsWith("step",StringComparison.Ordinal))return Thump(cue,.09f,140,.5f);
    if(cue=="land")return Thump(cue,.22f,90,.8f);
    if(cue=="prop-knock")return Thump(cue,.14f,210,1.1f);
@@ -30,11 +30,20 @@ namespace AvH {
   }
   static AudioClip Clip(string name,float[] samples){var clip=AudioClip.Create("Synth "+name,samples.Length,1,Rate,false);clip.SetData(samples,0);return clip;}
   static float Envelope(float t,float attack=.08f,float decay=7)=>Mathf.Sin(Mathf.PI*.5f*Mathf.Min(1,t/attack))*Mathf.Exp(-t*decay);
-  // The original bubble shot (air puff) and pop, unchanged from the first prototype.
-  static AudioClip Bubble(bool air) {
-   int count=air?2205:3307;var samples=new float[count];var random=new System.Random(19);float phase=0;
-   for(int i=0;i<count;i++){float t=(float)i/count;phase+=(air?900:1600)*(1-t*.85f)*Mathf.PI*2/Rate;float noise=(float)random.NextDouble()*2-1;samples[i]=(air?noise*.5f:Mathf.Sin(phase)*.6f+noise*.15f)*Mathf.Sin(Mathf.PI*Mathf.Min(1,t*8))*Mathf.Exp(-t*7);}
-   return Clip(air?"fire":"pop",samples);
+  // Cork popper shot: a tight "pomp" — a 25 ms air crack, then a hollow tube note dropping 620 -> 210 Hz. 0.11 s in all.
+  static AudioClip CorkShot() {
+   int count=(int)(Rate*.11f);var s=new float[count];var random=new System.Random(29);float phase=0,low=0;
+   for(int i=0;i<count;i++){float t=(float)i/Rate;float hz=210+410*Mathf.Exp(-t*55);phase+=hz*Mathf.PI*2/Rate;
+    low+=(((float)random.NextDouble()*2-1)-low)*.5f;float crack=t<.025f?low*(1-t/.025f):0;
+    s[i]=(Mathf.Sin(phase)*.75f+Mathf.Sin(phase*2.01f)*.15f)*Mathf.Min(1,t/.003f)*Mathf.Exp(-t*38)+crack*.55f;}
+   return Clip("fire",s);
+  }
+  // Cork hitting something: a dry wooden "tok" (two short partials) and a soft body thud. 0.12 s.
+  static AudioClip CorkKnock() {
+   int count=(int)(Rate*.12f);var s=new float[count];float a=0,b=0,c=0;
+   for(int i=0;i<count;i++){float t=(float)i/Rate;a+=980*Mathf.PI*2/Rate;b+=1530*Mathf.PI*2/Rate;c+=(150-60*t/.12f)*Mathf.PI*2/Rate;
+    s[i]=(Mathf.Sin(a)*.5f+Mathf.Sin(b)*.25f)*Mathf.Exp(-t*70)*Mathf.Min(1,t/.0015f)+Mathf.Sin(c)*.45f*Mathf.Exp(-t*30);}
+   return Clip("pop",s);
   }
   static AudioClip Thump(string name,float seconds,float hz,float noise) {
    int count=(int)(Rate*seconds);var s=new float[count];var random=new System.Random(name.Length*31);float phase=0,low=0;

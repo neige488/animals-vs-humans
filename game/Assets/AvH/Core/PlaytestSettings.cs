@@ -30,6 +30,8 @@ namespace AvH {
   public float RabbitSpeedMultiplier=1.05f, RabbitJumpMultiplier=1.55f, RabbitKnockbackMultiplier=1.4f;
   public float PenguinSpeedMultiplier=0.9f, PenguinJumpMultiplier=0.9f, PenguinKnockbackMultiplier=0.8f;
   public bool FriendlyCollision=true, EnemyCollision=true, FriendlyPush=true;
+  // Map for the next round (GameMaps): 0 = village, 1 = two-storey warehouse.
+  public int Map=GameMaps.Town;
   public PlaytestValues Copy() => (PlaytestValues)MemberwiseClone();
  }
  public struct AnimalModifiers {
@@ -121,6 +123,7 @@ namespace AvH {
      case "BubbleLifetime":max=10;break;
      case "BubbleSpeed":case "BubbleRange":max=100;break;
      case "PushForce":max=30;break;
+     case "Map":min=0;max=GameMaps.Count-1;break;
     }
     // UI and stored float fields use the nearest representable float boundary.
     // Keep integer/double comparisons unchanged and reject even the adjacent outside float.

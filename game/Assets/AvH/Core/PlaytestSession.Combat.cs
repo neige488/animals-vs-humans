@@ -67,6 +67,15 @@ namespace AvH {
    p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
    Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
+  /// <summary>
+  /// Called only by the authoritative physics adapter when a shot shoves a human (friendly push).
+  /// No stun and no faction change: the event only tells everyone who shoved whom.
+  /// </summary>
+  public bool RecordFriendlyShove(int victimSlot,int ownerSlot) {
+   if(victimSlot<0||victimSlot>=players.Length||ownerSlot<0||ownerSlot>=players.Length||victimSlot==ownerSlot||phase==RoundPhase.Results)return false;
+   if(players[victimSlot].Faction!=Faction.Human)return false;
+   Publish(FeelEventKind.Shoved,ownerSlot,victimSlot,players[victimSlot].Position);return true;
+  }
   /// <summary>Called only by the authoritative physics adapter when a body or bubble knocks a light prop (presentation event).</summary>
   public bool RecordPropPush(int prop,int actor,WorldPosition position,float strength) {
    if(prop<0||prop>=short.MaxValue||float.IsNaN(strength)||float.IsInfinity(strength)||phase==RoundPhase.Results)return false;

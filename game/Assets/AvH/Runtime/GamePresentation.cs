@@ -20,6 +20,9 @@ namespace AvH {
   Vector3 cameraOffset=new Vector3(.6f,.3f,-5.5f);
   readonly SettingsPanel settingsPanel=new SettingsPanel();
   readonly FeelDirector feel=new FeelDirector();
+  readonly HitFeed hitFeed=new HitFeed();
+  /// <summary>Recent shot hits as this viewer reads them (who shoved whom).</summary>
+  public HitFeed Hits=>hitFeed;
   readonly DisplaySettingsMenu displayMenu=new DisplaySettingsMenu();
   LocalDisplaySettings display;int appliedDisplay=-1;
   Vector3 follow,followVelocity;bool following;
@@ -59,6 +62,7 @@ namespace AvH {
   void Start() {
    if(!Debug.isDebugBuild||Application.isBatchMode)return;
    var args=System.Environment.GetCommandLineArgs();
+   if(WarehouseScenario.TryStart(this,network,session,args))return;
    if(NetworkFrameProbe.TryStart(this,network,session,args))return;
    int menus=System.Array.IndexOf(args,"-avhMenuPreview");
    if(menus>=0&&menus+1<args.Length){StartCoroutine(CaptureMenuPreview(args[menus+1]));return;}
@@ -108,8 +112,8 @@ namespace AvH {
   }
   void Update() {
    if(display!=null&&appliedDisplay!=display.Version)ApplyDisplay();
-   if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;debugOpen=false;return;}
-   rosterHud.Present(session.Observe(),network.LocalSlot);
+   if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;debugOpen=false;hitFeed.Reset();return;}
+   rosterHud.Present(session.Observe(),network.LocalSlot);hitFeed.Observe(session.Observe(),Time.deltaTime);
    if(!wasPlaying){menu=false;SetCursor();wasPlaying=true;}
    if(Input.GetKeyDown(KeyCode.F1))SetDebugPanelOpen(!debugOpen);
    if(Input.GetKeyDown(KeyCode.Escape)&&debugOpen)SetDebugPanelOpen(false);
@@ -198,8 +202,9 @@ namespace AvH {
     GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
    }
    if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
+   hitFeed.Draw(view,session.PlayerTransform,network.LocalSlot);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
-   GUI.Label(new Rect(w/2-275,h-85,550,35),$"{state.Players[network.LocalSlot].CharacterName} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · 라운드 {state.Round}",label);
+   GUI.Label(new Rect(w/2-275,h-85,550,35),$"{state.Players[network.LocalSlot].CharacterName} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · {GameMaps.Name(state.Map)} · 라운드 {state.Round}",label);
    GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전 · Esc 메뉴 · F1 디버그",new GUIStyle(label){fontSize=15});
 
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
@@ -221,7 +226,7 @@ namespace AvH {
   }
   static string WeaponLabel(PlayerState player,int magazine) {
    if(player.Faction==Faction.Animal)return player.AttackGraceRemaining>0?$"공격 대기 {player.AttackGraceRemaining:F1}초":"근접 공격";
-   return player.ReloadRemaining>0?$"재장전 중 ({player.ReloadRemaining:F1}초)":$"버블 {player.Ammo} / {magazine} (예비 ∞)";
+   return player.ReloadRemaining>0?$"재장전 중 ({player.ReloadRemaining:F1}초)":$"코르크 {player.Ammo} / {magazine} (예비 ∞)";
   }
   void OnDestroy(){RestoreLocalRenderers();if(ownsView&&view!=null)Destroy(view.gameObject);if(ownedSun!=null)Destroy(ownedSun.gameObject);if(rosterHud!=null)Destroy(rosterHud.gameObject);Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
  }

@@ -17,15 +17,31 @@ namespace AvH {
   readonly float[] vertical = new float[12];
   readonly MotionState[] motion = new MotionState[12];
   readonly Transform[] guns=new Transform[12];
-  readonly Vector3[] returns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
+  static readonly Vector3[] TownReturns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
+  Vector3[] returns = TownReturns;
   public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
-  public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null) {
+  int builtMap=-1;
+  /// <summary>Map whose geometry this world currently stands in (GameMaps).</summary>
+  public int BuiltMap=>builtMap;
+  /// <summary>
+  /// Replaces the map geometry. The old map is deactivated at once so physics queries in this same frame
+  /// (bot grid, spawns) never see it, then destroyed.
+  /// </summary>
+  void BuildMap(int map) {
+   map=GameMaps.Clamp(map);if(map==builtMap)return;
+   foreach(var name in new[]{"Village",WarehouseMap.RootName}){var old=transform.Find(name);if(old!=null){old.gameObject.SetActive(false);old.name+=" (removed)";Destroy(old.gameObject);}}
+   ShelterPoints=map==GameMaps.Warehouse?WarehouseMap.Build(transform):PrototypeVillage.Build(transform);
+   returns=map==GameMaps.Warehouse?WarehouseLayout.Recovery:TownReturns;
+   props=PushProps.Adopt(transform.Find(map==GameMaps.Warehouse?WarehouseMap.RootName:"Village"));
+   builtMap=map;botDirector.ResetMap();Physics.SyncTransforms();
+  }
+  public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null, int? map = null) {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");
    Session = new PlaytestSession(randomSeed ?? Environment.TickCount, settingsPath ?? System.IO.Path.Combine(Application.persistentDataPath,"playtest-settings.xml"));
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity,
-    catalog!=null&&catalog.Humans.Length>0?catalog.Humans.Select(c=>c.Definition()).ToArray():null,catalog!=null&&catalog.Animals.Length>0?catalog.Animals.Select(c=>c.Definition()).ToArray():null);
-   ShelterPoints=PrototypeVillage.Build(transform);props=PushProps.Adopt(transform.Find("Village"));
+    catalog!=null&&catalog.Humans.Length>0?catalog.Humans.Select(c=>c.Definition()).ToArray():null,catalog!=null&&catalog.Animals.Length>0?catalog.Animals.Select(c=>c.Definition()).ToArray():null,map);
+   BuildMap(Session.Observe().Map);
    foreach(var p in Session.Observe().Players) {
     var body = new GameObject("Slot " + p.Slot); body.transform.SetParent(transform);
     body.transform.position=ToVector(p.Position);
@@ -46,6 +62,8 @@ namespace AvH {
   /// <summary>This world's village dressing at the current graphics quality.</summary>
   public TownDressingView ObserveTown(){var village=transform.Find("Village");var dressing=village==null?null:village.GetComponent<TownDressing>();return dressing==null?default:dressing.Observe();}
   public BotNavigationDiagnostics ObserveBotNavigation()=>botDirector.ObserveNavigation();
+  /// <summary>What a bot would plan between two points in this world's current map (layout checks).</summary>
+  public List<Vector3> PlanBotRoute(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null)=>botDirector.Plan(from,to,out reachable,allowDrop,avoid);
   public void SubmitInput(int slot, PlayerInput input) {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
    if(float.IsNaN(input.Right) || float.IsInfinity(input.Right) || float.IsNaN(input.Forward) || float.IsInfinity(input.Forward) || float.IsNaN(input.Yaw) || float.IsInfinity(input.Yaw)) return;
@@ -65,7 +83,8 @@ namespace AvH {
    Session.Advance(seconds);
    var state=Session.Observe();
    PrepareCombatWorld(state,before.Round);
-   if(state.Round!=before.Round)props?.ResetHome();
+   if(state.Round!=before.Round&&state.Map!=builtMap)BuildMap(state.Map);
+   else if(state.Round!=before.Round)props?.ResetHome();
    if(state.Phase==RoundPhase.Results&&before.Phase!=RoundPhase.Results)CutTransformations();
    if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;

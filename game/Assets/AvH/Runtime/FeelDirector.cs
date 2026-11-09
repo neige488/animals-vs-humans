@@ -32,6 +32,7 @@ namespace AvH {
     case FeelEventKind.AttackHit:return e.Target==viewer?.65f:e.Actor==viewer?.45f:0;
     case FeelEventKind.AttackMiss:return e.Actor==viewer?.12f:0;
     case FeelEventKind.Stagger:return e.Target==viewer?.4f:0;
+    case FeelEventKind.Shoved:return e.Target==viewer?.3f:0;
     case FeelEventKind.Landing:
      float weight=.2f+.4f*Mathf.Clamp01(e.Strength);if(e.Actor==viewer)return weight;
      var me=state.Players[viewer].Position;float d=Vector3.Distance(new Vector3(me.X,me.Y,me.Z),new Vector3(e.Position.X,e.Position.Y,e.Position.Z));

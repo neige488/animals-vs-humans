@@ -47,7 +47,7 @@ namespace AvH {
      if(target>=0 && beforeCombat.Players[target].Faction==Faction.Human && !bubble.FriendlyPush)continue;
      if(propHit&&propAt<=hit.distance)break;
      bubble.Position+=bubble.Direction*hit.distance;
-     if(target>=0){bubbleHits[target]++;pushVelocity[target]+=(bubble.Direction*bubble.PushForce+Vector3.up*1.5f)*AnimalBalance.For(Session.ObserveSettings().Current,beforeCombat.Players[target]).Knockback;Session.RecordBubbleHit(target,bubble.Owner);}
+     if(target>=0){bubbleHits[target]++;pushVelocity[target]+=(bubble.Direction*bubble.PushForce+Vector3.up*1.5f)*AnimalBalance.For(Session.ObserveSettings().Current,beforeCombat.Players[target]).Knockback;if(beforeCombat.Players[target].Faction==Faction.Human)Session.RecordFriendlyShove(target,bubble.Owner);else Session.RecordBubbleHit(target,bubble.Owner);}
      Pop(bubble);popped=true;break;
     }
     if(!popped&&propHit){bubble.Position+=bubble.Direction*propAt;props.Push(prop,bubble.Direction*bubble.PushForce*PushProps.BubbleShare,bubble.Owner);Pop(bubble);popped=true;}
@@ -77,12 +77,16 @@ namespace AvH {
    var rules=Session.ObserveSettings().Current;
    var direction=Quaternion.Euler(input.Pitch,input.Yaw,0)*Vector3.forward;
    var position=bodies[slot].transform.position+Vector3.up*1.3f+Quaternion.Euler(0,input.Yaw,0)*Vector3.right*.1f;
-   var visual=Effects.Bubble(transform,rules.BubbleRadius);visual.name="Bubble";visual.transform.position=position;
-   Effects.Emit(position+direction*.6f,new Color(.63f,.93f,1,.7f),4,.65f,false);
+   // Cork popper: a small cork leaves the tube with a puff. The judged radius, speed and push stay the shot settings.
+   var visual=Effects.Cork(transform);visual.name="Bubble";visual.transform.position=position;
+   Effects.Emit(position+direction*.6f,MuzzlePuff,5,.9f,false);
    Audio.Play("fire",position);
    bubbles.Add(new Bubble{Id=++nextBubbleId,Owner=slot,Round=input.RoundId,Position=position,Direction=direction,Life=rules.BubbleLifetime,Radius=rules.BubbleRadius,Speed=rules.BubbleSpeed,Range=rules.BubbleRange,PushForce=rules.PushForce,FriendlyPush=rules.FriendlyPush,Visual=visual});
   }
-  void Pop(Bubble bubble){Destroy(bubble.Visual);var marker=new GameObject("Bubble impact");marker.transform.SetParent(transform,false);marker.transform.position=bubble.Position;bursts.Add((marker,.15f,bubble.Id));Effects.Emit(bubble.Position,new Color(.66f,.92f,1,.9f),12,1.9f);Audio.Play("pop",bubble.Position);}
+  void Pop(Bubble bubble){Destroy(bubble.Visual);var marker=new GameObject("Bubble impact");marker.transform.SetParent(transform,false);marker.transform.position=bubble.Position;bursts.Add((marker,.15f,bubble.Id));CorkImpact(bubble.Position,bubble.Direction);}
+  internal static readonly Color MuzzlePuff=new Color(1,.96f,.86f,.75f),ImpactChips=new Color(.86f,.7f,.48f,.95f);
+  /// <summary>Where a shot lands: a few cork-coloured chips, the knock and the cork pinging back. Host and remote alike.</summary>
+  void CorkImpact(Vector3 at,Vector3 direction){Effects.Emit(at,ImpactChips,8,1.6f);Effects.Ricochet(at,direction);Audio.Play("pop",at);}
   void Melee(int slot,int round) {
    var input=inputs[slot];float yaw=input.RoundId==round?input.Yaw:bodies[slot].transform.eulerAngles.y;
    var direction=Quaternion.Euler(0,yaw,0)*Vector3.forward;

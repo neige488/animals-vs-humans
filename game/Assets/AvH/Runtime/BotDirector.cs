@@ -7,7 +7,11 @@ namespace AvH {
  public struct BotNavigationDiagnostics {public int GridBuilds,MaxGridBuildsPerStep;}
  public sealed class BotDirector {
   public BotNavigationDiagnostics ObserveNavigation()=>routes.Observe();
-  sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;public BotAim Aim;}
+  /// <summary>The bot route planner itself (tests and layout checks): grid route from one floor point to another.</summary>
+  public List<Vector3> Plan(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null)=>routes.Find(from,to,out reachable,allowDrop,avoid);
+  /// <summary>New map geometry: the grid is rebuilt on the next route and every bot re-plans.</summary>
+  public void ResetMap(){routes.Reset();foreach(var brain in brains){brain.Round=-1;brain.Path.Clear();}}
+  sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;public BotAim Aim;public Vector3 Avoid;public float AvoidTime;}
   readonly Brain[] brains=Enumerable.Range(0,12).Select(i=>new Brain{Shelter=i%3,Aim=new BotAim(i+1)}).ToArray();
   double clock;
   readonly VillageRoutes routes=new VillageRoutes();
@@ -17,26 +21,32 @@ namespace AvH {
    foreach(var player in state.Players) {
     if(!player.IsBot)continue;
     var brain=brains[player.Slot];var position=V(player.Position);
-    if(brain.Round!=state.Round||brain.Faction!=player.Faction) {brain.Round=state.Round;brain.Faction=player.Faction;brain.Replan=0;brain.Path.Clear();brain.Stuck=0;brain.Shelter=player.Slot%3;brain.Flee=0;brain.ProgressTime=0;brain.LastDistance=float.MaxValue;brain.Aim.Reset();}
+    if(brain.Round!=state.Round||brain.Faction!=player.Faction) {brain.Round=state.Round;brain.Faction=player.Faction;brain.Replan=0;brain.Path.Clear();brain.Stuck=0;brain.Shelter=player.Slot%3;brain.Flee=0;brain.ProgressTime=0;brain.LastDistance=float.MaxValue;brain.Aim.Reset();brain.AvoidTime=0;}
     if(state.Phase==RoundPhase.Results){game.SubmitInput(player.Slot,new PlayerInput{RoundId=state.Round});continue;}
     var target=state.Players.Where(p=>p.Faction!=player.Faction).OrderBy(p=>(V(p.Position)-position).sqrMagnitude).FirstOrDefault();
     float distance=target==null?float.MaxValue:Vector3.Distance(position,V(target.Position));
-    brain.Flee-=seconds;brain.Replan-=seconds;
+    brain.Flee-=seconds;brain.Replan-=seconds;brain.AvoidTime-=seconds;
     Vector3 goal;
     if(player.Faction==Faction.Human) {
      if(distance<4 && brain.Flee<=0) {brain.Shelter=Enumerable.Range(0,3).Where(i=>i!=brain.Shelter).OrderByDescending(i=>(Shelters[i]-V(target.Position)).sqrMagnitude).First();brain.Flee=5;brain.Replan=0;}
      goal=Shelters[brain.Shelter]+new Vector3((player.Slot/3-1.5f)*.75f,0,0);
     } else goal=target==null?position:V(target.Position);
     if(brain.Replan<=0 && brain.Stuck>2){routes.Invalidate();brain.Stuck=.8f;}
+    // An animal held at a choke point (bodies, shots) marks the spot just ahead and plans round it for a while:
+    // a blocked staircase sends it to the far ramp instead of pushing into the same wall of humans.
+    bool crowded=state.Players.Any(o=>o.Slot!=player.Slot&&Vector3.Distance(V(o.Position),position)<2.5f);
+    if(player.Faction==Faction.Animal&&crowded&&brain.Stuck>1.2f&&brain.AvoidTime<=0&&brain.Cursor<brain.Path.Count){brain.Avoid=Vector3.Lerp(position,brain.Path[brain.Cursor],.5f);brain.AvoidTime=AvoidSeconds;brain.Replan=0;brain.Stuck=0;}
+    // A human chased on the deck may jump down through a railing gap when that is the shorter way out.
+    bool jumpDown=player.Faction==Faction.Human&&brain.Flee>0&&position.y>1.5f;
     if(brain.Replan<=0) {
-     brain.Path=routes.Find(position,goal,out bool reachable);
+     brain.Path=routes.Find(position,goal,out bool reachable,jumpDown,brain.AvoidTime>0?brain.Avoid:(Vector3?)null);
      if(!reachable) {
       routes.Invalidate();
       if(player.Faction==Faction.Human) {
        for(int offset=1;offset<Shelters.Count;offset++) {
         int alternate=(brain.Shelter+offset)%Shelters.Count;
         var alternative=Shelters[alternate]+new Vector3((player.Slot/3-1.5f)*.75f,0,0);
-        var path=routes.Find(position,alternative,out bool success);
+        var path=routes.Find(position,alternative,out bool success,jumpDown);
         if(success){brain.Shelter=alternate;brain.Path=path;goal=alternative;break;}
        }
       } else {
@@ -89,7 +99,9 @@ namespace AvH {
      Reload=player.Faction==Faction.Human&&player.Ammo==0,RoundId=state.Round});
    }
   }
-  const float ArrivalRadius=1.6f,MinArrivalInput=.25f,CornerRadius=.6f;
+  const float ArrivalRadius=1.6f,MinArrivalInput=.25f,CornerRadius=.6f,AvoidSeconds=6;
+  /// <summary>Extra route cost (metres) for each cell inside a bot's avoided choke point.</summary>
+  public const float AvoidRadius=3,AvoidPenalty=40;
   static Vector3 V(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   static Vector3 Flat(Vector3 p)=>new Vector3(p.x,0,p.z);
  }
@@ -103,6 +115,7 @@ namespace AvH {
   readonly SortedSet<(float score,int id)> open=new SortedSet<(float,int)>();
   public void BeginStep(float seconds){sinceBuild+=seconds;rebuiltThisStep=false;thisStep=0;}
   public void Invalidate(){rebuildRequested=true;}
+  public void Reset(){built=false;rebuildRequested=false;}
   static bool Terrain(Collider c)=>!(c is CharacterController)&&c.GetComponentInParent<CharacterController>()==null;
   void Build() {
    builds++;maxPerStep=Math.Max(maxPerStep,++thisStep);
@@ -160,7 +173,7 @@ namespace AvH {
    var direction=(end-anchor).normalized;float lift=sloped?.75f:.42f;
    return !Physics.CapsuleCastAll(anchor+Vector3.up*lift,anchor+Vector3.up*1.42f,.33f,direction,Vector3.Distance(anchor,end),~0,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
   }
-  public List<Vector3> Find(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false) {
+  public List<Vector3> Find(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null) {
    if(!rebuiltThisStep && (!built || rebuildRequested&&sinceBuild>=1))Build();
    int start=Nearest(from),goal=Nearest(to);var result=new List<Vector3>();reachable=false;if(start<0||goal<0)return result;
    for(int i=0;i<distance.Length;i++){distance[i]=float.MaxValue;parent[i]=-1;closed[i]=false;}open.Clear();
@@ -176,12 +189,14 @@ namespace AvH {
       // Permit a one-way walk-off only when the full body can clear the edge at roof height.
       if(points[id].y-points[next].y<.4f||!ClearDrop(points[id],points[next]))continue;
      } else if(dx!=0&&dz!=0&&(!walkable[z*Size+nx]||!walkable[nz*Size+x]))continue;
-     float cost=distance[id]+Vector3.Distance(points[id],points[next]);if(cost>=distance[next])continue;
+     float cost=distance[id]+Vector3.Distance(points[id],points[next]);
+     if(avoid.HasValue&&(points[next]-avoid.Value).sqrMagnitude<BotDirector.AvoidRadius*BotDirector.AvoidRadius)cost+=BotDirector.AvoidPenalty;
+     if(cost>=distance[next])continue;
      distance[next]=cost;parent[next]=id;open.Add((cost+Vector3.Distance(points[next],points[goal]),next));
     }
    }
    reachable=start==goal||parent[goal]>=0;
-   if(!reachable&&!allowDrop)return Find(from,to,out reachable,true);
+   if(!reachable&&!allowDrop)return Find(from,to,out reachable,true,avoid);
    if(!reachable)goal=nearestReachable;
    for(int id=goal;id!=start;id=parent[id]){if(id<0)return new List<Vector3>();result.Add(points[id]);}result.Reverse();return result;
   }
