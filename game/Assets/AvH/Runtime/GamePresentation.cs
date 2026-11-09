@@ -133,7 +133,10 @@ namespace AvH {
    // Spring follow softens steps and landings; spawns and recovery teleports snap.
    if(!following||(target-follow).sqrMagnitude>9){follow=target;followVelocity=Vector3.zero;following=true;}
    else follow=Vector3.SmoothDamp(follow,target,ref followVelocity,.07f,Mathf.Infinity,Time.unscaledDeltaTime);
-   target=follow;
+   // Landing dip springs back; a launch (our body tumbling) widens the view for a moment.
+   landDip=Mathf.MoveTowards(landDip,0,Time.unscaledDeltaTime*.9f);target=follow+Vector3.down*Mathf.Sin(Mathf.Min(1,landDip/.32f)*Mathf.PI*.5f)*landDip;
+   var anim=session.PlayerTransform(network.LocalSlot).GetComponent<CharacterAnimator>();bool launched=anim!=null&&anim.Observe().Tumbling;
+   fovPunch=Mathf.MoveTowards(fovPunch,launched?1:0,Time.unscaledDeltaTime*(launched?6:2));view.fieldOfView=BaseFieldOfView+7*Mathf.SmoothStep(0,1,fovPunch);
    var rotation=Quaternion.Euler(pitch,yaw,0);
    var preferred=new Vector3(.6f,.3f,-5.5f);float length=preferred.magnitude;
    var chosen=preferred;float preferredClear=ClearDistance(target,rotation*preferred);
@@ -159,16 +162,18 @@ namespace AvH {
    view.transform.rotation=look*feel.Shake();CameraShakeAngle=feel.LastShakeAngle;
   }
   // ---------- hit marker: the shooter's own confirmation, as shooters do it ----------
-  int markerSeen=-1;float markerAge=9;bool markerFriend;
+  int markerSeen=-1;float markerAge=9;bool markerFriend;float landDip,fovPunch;
   /// <summary>Age (s) of the newest hit marker and whether it was a friend (for tests).</summary>
   public (float age,bool friend) HitMarker=>(markerAge,markerFriend);
-  public const float HitMarkerSeconds=.22f;
+  public const float HitMarkerSeconds=.22f,BaseFieldOfView=65;
   void DrawHitMarker(SessionState state,float w,float h) {
    if(Event.current.type==EventType.Layout){
     int newest=markerSeen;
     foreach(var e in state.Events??new FeelEvent[0]) {
      if(e.Id<=markerSeen)continue;newest=Mathf.Max(newest,e.Id);
-     if(markerSeen>=0&&e.Actor==network.LocalSlot&&(e.Kind==FeelEventKind.Stagger||e.Kind==FeelEventKind.Shoved||e.Kind==FeelEventKind.AttackHit)){markerAge=0;markerFriend=e.Kind==FeelEventKind.Shoved;}
+     if(markerSeen>=0&&e.Actor==network.LocalSlot&&(e.Kind==FeelEventKind.Stagger||e.Kind==FeelEventKind.Shoved||e.Kind==FeelEventKind.AttackHit)){if(markerAge>.06f)session.Audio.Play("confirm",view.transform.position,markerFriend?.8f:1,e.Kind==FeelEventKind.Shoved?.85f:1);markerAge=0;markerFriend=e.Kind==FeelEventKind.Shoved;}
+     // A hard landing of our own body dips the camera a little.
+     if(markerSeen>=0&&e.Kind==FeelEventKind.Landing&&e.Actor==network.LocalSlot)landDip=Mathf.Max(landDip,.12f+.2f*e.Strength);
     }
     markerSeen=Mathf.Max(markerSeen<0?newest:markerSeen,newest);markerAge+=Time.unscaledDeltaTime;
    }

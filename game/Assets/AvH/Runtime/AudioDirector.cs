@@ -58,6 +58,7 @@ namespace AvH {
     case "reload":return new Profile(6,.6f,1.5f,22);
     case "stagger":return new Profile(6,.55f,2,30);
     case "pop":return new Profile(5,.45f,1.5f,28);
+    case "confirm":return new Profile(9,.5f,6,40);
     case "punch":return new Profile(8,.95f,2.5f,38);
     case "punch-whiff":return new Profile(4,.45f,1.5f,24);
     case "cushion":return new Profile(5,.6f,1.5f,26);

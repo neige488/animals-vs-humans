@@ -32,6 +32,7 @@ namespace AvH {
    new SoundEntry("disc-bounce",SoundOrigin.Synthesized),
    new SoundEntry("gust",SoundOrigin.Synthesized),
    new SoundEntry("cushion",SoundOrigin.Synthesized),
+   new SoundEntry("confirm",SoundOrigin.Synthesized),
    new SoundEntry("prop-knock",SoundOrigin.Synthesized),
    new SoundEntry("snarl",SoundOrigin.Owned,"SFX_Bear_Calm"),
    new SoundEntry("growl-bear",SoundOrigin.Owned,"SFX_Bear_Growl_2"),

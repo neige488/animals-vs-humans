@@ -21,6 +21,7 @@ namespace AvH {
    if(cue=="land")return Thump(cue,.22f,90,.8f);
    if(cue=="prop-knock")return Thump(cue,.14f,210,1.1f);
    if(cue=="hit")return Hit();
+   if(cue=="confirm")return Confirm();
    if(cue=="swing")return Whoosh();
    if(cue=="transform")return Sweep(cue,.45f,300,1400,true);
    if(cue=="stagger")return Sweep(cue,.5f,700,180,false);
@@ -78,6 +79,12 @@ namespace AvH {
    int count=(int)(Rate*seconds);var s=new float[count];var random=new System.Random(name.Length*31);float phase=0,low=0;
    for(int i=0;i<count;i++){float t=(float)i/count;phase+=hz*(1-t*.6f)*Mathf.PI*2/Rate;low+=((float)random.NextDouble()*2-1-low)*.15f;s[i]=(Mathf.Sin(phase)*.7f+low*noise*2)*Envelope(t,.02f,9)*.8f;}
    return Clip(name,s);
+  }
+  // The shooter's hit confirm: two bright ticks, short enough to stack under rapid fire.
+  static AudioClip Confirm() {
+   int count=(int)(Rate*.07f);var s=new float[count];
+   for(int i=0;i<count;i++){float t=(float)i/Rate;float a=t<.03f?Mathf.Sin(t*2400*Mathf.PI*2)*(1-t/.03f):0,b=t>=.035f?Mathf.Sin(t*3200*Mathf.PI*2)*(1-(t-.035f)/.035f):0;s[i]=(a+b)*.55f;}
+   return Clip("confirm",s);
   }
   static AudioClip Hit() {
    int count=(int)(Rate*.25f);var s=new float[count];var random=new System.Random(5);float phase=0;

@@ -46,6 +46,7 @@ EditMode 테스트 `AudioSourcesTests`가 이 표를 다시 읽어 (1) 커밋된
 | (합성) | disc-bounce | 합성 | 고무 원반 튕김 `SoundSynth.Thump` | - | 자체 생성 | 320Hz 둔탁음, 0.1초 |
 | (합성) | gust | 합성 | 송풍기 바람 `SoundSynth.Gust` | - | 자체 생성 | 대역 노이즈 + 180Hz 모터, 0.25초 |
 | (합성) | cushion | 합성 | 쿠션 팔 `SoundSynth.Cushion` | - | 자체 생성 | 95Hz '퍽' + 공기, 0.22초 |
+| (합성) | confirm | 합성 | 명중 확인음 `SoundSynth.Confirm` (쏜 사람에게만) | - | 자체 생성 | 2.4kHz·3.2kHz 짧은 '틱' 두 번, 0.07초 |
 | (합성) | pop | 합성 | 코르크 명중음 `SoundSynth.CorkKnock` (2026-11-09 버블 파열음 대체) | - | 자체 생성 | 22050Hz, 980/1530Hz 나무 '톡' + 150Hz 둔탁음, 0.12초 |
 
 ## 가져오기 설정
