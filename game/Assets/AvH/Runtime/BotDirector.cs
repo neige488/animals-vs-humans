@@ -83,6 +83,14 @@ namespace AvH {
     }
     if(brain.Stuck>.8f)move+=Vector3.Cross(move,Vector3.up)*(player.Slot%2==0?1:-1);
     move=Vector3.ClampMagnitude(move,1);
+    // Crowd spacing and stuck side-steps must not carry a bot over a bottomless edge (sky bridges, the chasm, the map rim).
+    // A route that plans a jump down keeps it; otherwise the bot heads straight for its waypoint, or stops.
+    // Judged from the floor under the bot, not its body: a bot in mid-jump has not planned a drop.
+    float floor=FloorBelow(position);bool plannedDrop=false;for(int k=brain.Cursor;k<Mathf.Min(brain.Path.Count,brain.Cursor+3);k++)plannedDrop|=floor-brain.Path[k].y>.6f;
+    if(!plannedDrop&&!FloorAhead(position,move)) {
+     var heading=brain.Cursor<brain.Path.Count?Flat(brain.Path[brain.Cursor]-position):Vector3.zero;
+     move=heading.sqrMagnitude>.01f&&FloorAhead(position,heading.normalized*move.magnitude)?heading.normalized*move.magnitude:Vector3.zero;
+    }
     Vector3 aim=target==null?move:V(target.Position)-position;
     float yaw=Mathf.Atan2(aim.x,aim.z)*Mathf.Rad2Deg,pitch=-Mathf.Atan2(aim.y,Flat(aim).magnitude)*Mathf.Rad2Deg;
     bool visible=target!=null;
@@ -98,6 +106,20 @@ namespace AvH {
      Jump=brain.Stuck>1.5f,Attack=target!=null&&canFire&&distance<(player.Faction==Faction.Human?Tools.Range(player.Tool,rules):CombatRules.MeleeDistance-.15f),
      Reload=player.Faction==Faction.Human&&Tools.UsesAmmo(player.Tool)&&player.Ammo==0,RoundId=state.Round});
    }
+  }
+  static float FloorBelow(Vector3 position) {
+   float best=float.NegativeInfinity;
+   foreach(var hit in Physics.RaycastAll(position+Vector3.up*.3f,Vector3.down,6,~0,QueryTriggerInteraction.Ignore))
+    if(!(hit.collider is CharacterController)&&hit.collider.GetComponentInParent<CharacterController>()==null)best=Mathf.Max(best,hit.point.y);
+   return float.IsNegativeInfinity(best)?position.y:best;
+  }
+  /// <summary>True when a body taking this step still lands on a floor (a ledge up to 6 m is fine; a void is not).</summary>
+  static bool FloorAhead(Vector3 position,Vector3 move) {
+   if(move.sqrMagnitude<.0025f)return true;
+   var probe=position+Vector3.up*.6f+Flat(move).normalized*.75f;
+   foreach(var hit in Physics.RaycastAll(probe,Vector3.down,6.6f,~0,QueryTriggerInteraction.Ignore))
+    if(!(hit.collider is CharacterController)&&hit.collider.GetComponentInParent<CharacterController>()==null)return true;
+   return false;
   }
   const float ArrivalRadius=1.6f,MinArrivalInput=.25f,CornerRadius=.6f,AvoidSeconds=6;
   /// <summary>Extra route cost (metres) for each cell inside a bot's avoided choke point.</summary>

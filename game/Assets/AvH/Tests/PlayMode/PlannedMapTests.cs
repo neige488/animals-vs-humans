@@ -99,6 +99,23 @@ namespace AvH.Tests {
    yield return null;
   }
 
+  // Bots walk the narrow sky bridges without stepping off on their own: every fall in a bot-only chase is someone's shove.
+  [UnityTest] public IEnumerator SkyBotsDoNotWalkOffTheBridgesOnTheirOwn() {
+   var root=new GameObject("sky bots");
+   try {
+    var game=root.AddComponent<UnityPlaytestSession>();game.AutomaticStep=false;
+    game.StartSolo("관찰",7,TempSettings(),GameMaps.Sky);yield return null;
+    int unshoved=0,lastId=0;var fallers=new List<string>();
+    for(int i=0;i<6000;i++) {
+     game.Step(.02f);if(i%50==0)yield return null;
+     foreach(var e in game.Observe().Events.Where(e=>e.Id>lastId)){lastId=e.Id;if(e.Kind==FeelEventKind.FellOff&&e.Actor<0){unshoved++;fallers.Add($"slot {e.Target} @ {V(e.Position)}");}}
+     if(game.Observe().Phase==RoundPhase.Results)break;
+    }
+    Assert.AreEqual(0,unshoved,"humans fell without a shove: "+string.Join(", ",fallers));
+   } finally {Object.Destroy(root);}
+   yield return null;
+  }
+
   [UnityTest] public IEnumerator FallsElsewhereOnlyReturnTheBody() {
    var root=new GameObject("ruins fall");
    try {
