@@ -74,7 +74,7 @@ namespace AvH {
    inputs[slot]=input;
    if(slot==0&&FishBridge!=null&&!IsRemote)FishBridge.QueueInput(slot,input);
   }
-  void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
+  void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);}else if(AutomaticStep && Session!=null) Step(Time.deltaTime); if(Session!=null)PresentTools(Observe()); }
   /// <summary>Advances the host simulation, or on a remote view advances frame playback by the same time.</summary>
   public void Step(float seconds) {
    if(remoteSnapshot!=null){InterpolateRemote(seconds);return;}
@@ -91,7 +91,7 @@ namespace AvH {
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
     if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; }
-    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId)ChangeVisual(before,state,i,body.transform.position);
+    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId||p.Faction==Faction.Human&&p.Tool!=before.Players[i].Tool)ChangeVisual(before,state,i,body.transform.position);
     if(FishControls(i)) continue;
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
@@ -185,7 +185,7 @@ namespace AvH {
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   void RefreshVisual(int slot,Faction faction,bool transformation=false) {
    var body=bodies[slot].transform;var parent=body.Find("Predicted presentation")??body;
-   if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Gun(parent):null;
+   if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Tool(parent,Observe().Players[slot].Tool):null;
    var old=parent.Find("Visual");
    if(old!=null){if(transformation){old.name="Transform ghost";old.gameObject.AddComponent<TransformGhost>();}else{old.gameObject.SetActive(false);Destroy(old.gameObject);}}
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");

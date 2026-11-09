@@ -95,8 +95,8 @@ namespace AvH {
     var local=Quaternion.Euler(0,-yaw,0)*move;
     game.SubmitInput(player.Slot,new PlayerInput {Right=local.x,Forward=local.z,Yaw=yaw,
      Pitch=pitch,
-     Jump=brain.Stuck>1.5f,Attack=target!=null&&canFire&&distance<(player.Faction==Faction.Human?rules.BubbleRange:CombatRules.MeleeDistance-.15f),
-     Reload=player.Faction==Faction.Human&&player.Ammo==0,RoundId=state.Round});
+     Jump=brain.Stuck>1.5f,Attack=target!=null&&canFire&&distance<(player.Faction==Faction.Human?Tools.Range(player.Tool,rules):CombatRules.MeleeDistance-.15f),
+     Reload=player.Faction==Faction.Human&&Tools.UsesAmmo(player.Tool)&&player.Ammo==0,RoundId=state.Round});
    }
   }
   const float ArrivalRadius=1.6f,MinArrivalInput=.25f,CornerRadius=.6f,AvoidSeconds=6;

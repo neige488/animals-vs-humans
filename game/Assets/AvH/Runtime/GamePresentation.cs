@@ -202,6 +202,9 @@ namespace AvH {
     GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
    }
    if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
+   // The tool drawn for this round, announced while everyone gets ready.
+   var mine=state.Players[network.LocalSlot];
+   if(state.Phase==RoundPhase.Preparation&&mine.Faction==Faction.Human)GUI.Label(new Rect(w/2-260,118,520,40),$"이번 도구: {Tools.Name(mine.Tool)}!",title);
    hitFeed.Draw(view,session.PlayerTransform,network.LocalSlot);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
    GUI.Label(new Rect(w/2-275,h-85,550,35),$"{state.Players[network.LocalSlot].CharacterName} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · {GameMaps.Name(state.Map)} · 라운드 {state.Round}",label);
@@ -226,7 +229,10 @@ namespace AvH {
   }
   static string WeaponLabel(PlayerState player,int magazine) {
    if(player.Faction==Faction.Animal)return player.AttackGraceRemaining>0?$"공격 대기 {player.AttackGraceRemaining:F1}초":"근접 공격";
-   return player.ReloadRemaining>0?$"재장전 중 ({player.ReloadRemaining:F1}초)":$"코르크 {player.Ammo} / {magazine} (예비 ∞)";
+   var name=Tools.Name(player.Tool);
+   if(player.ReloadRemaining>0)return $"{name} 재장전 중 ({player.ReloadRemaining:F1}초)";
+   if(Tools.UsesAmmo(player.Tool))return $"{name} {player.Ammo} / {magazine} (예비 ∞)";
+   return player.FireCooldownRemaining>0?$"{name} 충전 중":$"{name} 준비됨";
   }
   void OnDestroy(){RestoreLocalRenderers();if(ownsView&&view!=null)Destroy(view.gameObject);if(ownedSun!=null)Destroy(ownedSun.gameObject);if(rosterHud!=null)Destroy(rosterHud.gameObject);Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
  }

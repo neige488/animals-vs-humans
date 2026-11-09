@@ -10,6 +10,7 @@ namespace AvH {
   readonly Dictionary<int,GameObject> remoteBursts=new Dictionary<int,GameObject>();
   // Last seen flight direction of each remote shot, so its impact can bounce the cork back the right way.
   readonly Dictionary<int,Vector3> remoteShotDirections=new Dictionary<int,Vector3>();
+  readonly Dictionary<int,ToolKind> remoteShotKinds=new Dictionary<int,ToolKind>();
   readonly HashSet<int> seenRemoteImpacts=new HashSet<int>();
   readonly Queue<int> recentRemoteImpacts=new Queue<int>();
   public bool IsRemote=>remoteSnapshot!=null;
@@ -31,7 +32,7 @@ namespace AvH {
    // The host's round map: rebuilt before any body is placed in it.
    if(state.Map!=builtMap)BuildMap(state.Map);
    foreach(var p in state.Players){
-    if(old==null||old.Players[p.Slot].Faction!=p.Faction||old.Players[p.Slot].CharacterId!=p.CharacterId)ChangeVisual(immediate?null:old,state,p.Slot,ToVector(p.Position));
+    if(old==null||old.Players[p.Slot].Faction!=p.Faction||old.Players[p.Slot].CharacterId!=p.CharacterId||p.Faction==Faction.Human&&old.Players[p.Slot].Tool!=p.Tool)ChangeVisual(immediate?null:old,state,p.Slot,ToVector(p.Position));
     // With host frames flowing, the frames themselves show warps at the right moment; snapshots only reset on joins and new rounds.
     bool reset=immediate||old==null||state.Round!=old.Round;
     if(!FishControls(p.Slot)&&(reset||remoteMotion.Count==0&&Vector3.Distance(bodies[p.Slot].transform.position,ToVector(p.Position))>NetworkBodyMotion.TeleportDistance)){Warp(bodies[p.Slot],ToVector(p.Position));snapRemoteFacing[p.Slot]=true;}
@@ -89,23 +90,23 @@ namespace AvH {
    var incoming=new HashSet<int>(visual.Bubbles.Select(b=>b.Id));
    foreach(int id in remoteBubbles.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBubbles[id]);remoteBubbles.Remove(id);}
    foreach(var bubble in visual.Bubbles){GameObject obj;if(!remoteBubbles.TryGetValue(bubble.Id,out obj)){
-    obj=Effects.Cork(transform);obj.name="Remote Bubble";remoteBubbles[bubble.Id]=obj;
-    if(liveEffects&&bubble.OwnerSlot>=0&&bubble.OwnerSlot<bodies.Count){var direction=ToVector(bubble.Direction);var muzzle=bodies[bubble.OwnerSlot].transform.position+Vector3.up*1.3f+Vector3.Cross(Vector3.up,direction).normalized*.1f+direction*.6f;Effects.Emit(muzzle,MuzzlePuff,5,.9f,false);Audio.Play("fire",muzzle);}
+    var kind=(ToolKind)bubble.Kind;obj=kind==ToolKind.Disc?Effects.Disc(transform):Effects.Cork(transform);obj.name="Remote Bubble";remoteBubbles[bubble.Id]=obj;remoteShotKinds[bubble.Id]=kind;
+    if(liveEffects&&bubble.OwnerSlot>=0&&bubble.OwnerSlot<bodies.Count){var direction=ToVector(bubble.Direction);var muzzle=bodies[bubble.OwnerSlot].transform.position+Vector3.up*1.3f+Vector3.Cross(Vector3.up,direction).normalized*.1f+direction*.6f;Effects.Emit(muzzle,kind==ToolKind.Disc?DiscChips:MuzzlePuff,5,.9f,false);Audio.Play(kind==ToolKind.Disc?"disc":"fire",muzzle);}
     if(bubble.OwnerSlot>=0&&bubble.OwnerSlot<guns.Length&&guns[bubble.OwnerSlot]!=null&&ToVector(bubble.Direction).sqrMagnitude>.001f){var direction=ToVector(bubble.Direction);guns[bubble.OwnerSlot].GetComponent<BubbleGunPose>().SetAim(Mathf.Atan2(direction.x,direction.z)*Mathf.Rad2Deg,-Mathf.Atan2(direction.y,new Vector2(direction.x,direction.z).magnitude)*Mathf.Rad2Deg);}
    }obj.transform.position=ToVector(bubble.Position);remoteShotDirections[bubble.Id]=ToVector(bubble.Direction);}
-   foreach(int id in remoteShotDirections.Keys.ToArray())if(!incoming.Contains(id)&&remoteShotDirections.Count>64)remoteShotDirections.Remove(id);
+   foreach(int id in remoteShotDirections.Keys.ToArray())if(!incoming.Contains(id)&&remoteShotDirections.Count>64){remoteShotDirections.Remove(id);remoteShotKinds.Remove(id);}
    ApplyRemoteBursts(visual,liveEffects);
   }
   void ApplyRemoteBursts(NetworkVisualState visual,bool liveEffects) {
    var incoming=new HashSet<int>(visual.Bursts.Select(b=>b.Id));
    foreach(int id in remoteBursts.Keys.ToArray())if(!incoming.Contains(id)){Destroy(remoteBursts[id]);remoteBursts.Remove(id);}
-   foreach(var burst in visual.Bursts){GameObject obj;if(!remoteBursts.TryGetValue(burst.Id,out obj)){obj=new GameObject("Remote impact");obj.transform.SetParent(transform,false);remoteBursts[burst.Id]=obj;if(seenRemoteImpacts.Add(burst.Id)){recentRemoteImpacts.Enqueue(burst.Id);if(recentRemoteImpacts.Count>256)seenRemoteImpacts.Remove(recentRemoteImpacts.Dequeue());if(liveEffects){remoteShotDirections.TryGetValue(burst.Id,out var direction);CorkImpact(ToVector(burst.Position),direction);}}}
+   foreach(var burst in visual.Bursts){GameObject obj;if(!remoteBursts.TryGetValue(burst.Id,out obj)){obj=new GameObject("Remote impact");obj.transform.SetParent(transform,false);remoteBursts[burst.Id]=obj;if(seenRemoteImpacts.Add(burst.Id)){recentRemoteImpacts.Enqueue(burst.Id);if(recentRemoteImpacts.Count>256)seenRemoteImpacts.Remove(recentRemoteImpacts.Dequeue());if(liveEffects){remoteShotDirections.TryGetValue(burst.Id,out var direction);remoteShotKinds.TryGetValue(burst.Id,out var kind);CorkImpact(ToVector(burst.Position),direction,kind);}}}
     obj.transform.position=ToVector(burst.Position);
    }
   }
   public SettingsState ObserveActiveSettings()=>remoteVisuals==null?Session.ObserveSettings():new SettingsState{Current=remoteVisuals.CurrentRules.Copy(),Pending=remoteVisuals.HasPending?remoteVisuals.PendingRules.Copy():null,Version=remoteVisuals.SettingsVersion};
   public void ResetSession() {
-   System.Array.Clear(fishMotors,0,fishMotors.Length);AutomaticStep=true;builtMap=-1;returns=TownReturns;props=null;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();remoteShotDirections.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
+   System.Array.Clear(fishMotors,0,fishMotors.Length);AutomaticStep=true;builtMap=-1;returns=TownReturns;props=null;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();remoteShotDirections.Clear();remoteShotKinds.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
    seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;ForgetAudio();System.Array.Clear(presentedBirths,0,presentedBirths.Length);ForgetPresentedEvents();
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
    System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);

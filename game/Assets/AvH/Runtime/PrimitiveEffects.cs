@@ -18,7 +18,9 @@ namespace AvH {
   /// The cork popper: an orange workshop tube taped to a bike-pump chamber, with a cork waiting in the muzzle.
   /// The object keeps the original emitter name and pose so aiming and the hand grip are unchanged.
   /// </summary>
-  public Transform Gun(Transform owner) {
+  public Transform Gun(Transform owner)=>Tool(owner,ToolKind.Cork);
+  public Transform Tool(Transform owner,ToolKind kind) {
+   if(kind!=ToolKind.Cork)return Workshop(owner,kind);
    if(gunBody==null){gunBody=PrototypeVillage.Material(new Color(.93f,.45f,.12f));gunTrim=PrototypeVillage.Material(new Color(.2f,.55f,.35f));gunWood=PrototypeVillage.Material(new Color(.55f,.36f,.2f));gunTape=PrototypeVillage.Material(new Color(.62f,.64f,.66f));}
    var gun=new GameObject("Bubble emitter").transform;gun.SetParent(owner,false);gun.localPosition=new Vector3(.1f,1.3f,.3f);
    GunPart(gun,PrimitiveType.Cylinder,new Vector3(0,.01f,.24f),new Vector3(.085f,.2f,.085f),Quaternion.Euler(90,0,0),gunBody);   // tube
@@ -31,6 +33,63 @@ namespace AvH {
    GunPart(gun,PrimitiveType.Cube,new Vector3(0,-.12f,-.03f),new Vector3(.07f,.2f,.09f),Quaternion.Euler(-12,0,0),gunWood);         // grip
    gun.gameObject.AddComponent<BubbleGunPose>();
    return gun;
+  }
+  Material Paint(Color c){var key=c.GetHashCode();if(!paints.TryGetValue(key,out var m)){m=PrototypeVillage.Material(c);paints[key]=m;}return m;}
+  readonly Dictionary<int,Material> paints=new Dictionary<int,Material>();
+  static readonly Color Red=new Color(.86f,.14f,.12f),Yellow=new Color(.98f,.78f,.15f),Leaf=new Color(.25f,.62f,.3f),Steel=new Color(.66f,.68f,.7f),Pink=new Color(.98f,.55f,.72f),Wood=new Color(.55f,.36f,.2f),Orange=new Color(.95f,.5f,.12f);
+  /// <summary>The other workshop tools. Same root name and pose component as the popper, so aim and grip work unchanged.</summary>
+  Transform Workshop(Transform owner,ToolKind kind) {
+   var tool=new GameObject("Bubble emitter").transform;tool.SetParent(owner,false);tool.localPosition=new Vector3(.1f,1.3f,.3f);
+   var anim=tool.gameObject.AddComponent<ToolAnimator>();anim.Kind=kind;
+   GunPart(tool,PrimitiveType.Cube,new Vector3(0,-.12f,-.03f),new Vector3(.07f,.2f,.09f),Quaternion.Euler(-12,0,0),Paint(Wood)); // grip
+   switch(kind) {
+    case ToolKind.Glove: {
+     GunPart(tool,PrimitiveType.Cube,new Vector3(0,0,.02f),new Vector3(.12f,.12f,.22f),Quaternion.identity,Paint(Steel));
+     var spring=new GameObject("Spring").transform;spring.SetParent(tool,false);spring.localPosition=new Vector3(0,0,.13f);anim.Spring=spring;
+     for(int i=0;i<5;i++)GunPart(spring,PrimitiveType.Cylinder,new Vector3(0,0,i*.05f),new Vector3(.1f,.008f,.1f),Quaternion.Euler(90,0,0),Paint(Steel));
+     var fist=new GameObject("Glove fist").transform;fist.SetParent(tool,false);fist.localPosition=new Vector3(0,0,.42f);anim.Head=fist;anim.Rest=fist.localPosition;anim.Reach=1.1f;
+     GunPart(fist,PrimitiveType.Sphere,Vector3.zero,new Vector3(.26f,.24f,.3f),Quaternion.identity,Paint(Red));
+     GunPart(fist,PrimitiveType.Sphere,new Vector3(.12f,.03f,-.02f),new Vector3(.1f,.1f,.14f),Quaternion.identity,Paint(Red));
+     GunPart(fist,PrimitiveType.Cylinder,new Vector3(0,0,-.16f),new Vector3(.2f,.03f,.2f),Quaternion.Euler(90,0,0),Paint(Color.white));
+     break;}
+    case ToolKind.Disc:
+     GunPart(tool,PrimitiveType.Cube,new Vector3(0,0,.15f),new Vector3(.17f,.14f,.42f),Quaternion.identity,Paint(Yellow));
+     GunPart(tool,PrimitiveType.Cube,new Vector3(0,0,.37f),new Vector3(.19f,.05f,.04f),Quaternion.identity,Paint(new Color(.15f,.15f,.15f)));
+     for(int i=0;i<3;i++)GunPart(tool,PrimitiveType.Cylinder,new Vector3(0,.09f+i*.025f,.05f),new Vector3(.16f,.01f,.16f),Quaternion.identity,Paint(Red));
+     break;
+    case ToolKind.Blower:
+     GunPart(tool,PrimitiveType.Cube,new Vector3(0,.02f,-.05f),new Vector3(.2f,.2f,.26f),Quaternion.identity,Paint(Leaf));
+     GunPart(tool,PrimitiveType.Cylinder,new Vector3(0,-.02f,.32f),new Vector3(.09f,.3f,.09f),Quaternion.Euler(95,0,0),Paint(Orange));
+     GunPart(tool,PrimitiveType.Cylinder,new Vector3(0,-.05f,.62f),new Vector3(.12f,.03f,.12f),Quaternion.Euler(95,0,0),Paint(new Color(.15f,.15f,.15f)));
+     break;
+    case ToolKind.Cushion: {
+     GunPart(tool,PrimitiveType.Cube,new Vector3(0,0,0),new Vector3(.16f,.14f,.18f),Quaternion.identity,Paint(Steel));
+     var arm=new GameObject("Cushion arm").transform;arm.SetParent(tool,false);arm.localPosition=new Vector3(0,0,.1f);anim.Spring=arm;
+     GunPart(arm,PrimitiveType.Cube,new Vector3(0,0,.1f),new Vector3(.05f,.05f,.2f),Quaternion.identity,Paint(Wood));
+     var pad=new GameObject("Cushion").transform;pad.SetParent(tool,false);pad.localPosition=new Vector3(0,0,.34f);anim.Head=pad;anim.Rest=pad.localPosition;anim.Reach=1.3f;anim.Grow=2.2f;
+     GunPart(pad,PrimitiveType.Cube,Vector3.zero,new Vector3(.34f,.28f,.1f),Quaternion.identity,Paint(Pink));
+     break;}
+   }
+   tool.gameObject.AddComponent<BubbleGunPose>();
+   return tool;
+  }
+  /// <summary>A rubber disc: flat red puck with a white ring, spinning flat as it flies.</summary>
+  public GameObject Disc(Transform parent) {
+   Initialize();var go=GameObject.CreatePrimitive(PrimitiveType.Cylinder);go.name="Disc";go.transform.SetParent(parent,false);go.transform.localScale=new Vector3(.32f,.025f,.32f);
+   var collider=go.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
+   var renderer=go.GetComponent<Renderer>();renderer.sharedMaterial=Paint(Red);renderer.shadowCastingMode=ShadowCastingMode.Off;
+   var streak=new GameObject("Disc trail");streak.transform.SetParent(go.transform,false);
+   var trail=streak.AddComponent<TrailRenderer>();trail.sharedMaterial=material;trail.time=.18f;trail.minVertexDistance=.05f;trail.widthMultiplier=.12f;
+   trail.widthCurve=AnimationCurve.Linear(0,1,1,0);trail.startColor=new Color(1,.5f,.45f,.7f);trail.endColor=new Color(1,.5f,.45f,0);trail.shadowCastingMode=ShadowCastingMode.Off;trail.receiveShadows=false;
+   go.AddComponent<DiscSpin>();return go;
+  }
+  /// <summary>Particles thrown along a direction with some spread (gusts of paper and dust).</summary>
+  public void Spray(Vector3 origin,Vector3 direction,Color color,int count,float speed,float spread,float gravity=.4f) {
+   Initialize();count=count<=0?0:Mathf.Max(1,Mathf.RoundToInt(count*Mathf.Clamp01(Density)));direction=direction.normalized;
+   var side=Vector3.Cross(Vector3.up,direction).normalized;if(side.sqrMagnitude<.01f)side=Vector3.right;var up=Vector3.Cross(direction,side);
+   for(int i=0;i<count;i++){float a=(i*2.39996f+Time.time*7)%(Mathf.PI*2);float r=spread*Mathf.Sqrt(((i*37)%17)/17f);
+    var v=(direction+side*Mathf.Cos(a)*r+up*Mathf.Sin(a)*r).normalized*speed*(.7f+.3f*((i*13)%7)/7f);
+    Spawn(origin,v,color,.45f+(i%3)*.12f,.05f+(i%4)*.018f,gravity,false);}
   }
   Material CorkMaterial(){if(cork==null)cork=PrototypeVillage.Material(new Color(.8f,.62f,.4f));return cork;}
   /// <summary>
@@ -100,7 +159,7 @@ namespace AvH {
    }
   }
   static void Dispose(Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
-  void OnDestroy(){if(material!=null)Dispose(material);if(film!=null)Dispose(film);if(ringMesh!=null)Dispose(ringMesh);foreach(var m in new[]{gunBody,gunTrim,gunWood,gunTape,cork})if(m!=null)Dispose(m);}
+  void OnDestroy(){if(material!=null)Dispose(material);if(film!=null)Dispose(film);if(ringMesh!=null)Dispose(ringMesh);foreach(var m in new[]{gunBody,gunTrim,gunWood,gunTape,cork})if(m!=null)Dispose(m);foreach(var m in paints.Values)if(m!=null)Dispose(m);}
  }
  public sealed class BubbleMotion:MonoBehaviour {
   public float Radius=.3f;
@@ -127,6 +186,21 @@ namespace AvH {
     {next.y=hit.point.y+.03f;Velocity=new Vector3(Velocity.x*.6f,-Velocity.y*.45f,Velocity.z*.6f);}
    transform.position=next;transform.Rotate(spinAxis,720*dt*Mathf.Clamp01(Velocity.magnitude/3),Space.Self);
    if(age>Life-.25f)transform.localScale=new Vector3(.11f,.06f,.11f)*Mathf.Clamp01((Life-age)/.25f);
+  }
+ }
+ /// <summary>A disc spins flat around its own axis (presentation only).</summary>
+ public sealed class DiscSpin:MonoBehaviour {float spin;void LateUpdate(){spin+=Time.deltaTime*1400;transform.rotation=Quaternion.Euler(0,spin,0);}}
+ /// <summary>
+ /// Moves a tool's head out and back for one use (glove fist on its spring, cushion on its arm). Presentation only:
+ /// the session sets <see cref="Extension"/> 0..1 from the public tool timer, so host and guests show the same punch.
+ /// </summary>
+ public sealed class ToolAnimator:MonoBehaviour {
+  public ToolKind Kind;public Transform Head,Spring;public Vector3 Rest;public float Reach=1,Grow=1;
+  public float Extension {get;private set;}
+  public void SetExtension(float t) {
+   Extension=Mathf.Clamp01(t);if(Head==null)return;
+   Head.localPosition=Rest+Vector3.forward*Reach*Extension;Head.localScale=Vector3.one*Mathf.Lerp(1,Grow,Extension);
+   if(Spring!=null)Spring.localScale=new Vector3(1,1,1+Extension*Reach/.25f);
   }
  }
 }

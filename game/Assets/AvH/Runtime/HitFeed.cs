@@ -22,13 +22,13 @@ namespace AvH {
     if(e.Id<=lastId||(e.Kind!=FeelEventKind.Shoved&&e.Kind!=FeelEventKind.Stagger))continue;
     if(e.Actor<0||e.Actor>=state.Players.Length||e.Target<0||e.Target>=state.Players.Length)continue;
     bool friendly=e.Kind==FeelEventKind.Shoved;var shooter=state.Players[e.Actor];var target=state.Players[e.Target];
-    entries.Add(new Entry{Id=e.Id,Shooter=e.Actor,Target=e.Target,Friendly=friendly,Text=Describe(shooter.Nickname,target.Nickname,target.CharacterName,friendly)});
+    entries.Add(new Entry{Id=e.Id,Shooter=e.Actor,Target=e.Target,Friendly=friendly,Text=Describe(shooter.Nickname,target.Nickname,target.CharacterName,friendly,shooter.Tool)});
    }
    lastId=Mathf.Max(lastId,newest);
    while(entries.Count>12)entries.RemoveAt(0);
   }
-  /// <summary>"민지의 코르크 → 준호 (아군!)" / "민지의 코르크 → 여우".</summary>
-  public static string Describe(string shooter,string target,string targetCharacter,bool friendly)=>friendly?$"{shooter}의 코르크 → {target} (아군!)":$"{shooter}의 코르크 → {targetCharacter}";
+  /// <summary>"민지의 글러브 → 준호 (아군!)" / "민지의 코르크 → 여우".</summary>
+  public static string Describe(string shooter,string target,string targetCharacter,bool friendly,ToolKind tool=ToolKind.Cork)=>friendly?$"{shooter}의 {Tools.Short(tool)} → {target} (아군!)":$"{shooter}의 {Tools.Short(tool)} → {targetCharacter}";
   public void Reset(){entries.Clear();primed=false;lastId=0;}
 
   GUIStyle tag,line;
@@ -49,7 +49,7 @@ namespace AvH {
     Shadowed(new Rect(20,Screen.height-130-shown*24,520,24),e.Text,line,(e.Friendly?Friendly:Enemy)*new Color(1,1,1,alpha));
    }
   }
-  // The tag over a head keeps only the shooter: "민지의 코르크!".
+  // The tag over a head keeps only the shooter and tool: "민지의 글러브!".
   static string Short(string text){int arrow=text.IndexOf(" →");return arrow<0?text:text.Substring(0,arrow)+"!";}
   static void Shadowed(Rect r,string text,GUIStyle style,Color color) {
    var old=style.normal.textColor;style.normal.textColor=new Color(0,0,0,color.a*.75f);GUI.Label(new Rect(r.x+1.5f,r.y+1.5f,r.width,r.height),text,style);

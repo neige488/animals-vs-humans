@@ -161,7 +161,7 @@ namespace AvH.Tests {
     var after=game.Observe().Players[4];
     Assert.Greater(after.Position.Z-before.z,.5f,"the friend is pushed along the shot");
     Assert.AreEqual(Faction.Human,after.Faction);Assert.AreEqual(ActionPhase.None,after.Action,"no stun for friends");
-    Assert.AreEqual("창고의 코르크 → 봇 4 (아군!)",HitFeed.Describe("창고","봇 4","인간",true));
+    Assert.AreEqual("창고의 코르크 → 봇 4 (아군!)",HitFeed.Describe("창고","봇 4","인간",true,ToolKind.Cork));
     var feed=new HitFeed();var state=game.Observe();feed.Observe(new SessionState{Players=state.Players,Events=new FeelEvent[0]},.02f);feed.Observe(new SessionState{Players=state.Players,Events=new[]{shove}},.02f);
     Assert.AreEqual(1,feed.Entries.Count);Assert.IsTrue(feed.Entries[0].Friendly);StringAssert.Contains("아군",feed.Entries[0].Text);
     Assert.IsTrue(root.GetComponentsInChildren<Transform>().Any(t=>t.name=="Cork ricochet"),"the cork pings back off the friend");

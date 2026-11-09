@@ -6,18 +6,18 @@ namespace AvH {
  // UI edits are copies; the world keeps stepping while this panel is visible.
  public sealed class SettingsPanel {
   Vector2 scroll; int tab,species;
-  readonly string[] tabs={"라운드","이동","팝퍼","동물","타격","봇"};
+  readonly string[] tabs={"라운드","이동","도구","동물","타격","봇"};
   readonly string[][] keys={
    new[]{"Map","PreparationSeconds","RoundSeconds","ResultSeconds","InitialAnimals","InitialAttackGrace","TransformAttackGrace","FriendlyCollision","EnemyCollision"},
    new[]{"HumanSpeed","AnimalSpeed","HumanJump","AnimalJump","InertiaSeconds","AirControl"},
-   new[]{"Magazine","ReloadSeconds","BubbleRadius","BubbleSpeed","BubbleRange","BubbleLifetime","FireInterval","PushForce","FriendlyPush"},
+   new[]{"Tool","Magazine","ReloadSeconds","BubbleRadius","BubbleSpeed","BubbleRange","BubbleLifetime","FireInterval","PushForce","FriendlyPush"},
    new string[0],
    new[]{"AttackWindupSeconds","HitStopSeconds","HitStunSeconds"},
    new[]{"BotAimDelaySeconds","BotAimErrorDegrees"}};
   readonly string[][] names={
    new[]{"맵 (0 마을 · 1 2층 창고, 다음 라운드)","준비 시간 (초)","추격 시간 (초)","결과 표시 시간 (초)","최초 동물 수","최초 공격 유예 (초)","변신 공격 유예 (초)","아군 몸 충돌","진영 간 몸 충돌"},
    new[]{"인간 속도","동물 속도","인간 점프 높이","동물 점프 높이","관성 시간 (초, 0=즉시)","공중 조작 비율"},
-   new[]{"탄창","재장전 (초)","코르크 판정 반지름","코르크 속도","코르크 사거리","코르크 유지 (초)","발사 간격 (초)","밀치는 힘","코르크 아군 밀치기"},
+   new[]{"도구 (-1 무작위 · 0 코르크 · 1 글러브 · 2 원반 · 3 송풍기 · 4 쿠션, 다음 라운드)","탄창","재장전 (초)","코르크 판정 반지름","코르크 속도","코르크 사거리","코르크 유지 (초)","발사 간격 (초)","밀치는 힘","코르크 아군 밀치기"},
    new string[0],
    new[]{"공격 예비동작 (초, 0=클릭 즉시)","히트스톱 (초, 0=정지 없음)","피격 경직 (초, 0=경직 없음)"},
    new[]{"봇 조준 반응 지연 (초, 0=즉시)","봇 조준 오차 (도, 0=정조준)"}};
@@ -36,6 +36,7 @@ namespace AvH {
    if(key.EndsWith("Multiplier",StringComparison.Ordinal))return new Vector3(key.EndsWith("KnockbackMultiplier",StringComparison.Ordinal)?0:.05f,3,.05f);
    switch(key) {
     case "Map":return new Vector3(0,GameMaps.Count-1,1);
+    case "Tool":return new Vector3(Tools.Random,Tools.Count-1,1);
     case "PreparationSeconds":return new Vector3(1,120,1);
     case "RoundSeconds":return new Vector3(1,3600,1);
     case "ResultSeconds":return new Vector3(1,30,1);

@@ -11,6 +11,12 @@ namespace AvH {
    if(cue==null)return null;
    if(cue=="fire")return CorkShot();
    if(cue=="pop")return CorkKnock();
+   if(cue=="punch")return Punch(true);
+   if(cue=="punch-whiff")return Punch(false);
+   if(cue=="disc")return Sweep(cue,.18f,900,1600,false);
+   if(cue=="disc-bounce")return Thump(cue,.1f,320,.4f);
+   if(cue=="gust")return Gust();
+   if(cue=="cushion")return Cushion();
    if(cue.StartsWith("step",StringComparison.Ordinal))return Thump(cue,.09f,140,.5f);
    if(cue=="land")return Thump(cue,.22f,90,.8f);
    if(cue=="prop-knock")return Thump(cue,.14f,210,1.1f);
@@ -44,6 +50,29 @@ namespace AvH {
    for(int i=0;i<count;i++){float t=(float)i/Rate;a+=980*Mathf.PI*2/Rate;b+=1530*Mathf.PI*2/Rate;c+=(150-60*t/.12f)*Mathf.PI*2/Rate;
     s[i]=(Mathf.Sin(a)*.5f+Mathf.Sin(b)*.25f)*Mathf.Exp(-t*70)*Mathf.Min(1,t/.0015f)+Mathf.Sin(c)*.45f*Mathf.Exp(-t*30);}
    return Clip("pop",s);
+  }
+  // Spring glove: a rising "boing" (spring) and, on a hit, a fat thwack on top. 0.3 s.
+  static AudioClip Punch(bool hit) {
+   int count=(int)(Rate*.3f);var s=new float[count];var random=new System.Random(hit?13:17);float boing=0,body=0;
+   for(int i=0;i<count;i++){float t=(float)i/Rate;boing+=(220+260*t/.3f)*(1+.25f*Mathf.Sin(t*90))*Mathf.PI*2/Rate;
+    float v=Mathf.Sin(boing)*.35f*Mathf.Exp(-t*9);
+    if(hit&&t>.04f){float u=t-.04f;body+=(120-60*u)*Mathf.PI*2/Rate;float crack=u<.03f?((float)random.NextDouble()*2-1)*(1-u/.03f):0;v+=(Mathf.Sin(body)*.9f+crack*.7f)*Mathf.Exp(-u*14);}
+    s[i]=v;}
+   return Clip(hit?"punch":"punch-whiff",s);
+  }
+  // Leaf blower burst: band-passed noise with a motor hum. 0.25 s, voiced every gust.
+  static AudioClip Gust() {
+   int count=(int)(Rate*.25f);var s=new float[count];var random=new System.Random(37);float low=0,band=0,hum=0;
+   for(int i=0;i<count;i++){float t=(float)i/count;low+=(((float)random.NextDouble()*2-1)-low)*.35f;band+=(low-band)*.12f;hum+=180*Mathf.PI*2/Rate;
+    s[i]=((low-band)*1.4f+Mathf.Sin(hum)*.12f)*Mathf.Sin(Mathf.PI*t);}
+   return Clip("gust",s);
+  }
+  // Cushion pop: a soft low "fwump" with a little air. 0.22 s.
+  static AudioClip Cushion() {
+   int count=(int)(Rate*.22f);var s=new float[count];var random=new System.Random(41);float phase=0,low=0;
+   for(int i=0;i<count;i++){float t=(float)i/Rate;phase+=(95-40*t/.22f)*Mathf.PI*2/Rate;low+=(((float)random.NextDouble()*2-1)-low)*.08f;
+    s[i]=(Mathf.Sin(phase)*.8f+low*.6f)*Mathf.Min(1,t/.01f)*Mathf.Exp(-t*14);}
+   return Clip("cushion",s);
   }
   static AudioClip Thump(string name,float seconds,float hz,float noise) {
    int count=(int)(Rate*seconds);var s=new float[count];var random=new System.Random(name.Length*31);float phase=0,low=0;

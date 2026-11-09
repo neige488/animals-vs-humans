@@ -32,6 +32,10 @@ namespace AvH {
   public bool FriendlyCollision=true, EnemyCollision=true, FriendlyPush=true;
   // Map for the next round (GameMaps): 0 = village, 1 = two-storey warehouse.
   public int Map=GameMaps.Town;
+  /// <summary>Default for <see cref="Tool"/> in new settings. Test assemblies pin the cork so shot tests stay deterministic.</summary>
+  public static int DefaultTool=Tools.Random;
+  // Human tool each round (ToolKind): -1 = everybody draws one at random, 0..4 = everybody gets that one.
+  public int Tool=DefaultTool;
   public PlaytestValues Copy() => (PlaytestValues)MemberwiseClone();
  }
  public struct AnimalModifiers {
@@ -100,7 +104,7 @@ namespace AvH {
   public static Dictionary<string,string> Validate(PlaytestValues v) {
    var errors=new Dictionary<string,string>();
    foreach(var f in typeof(PlaytestValues).GetFields()) {
-    if(f.FieldType==typeof(bool))continue;
+    if(f.IsStatic||f.FieldType==typeof(bool))continue;
     double value=Convert.ToDouble(f.GetValue(v));double min=.01,max=1000;
     if(f.Name.EndsWith("Multiplier",StringComparison.Ordinal)){min=f.Name.EndsWith("KnockbackMultiplier",StringComparison.Ordinal)?0:.05;max=3;}
     switch(f.Name) {
@@ -124,6 +128,7 @@ namespace AvH {
      case "BubbleSpeed":case "BubbleRange":max=100;break;
      case "PushForce":max=30;break;
      case "Map":min=0;max=GameMaps.Count-1;break;
+     case "Tool":min=Tools.Random;max=Tools.Count-1;break;
     }
     // UI and stored float fields use the nearest representable float boundary.
     // Keep integer/double comparisons unchanged and reject even the adjacent outside float.

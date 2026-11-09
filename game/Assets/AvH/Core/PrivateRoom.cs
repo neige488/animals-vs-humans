@@ -12,14 +12,14 @@ namespace AvH {
   public static string Create(){var bytes=new byte[16];using(var rng=System.Security.Cryptography.RandomNumberGenerator.Create())rng.GetBytes(bytes);return BitConverter.ToString(bytes).Replace("-","").ToLowerInvariant();}
  }
  public static class RoomProtocol {
-  public const string Version="avh-private-12";
+  public const string Version="avh-private-13";
   public static string SchemaFingerprint()=>BuildVersion();
   /// <summary>Encoded size of one wire value in bytes (bandwidth checks).</summary>
   public static int EncodedBytes(object value)=>RoomWire.Encode(value).Length;
   static string Schema(Type t){if(t.IsArray)return "[]"+Schema(t.GetElementType());if(Nullable.GetUnderlyingType(t)!=null)return "?"+Schema(Nullable.GetUnderlyingType(t));if(t.IsPrimitive||t==typeof(string)||t.IsEnum)return t.FullName;return t.FullName+"{"+string.Join(";",t.GetFields(BindingFlags.Public|BindingFlags.Instance).OrderBy(f=>f.Name,StringComparer.Ordinal).Select(f=>f.Name+":"+Schema(f.FieldType)))+"}";}
   static string BuildVersion(){using(var hash=System.Security.Cryptography.SHA256.Create())return Convert.ToBase64String(hash.ComputeHash(Encoding.UTF8.GetBytes(Schema(typeof(SessionState))+Schema(typeof(NetworkInput))+Schema(typeof(NetworkVisualState)))));}
  }
- [Serializable] public sealed class NetworkBubble {public int Id,OwnerSlot,Round;public WorldPosition Position,Direction;public float RemainingLife,Travelled;}
+ [Serializable] public sealed class NetworkBubble {public int Id,OwnerSlot,Round,Kind;public WorldPosition Position,Direction;public float RemainingLife,Travelled;}
  [Serializable] public sealed class NetworkBurst {public int Id;public WorldPosition Position;public float Remaining;}
  [Serializable] public sealed class NetworkVisualState {
   public NetworkBurst[] Bursts=Array.Empty<NetworkBurst>();public NetworkMotionFrame Motion=new NetworkMotionFrame();public NetworkBubble[] Bubbles=Array.Empty<NetworkBubble>();

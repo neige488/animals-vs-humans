@@ -19,6 +19,9 @@ namespace AvH
         public double ReloadRemaining, AttackGraceRemaining, FireCooldownRemaining;
         // Impact timers (host rules): attack tell, presented swing, hit-stop freeze and bubble stun.
         public double AttackWindupRemaining, SwingRemaining, HitStopRemaining, StunRemaining;
+        // The workshop tool a human carries this round, and how long its last use is still shown (punch out, gust).
+        public ToolKind Tool;
+        public double ToolUseRemaining;
         public ActionPhase Action;
         public Faction Faction;
         public WorldPosition Position;
@@ -42,7 +45,7 @@ namespace AvH
     public sealed partial class PlaytestSession
     {
         private PlayerState[] players = Array.Empty<PlayerState>();
-        private readonly Random random;
+        private readonly Random random, toolRandom;
         private RoundPhase phase;
         private double remaining, hostTime, phaseDeadline, phaseStartedAt;
         private int round, map;
@@ -50,7 +53,7 @@ namespace AvH
         private CharacterDefinition[] humanRoster,animalRoster;
         private int nextAnimal;
         private BirthNotice[] births = Array.Empty<BirthNotice>();
-        public PlaytestSession(int randomSeed, string settingsPath = null) { random = new Random(randomSeed); settings.Load(settingsPath); }
+        public PlaytestSession(int randomSeed, string settingsPath = null) { random = new Random(randomSeed); toolRandom = new Random(randomSeed * 31 + 7); settings.Load(settingsPath); }
         /// <param name="map">Map for this run from the first round (start screen choice); null keeps the loaded settings' map.</param>
         public void StartSolo(string nickname, string animalKind = "임시 동물", string animalRarity = "일반", CharacterDefinition[] humans=null, CharacterDefinition[] animals=null, int? map=null)
         {
@@ -70,7 +73,8 @@ namespace AvH
             settings.BeginRound(); map = GameMaps.Clamp(settings.Current.Map); round++; phase = RoundPhase.Preparation; remaining = settings.Current.PreparationSeconds; winner = null;
             births = Array.Empty<BirthNotice>();
             nextAnimal=(round-1)*settings.Current.InitialAnimals;
-            foreach (var player in players) { player.Faction = Faction.Human; AssignCharacter(player,humanRoster[player.Slot%humanRoster.Length]);player.Position = Spawn(player.Slot); }
+            foreach (var player in players) { player.Faction = Faction.Human; AssignCharacter(player,humanRoster[player.Slot%humanRoster.Length]);player.Position = Spawn(player.Slot);
+                int tool = settings.Current.Tool; player.Tool = (ToolKind)(tool >= 0 && tool < Tools.Count ? tool : toolRandom.Next(Tools.Count)); }
             ResetCombat(); phaseStartedAt=hostTime; phaseDeadline=hostTime+remaining;
         }
         public void Advance(double elapsed) {
