@@ -41,7 +41,7 @@ namespace AvH {
  public static class WarehouseMap {
   public const string RootName="Warehouse";
   public static IReadOnlyList<Vector3> Shelters {get;}=Array.AsReadOnly(new[]{WarehouseLayout.StairShelter,WarehouseLayout.RampShelter,WarehouseLayout.YardShelter});
-  static readonly Color Asphalt=new Color(.36f,.37f,.36f),Fallback=new Color(.55f,.55f,.52f);
+  static readonly Color Asphalt=new Color(.36f,.37f,.36f);
 
   public static IReadOnlyList<Vector3> Build(Transform parent) {
    var root=new GameObject(RootName).transform;root.SetParent(parent,false);
@@ -84,20 +84,16 @@ namespace AvH {
 
   // 21 steps of 1/6 m: both factions climb without jumping; each step is a solid column like the village stair.
   static void Stair(Transform root) {
-   float run=WarehouseLayout.StairLength/21,rise=WarehouseLayout.Upper/21,start=WarehouseLayout.DeckFront-WarehouseLayout.StairLength;
+   float start=WarehouseLayout.DeckFront-WarehouseLayout.StairLength;
    var stair=Module(root,"WH_Stair",new Vector3(WarehouseLayout.StairX,0,start+WarehouseLayout.StairLength/2),0);
-   for(int i=0;i<21;i++){float h=(i+1)*rise;Collider(stair.gameObject,new Vector3(0,h/2,-WarehouseLayout.StairLength/2+run*(i+.5f)),new Vector3(WarehouseLayout.StairWidth,h,run));}
+   MapKit.StairColliders(stair,WarehouseLayout.StairLength,WarehouseLayout.StairWidth,WarehouseLayout.Upper,21);
   }
 
   // A solid wedge, so the slope is the only floor the bot grid sees there.
   static void Ramp(Transform root) {
    float l=WarehouseLayout.RampLength,w=WarehouseLayout.RampWidth,h=WarehouseLayout.Upper;
    var ramp=Module(root,"WH_Ramp",new Vector3(WarehouseLayout.RampX,0,WarehouseLayout.DeckFront-l/2),0);
-   var mesh=new Mesh{name="Ramp wedge"};
-   mesh.vertices=new[]{new Vector3(-w/2,0,-l/2),new Vector3(w/2,0,-l/2),new Vector3(-w/2,0,l/2),new Vector3(w/2,0,l/2),new Vector3(-w/2,h,l/2),new Vector3(w/2,h,l/2)};
-   mesh.triangles=new[]{0,2,1, 1,2,3, 0,1,4, 1,5,4, 2,4,3, 3,4,5, 0,4,2, 1,3,5};
-   mesh.RecalculateNormals();mesh.RecalculateBounds();
-   var wedge=new GameObject("Ramp collider");wedge.transform.SetParent(ramp,false);var collider=wedge.AddComponent<MeshCollider>();collider.sharedMesh=mesh;collider.convex=true;
+   MapKit.RampWedge(ramp,l,w,h);
   }
 
   // 1 m railing along the deck edge with openings at the stair head, the ramp head and the two jump-down gaps.
@@ -139,19 +135,8 @@ namespace AvH {
    for(int i=0;i<Light.Length;i++){var crate=Module(container,"WH_Crate",Light[i],i*23%90);crate.name="Light crate "+i;crate.localScale=Vector3.one*.7f;}
   }
 
-  // One Blender module (visual only). Without the imported model a plain box of the same footprint stands in.
-  static Transform Module(Transform parent,string name,Vector3 foot,float yaw) {
-   var prefab=Resources.Load<GameObject>("Warehouse/"+name);
-   GameObject go;
-   if(prefab!=null){go=UnityEngine.Object.Instantiate(prefab,parent);foreach(var c in go.GetComponentsInChildren<Collider>())UnityEngine.Object.Destroy(c);}
-   else{go=GameObject.CreatePrimitive(PrimitiveType.Cube);UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());go.transform.SetParent(parent,false);go.GetComponent<Renderer>().sharedMaterial=PrototypeVillage.Material(Fallback);}
-   go.name=name;go.transform.localPosition=foot;go.transform.localRotation=Quaternion.Euler(0,yaw,0);
-   return go.transform;
-  }
-  static void Collider(GameObject owner,Vector3 center,Vector3 size){var box=owner.AddComponent<BoxCollider>();box.center=center;box.size=size;}
-  static void Solid(Transform parent,string name,Vector3 center,Vector3 size,Color color) {
-   var box=GameObject.CreatePrimitive(PrimitiveType.Cube);box.name=name;box.transform.SetParent(parent,false);
-   box.transform.localPosition=center;box.transform.localScale=size;box.GetComponent<Renderer>().sharedMaterial=PrototypeVillage.Material(color);
-  }
+  static Transform Module(Transform parent,string name,Vector3 foot,float yaw)=>MapKit.Module(parent,"Warehouse/"+name,foot,yaw);
+  static void Collider(GameObject owner,Vector3 center,Vector3 size)=>MapKit.Collider(owner,center,size);
+  static void Solid(Transform parent,string name,Vector3 center,Vector3 size,Color color)=>MapKit.Solid(parent,name,center,size,color);
  }
 }

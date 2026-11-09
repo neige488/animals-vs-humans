@@ -10,7 +10,7 @@ namespace AvH {
   /// <summary>The bot route planner itself (tests and layout checks): grid route from one floor point to another.</summary>
   public List<Vector3> Plan(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null)=>routes.Find(from,to,out reachable,allowDrop,avoid);
   /// <summary>New map geometry: the grid is rebuilt on the next route and every bot re-plans.</summary>
-  public void ResetMap(){routes.Reset();foreach(var brain in brains){brain.Round=-1;brain.Path.Clear();}}
+  public void ResetMap(RouteGrid grid){routes.Reset(grid);foreach(var brain in brains){brain.Round=-1;brain.Path.Clear();}}
   sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;public BotAim Aim;public Vector3 Avoid;public float AvoidTime;}
   readonly Brain[] brains=Enumerable.Range(0,12).Select(i=>new Brain{Shelter=i%3,Aim=new BotAim(i+1)}).ToArray();
   double clock;
@@ -105,23 +105,34 @@ namespace AvH {
   static Vector3 V(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   static Vector3 Flat(Vector3 p)=>new Vector3(p.x,0,p.z);
  }
+ /// <summary>
+ /// Where the bot route grid lies for one map: corner (OriginX, OriginZ), cell size, cell counts, and how many
+ /// floors one cell may hold (2 lets a bridge and the courtyard under it both be walkable).
+ /// </summary>
+ public readonly struct RouteGrid {
+  public readonly float OriginX,OriginZ,Cell;public readonly int SizeX,SizeZ,Layers;
+  public RouteGrid(float originX,float originZ,float cell,int sizeX,int sizeZ,int layers){OriginX=originX;OriginZ=originZ;Cell=cell;SizeX=sizeX;SizeZ=sizeZ;Layers=layers;}
+  /// <summary>The village and the warehouse: 90 m square round the centre, one floor per cell.</summary>
+  public static readonly RouteGrid Default=new RouteGrid(-45,-45,.75f,121,121,1);
+ }
  // A small terrain-derived grid supports the roof staircase and both ground shelters.
  sealed class VillageRoutes {
-  const int Size=121;const float Cell=.75f,Origin=-45;
-  readonly Vector3[] points=new Vector3[Size*Size];readonly bool[] walkable=new bool[Size*Size];
+  RouteGrid grid=RouteGrid.Default;int Cells,Nodes;
+  Vector3[] points;bool[] walkable;float[] distance;int[] parent;bool[] closed;
+  public VillageRoutes(){Allocate();}
+  void Allocate(){Cells=grid.SizeX*grid.SizeZ;Nodes=Cells*grid.Layers;points=new Vector3[Nodes];walkable=new bool[Nodes];distance=new float[Nodes];parent=new int[Nodes];closed=new bool[Nodes];}
   bool built,rebuildRequested,rebuiltThisStep;float sinceBuild=1;int builds,thisStep,maxPerStep;
   public BotNavigationDiagnostics Observe()=>new BotNavigationDiagnostics{GridBuilds=builds,MaxGridBuildsPerStep=maxPerStep};
-  readonly float[] distance=new float[Size*Size];readonly int[] parent=new int[Size*Size];readonly bool[] closed=new bool[Size*Size];
   readonly SortedSet<(float score,int id)> open=new SortedSet<(float,int)>();
   public void BeginStep(float seconds){sinceBuild+=seconds;rebuiltThisStep=false;thisStep=0;}
   public void Invalidate(){rebuildRequested=true;}
-  public void Reset(){built=false;rebuildRequested=false;}
+  public void Reset(RouteGrid next){if(!next.Equals(grid)){grid=next;Allocate();}built=false;rebuildRequested=false;}
   static bool Terrain(Collider c)=>!(c is CharacterController)&&c.GetComponentInParent<CharacterController>()==null;
   void Build() {
    builds++;maxPerStep=Math.Max(maxPerStep,++thisStep);
    Physics.SyncTransforms();Array.Clear(walkable,0,walkable.Length);
-   for(int z=0;z<Size;z++)for(int x=0;x<Size;x++) {
-    int id=z*Size+x;var top=new Vector3(Origin+x*Cell,12,Origin+z*Cell);
+   for(int z=0;z<grid.SizeZ;z++)for(int x=0;x<grid.SizeX;x++) {
+    int id=z*grid.SizeX+x,layer=0;var top=new Vector3(grid.OriginX+x*grid.Cell,12,grid.OriginZ+z*grid.Cell);
     var hits=Physics.RaycastAll(top,Vector3.down,15,~0,QueryTriggerInteraction.Ignore).Where(h=>Terrain(h.collider)&&h.normal.y>.7f).OrderByDescending(h=>h.distance).ToArray();
     foreach(var hit in hits) {
      var p=hit.point;
@@ -129,10 +140,22 @@ namespace AvH {
      // foot clearance and can otherwise connect ground directly to a .5m step.
      if(Physics.OverlapSphere(p+Vector3.up*.05f,.015f,~0,QueryTriggerInteraction.Ignore).Any(Terrain))continue;
      if(Physics.OverlapCapsule(p+Vector3.up*.75f,p+Vector3.up*1.47f,.32f,~0,QueryTriggerInteraction.Ignore).Any(Terrain))continue;
-     points[id]=p;walkable[id]=true;break;
+     // A second floor counts only well above the first (a bridge over a street), never a step or a crate top.
+     if(layer>0&&p.y-points[id+(layer-1)*Cells].y<2)continue;
+     points[id+layer*Cells]=p;walkable[id+layer*Cells]=true;if(++layer>=grid.Layers)break;
     }
    }
    built=true;rebuildRequested=false;rebuiltThisStep=true;sinceBuild=0;
+  }
+  // A diagonal step must not cut a corner: both side cells need a floor near this height.
+  bool Floor(int cell,float y) {
+   if(grid.Layers==1)return walkable[cell];
+   for(int l=0;l<grid.Layers;l++){int n=cell+l*Cells;if(walkable[n]&&Mathf.Abs(points[n].y-y)<1)return true;}
+   return false;
+  }
+  bool Covered(int cell,float low,float high) {
+   for(int l=0;l<grid.Layers;l++){int n=cell+l*Cells;if(walkable[n]&&points[n].y>low+.4f&&points[n].y<high+.5f)return true;}
+   return false;
   }
   int Nearest(Vector3 p) {
    int best=-1;float score=float.MaxValue;
@@ -180,15 +203,17 @@ namespace AvH {
    distance[start]=0;open.Add((0,start));int nearestReachable=start;
    while(open.Count>0) {
     var current=open.Min;open.Remove(current);int id=current.id;if(closed[id])continue;closed[id]=true;if((points[id]-to).sqrMagnitude<(points[nearestReachable]-to).sqrMagnitude)nearestReachable=id;if(id==goal)break;
-    int x=id%Size,z=id/Size;
-    for(int span=1;span<=(allowDrop?4:1);span++)for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++) {
-     if(dx==0&&dz==0)continue;int nx=x+dx*span,nz=z+dz*span;if(nx<0||nx>=Size||nz<0||nz>=Size)continue;int next=nz*Size+nx;
+    int cell=id%Cells,x=cell%grid.SizeX,z=cell/grid.SizeX;
+    for(int span=1;span<=(allowDrop?4:1);span++)for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++)for(int layer=0;layer<grid.Layers;layer++) {
+     if(dx==0&&dz==0)continue;int nx=x+dx*span,nz=z+dz*span;if(nx<0||nx>=grid.SizeX||nz<0||nz>=grid.SizeZ)continue;int next=nz*grid.SizeX+nx+layer*Cells;
      if(!walkable[next]||closed[next]||points[next].y-points[id].y>.36f||points[id].y-points[next].y>4.2f)continue;
      if(span>1) {
       // A roof can be an isolated grid island: its steep eave has no standable cells.
       // Permit a one-way walk-off only when the full body can clear the edge at roof height.
       if(points[id].y-points[next].y<.4f||!ClearDrop(points[id],points[next]))continue;
-     } else if(dx!=0&&dz!=0&&(!walkable[z*Size+nx]||!walkable[nz*Size+x]))continue;
+     } else if(dx!=0&&dz!=0&&(!Floor(z*grid.SizeX+nx,points[id].y)||!Floor(nz*grid.SizeX+x,points[id].y)))continue;
+     // On a layered grid a drop must really fall: nothing to land on first (the bridge deck itself) and no parapet in the way.
+     if(grid.Layers>1&&points[id].y-points[next].y>.4f&&(Covered(nz*grid.SizeX+nx,points[next].y,points[id].y)||span==1&&!ClearDrop(points[id],points[next])))continue;
      float cost=distance[id]+Vector3.Distance(points[id],points[next]);
      if(avoid.HasValue&&(points[next]-avoid.Value).sqrMagnitude<BotDirector.AvoidRadius*BotDirector.AvoidRadius)cost+=BotDirector.AvoidPenalty;
      if(cost>=distance[next])continue;

@@ -25,7 +25,7 @@ namespace AvH {
    int c=Array.IndexOf(args,"-avhScenarioChase");if(c>=0&&c+1<args.Length)s.chase=float.Parse(args[c+1],CultureInfo.InvariantCulture);
    int m=Array.IndexOf(args,"-avhScenarioSeconds");if(m>=0&&m+1<args.Length)s.cap=double.Parse(args[m+1],CultureInfo.InvariantCulture);
    if(s.role=="host") {
-    network.HostMap=GameMaps.Warehouse;network.HostSettingsPath=Path.Combine(s.folder,"host-settings.xml");if(File.Exists(network.HostSettingsPath))File.Delete(network.HostSettingsPath);
+    network.HostMap=Array.IndexOf(args,"-avhMap")>=0?NetworkPresentation.StartupMap():GameMaps.Warehouse;network.HostSettingsPath=Path.Combine(s.folder,"host-settings.xml");if(File.Exists(network.HostSettingsPath))File.Delete(network.HostSettingsPath);
     network.StartHost("민지","127.0.0.1");File.WriteAllText(Path.Combine(s.folder,"room.txt"),network.RoomCode);
     if(s.chase>0){world.Session.BeginSettingsEdit(0);var v=world.Session.ObserveSettings().Edit;v.RoundSeconds=s.chase;v.PreparationSeconds=12;world.Session.UpdateSettingsEdit(0,v);world.Session.ApplySettingsNow(0);}
    } else {
@@ -47,16 +47,19 @@ namespace AvH {
   float nextMoveNote=25;bool grounded=true;int jumpsSeen;readonly Queue<(double t,float y)> recentY=new Queue<(double,float)>();
   Faction localFaction;float moved;Vector3 lastLocal;bool haveLocal;float lastY;int lastAmmo=-1;
   static Vector3 V(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
-  static bool OnStairs(Vector3 p)=>Mathf.Abs(p.x-WarehouseLayout.StairX)<1.3f&&p.y>.5f&&p.y<3.2f&&p.z<WarehouseLayout.DeckFront;
-  static bool OnRamp(Vector3 p)=>Mathf.Abs(p.x-WarehouseLayout.RampX)<1.8f&&p.y>.5f&&p.y<3.2f&&p.z<WarehouseLayout.DeckFront;
-  static bool OnDeck(Vector3 p)=>p.y>WarehouseLayout.Upper-.4f&&p.z>WarehouseLayout.DeckFront-.3f;
+  // The map the round is played on decides what "stairs", "ramp" and "deck" mean.
+  bool Crossing=>world.Observe().Map==GameMaps.Crossing;
+  bool OnStairs(Vector3 p)=>Crossing?CrossingLayout.OnClimb(p)&&Mathf.Abs(p.z-26)>1.8f:Mathf.Abs(p.x-WarehouseLayout.StairX)<1.3f&&p.y>.5f&&p.y<3.2f&&p.z<WarehouseLayout.DeckFront;
+  bool OnRamp(Vector3 p)=>Crossing?CrossingLayout.OnClimb(p)&&Mathf.Abs(p.z-26)<=1.8f&&Mathf.Abs(p.x)>14:Mathf.Abs(p.x-WarehouseLayout.RampX)<1.8f&&p.y>.5f&&p.y<3.2f&&p.z<WarehouseLayout.DeckFront;
+  bool OnDeck(Vector3 p)=>Crossing?CrossingLayout.OnDeck(p):p.y>WarehouseLayout.Upper-.4f&&p.z>WarehouseLayout.DeckFront-.3f;
+  readonly Dictionary<int,List<string>> lanes=new Dictionary<int,List<string>>();int laneDetours,bridgeShoves;
   void Observe(SessionState s) {
    if(s.Round!=round){if(round!=0)Note($"라운드 {round} 끝");round=s.Round;Note($"라운드 {round} 시작 · 맵 {GameMaps.Name(s.Map)} · 도구 배정: "+string.Join(", ",s.Players.GroupBy(p=>p.Tool).OrderBy(g=>g.Key).Select(g=>$"{Tools.Short(g.Key)} {g.Count()}")));}
    foreach(var e in s.Events??new FeelEvent[0]) {
     if(e.Id<=lastEvent)continue;lastEvent=e.Id;
     string Name(int slot)=>slot>=0&&slot<s.Players.Length?s.Players[slot].Nickname:"?";
     if((e.Kind==FeelEventKind.Shoved||e.Kind==FeelEventKind.Stagger)&&e.Actor>=0&&e.Actor<s.Players.Length){var t=Tools.Short(s.Players[e.Actor].Tool);toolHits[t]=(toolHits.TryGetValue(t,out var n)?n:0)+1;if(s.Players[e.Actor].Tool==ToolKind.Glove&&e.Kind==FeelEventKind.Shoved)Note($"글러브로 아군 날림: {Name(e.Actor)} → {Name(e.Target)}");}
-    if(e.Kind==FeelEventKind.Shoved){shoves++;var where=V(s.Players[e.Target].Position);var line=$"아군 밀침: {Name(e.Actor)} → {Name(e.Target)} @({where.x:F1},{where.y:F1},{where.z:F1}){(OnDeck(where)||OnStairs(where)?" [계단/2층]":"")}";shoveLines.Add(line);Note(line);
+    if(e.Kind==FeelEventKind.Shoved){shoves++;var where=V(s.Players[e.Target].Position);var line=$"아군 밀침: {Name(e.Actor)} → {Name(e.Target)} @({where.x:F1},{where.y:F1},{where.z:F1}){(Crossing&&CrossingLayout.OnBridge(where)?" [다리 위]":OnDeck(where)||OnStairs(where)?" [계단/2층]":"")}";if(Crossing&&CrossingLayout.OnBridge(where))bridgeShoves++;shoveLines.Add(line);Note(line);
      if(e.Target==network.LocalSlot)localShoved++;if(e.Actor==network.LocalSlot)localShovedOthers++;}
     else if(e.Kind==FeelEventKind.Stagger)staggers++;
     else if(e.Kind==FeelEventKind.Transform&&e.Actor>=0){transforms++;Note($"변신: {Name(e.Target)} ← {Name(e.Actor)} @({e.Position.X:F1},{e.Position.Y:F1},{e.Position.Z:F1})");}
@@ -67,6 +70,9 @@ namespace AvH {
     if(p.Faction==Faction.Animal) {
      if(OnStairs(at)&&onStairs.Add(p.Slot))Note($"동물 계단 진입: {p.Nickname} ({p.CharacterName})");
      if(OnRamp(at)&&onRamp.Add(p.Slot)){Note($"동물 경사로 진입: {p.Nickname}");if(onStairs.Contains(p.Slot)&&detours.Add(p.Slot))Note($"  → 계단에서 경사로로 우회: {p.Nickname}");}
+     var lane=Crossing?CrossingLayout.Lane(at):null;
+     if(lane!=null){if(!lanes.TryGetValue(p.Slot,out var seen))lanes[p.Slot]=seen=new List<string>();
+      if(!seen.Contains(lane)){seen.Add(lane);Note($"동물 {lane} 진입: {p.Nickname}"+(seen.Count>1?$" (우회: {string.Join(" → ",seen)})":""));if(seen.Count==2)laneDetours++;}}
      if(OnDeck(at)&&reachedDeck.Add(p.Slot))Note($"동물 2층 도달: {p.Nickname} (경로: {(onRamp.Contains(p.Slot)?"경사로":onStairs.Contains(p.Slot)?"계단":"?")})");
     } else {
      if(at.y>WarehouseLayout.Upper-.4f)lastHigh[p.Slot]=(Now,at);
@@ -110,6 +116,7 @@ namespace AvH {
    var animals=s.Players.Where(p=>p.Faction==Faction.Animal).ToArray();
    var nearest=animals.OrderBy(a=>(V(a.Position)-at).sqrMagnitude).FirstOrDefault();float distance=nearest==null?999:Vector3.Distance(V(nearest.Position),at);
    if(!fleeing&&s.Phase==RoundPhase.Chase&&at.y>3&&(animals.Any(a=>OnDeck(V(a.Position))&&Vector3.Distance(V(a.Position),at)<7)||distance<2.6f)){fleeing=true;path.Clear();replan=0;Note("2층이 뚫림 → 난간 틈으로 뛰어내림");}
+   if(Crossing)return HostCrossing(s,me,at,nearest,distance);
    if(fleeing) {
     // Through the nearest railing gap, then out to the yard and keep away from the closest animal.
     if(at.y>2.5f)goal=new Vector3(WarehouseLayout.DropGaps.OrderBy(g=>Mathf.Abs(g-at.x)).First(),0,WarehouseLayout.DeckFront-3);
@@ -124,12 +131,29 @@ namespace AvH {
    if(target!=null){var aim=Fire(at,V(target.Position),false);aim.Attack=Vector3.Distance(V(target.Position),at)<Tools.Range(me.Tool,world.ObserveActiveSettings().Current)+.3f;return aim;}
    presentation.SetLookAngles(180,22);return new PlayerInput{Yaw=180,Pitch=12};
   }
+  // Crossing: hold the tower stair head and shoot down it; when the deck is breached, drop through the nearest
+  // parapet gap and run for the lane farthest from the closest animal.
+  static readonly Vector3 TowerPost=new Vector3(3.2f,CrossingLayout.Upper,26);
+  static readonly Vector3[] CrossingDrops={new Vector3(-2,0,22),new Vector3(-16,0,28.3f),new Vector3(16,0,28.3f),new Vector3(-22,0,34.7f),new Vector3(22,0,34.7f),new Vector3(-34,0,22),new Vector3(34,0,22)};
+  PlayerInput HostCrossing(SessionState s,PlayerState me,Vector3 at,PlayerState nearest,float distance) {
+   var animals=s.Players.Where(p=>p.Faction==Faction.Animal).ToArray();
+   if(fleeing) {
+    if(at.y>2.5f)goal=CrossingDrops.OrderBy(g=>Vector2.Distance(new Vector2(g.x,g.z),new Vector2(at.x,at.z))).First();
+    else goal=nearest==null?CrossingLayout.Recovery[0]:CrossingLayout.Recovery.OrderByDescending(r=>(r-V(nearest.Position)).sqrMagnitude).First();
+    if(at.y<1&&nearest!=null&&distance<9&&distance>2.5f&&Sight(at,V(nearest.Position)))return Fire(at,V(nearest.Position),true);
+    return Walk(at,goal,at.y>2.5f);
+   }
+   if(Vector2.Distance(new Vector2(at.x,at.z),new Vector2(TowerPost.x,TowerPost.z))>.5f||at.y<3)return Walk(at,TowerPost,false);
+   var target=animals.Where(a=>Vector3.Distance(V(a.Position),at)<20&&Sight(at,V(a.Position))).OrderBy(a=>(V(a.Position)-at).sqrMagnitude).FirstOrDefault();
+   if(target!=null){var aim=Fire(at,V(target.Position),false);aim.Attack=Vector3.Distance(V(target.Position),at)<Tools.Range(me.Tool,world.ObserveActiveSettings().Current)+.3f;return aim;}
+   presentation.SetLookAngles(90,22);return new PlayerInput{Yaw=90,Pitch=12};
+  }
   PlayerInput Guest(SessionState s,PlayerState me,Vector3 at) {
    if(me.Faction==Faction.Animal)return Hunt(s,me,at);
    var target=s.Players.Where(p=>p.Faction==Faction.Animal&&Vector3.Distance(V(p.Position),at)<14&&Sight(at,V(p.Position))).OrderBy(p=>(V(p.Position)-at).sqrMagnitude).FirstOrDefault();
    if(target!=null&&s.Phase==RoundPhase.Chase){var aim=Fire(at,V(target.Position),false);aim.Attack=Vector3.Distance(V(target.Position),at)<Tools.Range(me.Tool,world.ObserveActiveSettings().Current)+.3f;return aim;}
    // Wander between the ramp foot, the deck and the yard, hopping now and then.
-   var stops=new[]{WarehouseLayout.RampFoot,WarehouseLayout.RampShelter,new Vector3(2,WarehouseLayout.Upper,9),WarehouseLayout.YardShelter,new Vector3(-6,0,-6)};
+   var stops=Crossing?new[]{CrossingLayout.RampBFoot,CrossingLayout.ShelterB,CrossingLayout.ShelterTower,new Vector3(-12,CrossingLayout.Upper,CrossingLayout.BridgeZ),new Vector3(8,0,0)}:new[]{WarehouseLayout.RampFoot,WarehouseLayout.RampShelter,new Vector3(2,WarehouseLayout.Upper,9),WarehouseLayout.YardShelter,new Vector3(-6,0,-6)};
    if(path.Count==0||cursor>=path.Count||Vector3.Distance(at,goal)<1)goal=stops[(int)(Now/12)%stops.Length];
    var input=Walk(at,goal,false);input.Jump|=((int)(Now*10))%35==0;return input;
   }
@@ -171,6 +195,7 @@ namespace AvH {
    bool overview=s.Phase==RoundPhase.Chase&&me.Faction==Faction.Human&&!fleeing&&at.y>3;
    if(!overview)return;
    var view=Camera.main;if(view==null)return;
+   if(s.Map==GameMaps.Crossing){view.transform.position=new Vector3(16,17,8);view.transform.rotation=Quaternion.LookRotation(new Vector3(-2,2,28)-view.transform.position);return;}
    view.transform.position=new Vector3(-2,15,-25);view.transform.rotation=Quaternion.LookRotation(new Vector3(-1,1.5f,5)-view.transform.position);
   }
 
@@ -178,11 +203,12 @@ namespace AvH {
   void Finish(string why) {
    if(finished)return;finished=true;Note("종료: "+why);
    var r=new StringBuilder();
-   r.AppendLine($"# 창고 시나리오 결과 ({role})");
+   r.AppendLine($"# 시나리오 결과 ({role}) · 맵 {GameMaps.Name(world.Session==null?network.HostMap:world.Observe().Map)}");
    r.AppendLine($"참가 슬롯: {joinedSlot} · 이동 거리: {moved:F0} m · 점프 입력: {jumps} · 점프 확인: {jumpsSeen} · 발사: {shots}");
    r.AppendLine($"아군 밀침 전체: {shoves} (내가 밀림 {localShoved}, 내가 밈 {localShovedOthers}) · 동물 경직: {staggers} · 공격 변신: {transforms}");
    r.AppendLine($"동물 계단 진입: {onStairs.Count} · 경사로 진입: {onRamp.Count} · 계단→경사로 우회: {detours.Count} · 2층 도달: {reachedDeck.Count}");
    r.AppendLine($"인간 낙하 탈출: {drops} · 낙하 후 1층 추격: {dropChases}");
+   if(lanes.Count>0)r.AppendLine($"동물 갈래 사용: "+string.Join(", ",lanes.Values.SelectMany(l=>l).GroupBy(l=>l).Select(g=>$"{g.Key} {g.Count()}"))+$" · 갈래 우회: {laneDetours} · 다리 위 밀침: {bridgeShoves}");
    r.AppendLine("도구별 명중(밀침+경직): "+string.Join(", ",toolHits.OrderByDescending(p=>p.Value).Select(p=>$"{p.Key} {p.Value}")));
    foreach(var line in shoveLines.Take(20))r.AppendLine("- "+line);
    r.AppendLine();r.AppendLine("## 기록");r.Append(log);

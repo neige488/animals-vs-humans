@@ -29,11 +29,13 @@ namespace AvH {
   /// </summary>
   void BuildMap(int map) {
    map=GameMaps.Clamp(map);if(map==builtMap)return;
-   foreach(var name in new[]{"Village",WarehouseMap.RootName}){var old=transform.Find(name);if(old!=null){old.gameObject.SetActive(false);old.name+=" (removed)";Destroy(old.gameObject);}}
-   ShelterPoints=map==GameMaps.Warehouse?WarehouseMap.Build(transform):PrototypeVillage.Build(transform);
-   returns=map==GameMaps.Warehouse?WarehouseLayout.Recovery:TownReturns;
-   props=PushProps.Adopt(transform.Find(map==GameMaps.Warehouse?WarehouseMap.RootName:"Village"));
-   builtMap=map;botDirector.ResetMap();Physics.SyncTransforms();
+   foreach(var name in new[]{"Village",WarehouseMap.RootName,CrossingMap.RootName}){var old=transform.Find(name);if(old!=null){old.gameObject.SetActive(false);old.name+=" (removed)";Destroy(old.gameObject);}}
+   switch(map){
+    case GameMaps.Warehouse:ShelterPoints=WarehouseMap.Build(transform);returns=WarehouseLayout.Recovery;props=PushProps.Adopt(transform.Find(WarehouseMap.RootName));break;
+    case GameMaps.Crossing:ShelterPoints=CrossingMap.Build(transform);returns=CrossingLayout.Recovery;props=PushProps.Adopt(transform.Find(CrossingMap.RootName));break;
+    default:ShelterPoints=PrototypeVillage.Build(transform);returns=TownReturns;props=PushProps.Adopt(transform.Find("Village"));break;
+   }
+   builtMap=map;botDirector.ResetMap(map==GameMaps.Crossing?CrossingLayout.Grid:RouteGrid.Default);Physics.SyncTransforms();
   }
   public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null, int? map = null) {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");

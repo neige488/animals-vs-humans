@@ -30,7 +30,7 @@ namespace AvH {
   public float RabbitSpeedMultiplier=1.05f, RabbitJumpMultiplier=1.55f, RabbitKnockbackMultiplier=1.4f;
   public float PenguinSpeedMultiplier=0.9f, PenguinJumpMultiplier=0.9f, PenguinKnockbackMultiplier=0.8f;
   public bool FriendlyCollision=true, EnemyCollision=true, FriendlyPush=true;
-  // Map for the next round (GameMaps): 0 = village, 1 = two-storey warehouse.
+  // Map for the next round (GameMaps): 0 = village, 1 = two-storey warehouse, 2 = sand crossing.
   public int Map=GameMaps.Town;
   /// <summary>Default for <see cref="Tool"/> in new settings. Test assemblies pin the cork so shot tests stay deterministic.</summary>
   public static int DefaultTool=Tools.Random;

@@ -42,11 +42,11 @@ namespace AvH {
   public NetworkVisualState RemoteVisuals=>client.Visuals;
   public void Initialize(UnityPlaytestSession session){world=session;address=FindAddress();client=gameObject.AddComponent<FishRoomBridge>();client.Initialize(world);}
   static string FindAddress(){try{return NetworkInterface.GetAllNetworkInterfaces().Where(n=>n.OperationalStatus==OperationalStatus.Up&&n.NetworkInterfaceType!=NetworkInterfaceType.Loopback).SelectMany(n=>n.GetIPProperties().UnicastAddresses).Select(a=>a.Address).FirstOrDefault(a=>a.AddressFamily==AddressFamily.InterNetwork&&!IPAddress.IsLoopback(a))?.ToString()??"127.0.0.1";}catch{return "127.0.0.1";}}
-  /// <summary>Map the next hosted room starts on (start screen toggle; <c>-avhMap warehouse</c> preselects it).</summary>
+  /// <summary>Map the next hosted room starts on (start screen toggle; <c>-avhMap warehouse|crossing</c> preselects it).</summary>
   public int HostMap=StartupMap();
   /// <summary>Settings file for the next hosted room (development harnesses use an isolated one); null = this PC's saved settings.</summary>
   public string HostSettingsPath;
-  static int StartupMap(){var args=System.Environment.GetCommandLineArgs();int i=System.Array.IndexOf(args,"-avhMap");return i>=0&&i+1<args.Length&&args[i+1]=="warehouse"?GameMaps.Warehouse:GameMaps.Town;}
+  public static int StartupMap(){var args=System.Environment.GetCommandLineArgs();int i=System.Array.IndexOf(args,"-avhMap");var name=i>=0&&i+1<args.Length?args[i+1]:"";return name=="warehouse"?GameMaps.Warehouse:name=="crossing"?GameMaps.Crossing:GameMaps.Town;}
   public void StartHost(string nickname,string advertisedAddress=null){try{world.StartSolo(nickname,null,HostSettingsPath,HostMap);host=client;host.StartRoom(advertisedAddress??address);host.CaptureVisuals=()=>new NetworkVisualState{Bursts=world.ObserveBursts(),Motion=world.CaptureMotion(),Bubbles=world.ObserveBubbles().Select(b=>new NetworkBubble{Kind=(int)b.Kind,Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray()};message="";}catch(Exception){host?.Dispose();host=null;world.ResetSession();message="방을 열지 못했습니다. 호스트 주소와 네트워크 상태를 확인하세요.";}}
   public void JoinRoom(string roomCode,string nickname){code=roomCode;Join(nickname);}
   public void Join(string nickname){lastNickname=nickname;clientStarted=true;message="";client.Connect(code,nickname);}
