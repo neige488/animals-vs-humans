@@ -138,6 +138,22 @@ namespace AvH.Tests {
    yield return null;
   }
 
+  // With the owned Synty assets configured the generated dressing replaces every Blender module; colliders do not change.
+  [UnityTest] public IEnumerator OwnedDressingReplacesTheBlenderModules() {
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   Assume.That(catalog!=null&&catalog.Crossing!=null,"owned assets not configured in this checkout");
+   var root=new GameObject("crossing dressed");
+   try {
+    var game=Crossing(root);yield return null;
+    var map=root.transform.Find(CrossingMap.RootName);Assert.IsNotNull(map.Find(CrossingMap.DressingName),"the Synty dressing is placed");
+    Assert.IsFalse(map.GetComponentsInChildren<Renderer>().Any(r=>r.name.StartsWith("SD_")),"no Blender module is drawn under it");
+    Assert.IsTrue(map.GetComponentsInChildren<MeshFilter>().Any(f=>f.name.StartsWith("Crossing ")),"static scenery is merged into chunk meshes");
+    Assert.IsFalse(map.Find(CrossingMap.DressingName).GetComponentsInChildren<Collider>().Any(),"the dressing is visual only");
+    Assert.AreEqual(12,game.ObserveProps().Length);
+   } finally {Object.Destroy(root);}
+   yield return null;
+  }
+
   // Humans run north during preparation; the first animals then leave from the south plaza and must come up the lanes.
   [UnityTest] public IEnumerator FirstAnimalsStartInThePlazaWhileHumansStayPut() {
    var root=new GameObject("crossing release");

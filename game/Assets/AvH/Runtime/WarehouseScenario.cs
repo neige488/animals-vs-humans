@@ -36,6 +36,7 @@ namespace AvH {
    s.Note($"시작 role={s.role}");return true;
   }
   double Now=>Time.realtimeSinceStartupAsDouble-started;
+  int frames;double frameTime;float worstFrame;
   void Note(string text){var line=$"[{Now,6:F1}s] {text}";log.AppendLine(line);Debug.Log("[scenario] "+line);}
 
   // ---------- what happened (read from the public session state every viewer has) ----------
@@ -88,6 +89,7 @@ namespace AvH {
   static readonly Vector3 StairPost=new Vector3(WarehouseLayout.StairX,WarehouseLayout.Upper,WarehouseLayout.DeckFront+.7f);
   void Update() {
    if(Now>cap){Finish("시간 상한");return;}
+   if(Now>5){frames++;frameTime+=Time.unscaledDeltaTime;worstFrame=Mathf.Max(worstFrame,Time.unscaledDeltaTime);}
    // A guest whose host left (round over, host quit) ends here too instead of waiting for the cap.
    if(joinedSlot>=0&&network.IsClient&&!network.CanPlay){Finish("호스트 연결 종료");return;}
    if(world.Session==null||!network.CanPlay||network.LocalSlot<0)return;
@@ -204,6 +206,7 @@ namespace AvH {
    if(finished)return;finished=true;Note("종료: "+why);
    var r=new StringBuilder();
    r.AppendLine($"# 시나리오 결과 ({role}) · 맵 {GameMaps.Name(world.Session==null?network.HostMap:world.Observe().Map)}");
+   r.AppendLine($"화면 갱신: 평균 {(frames>0?frames/frameTime:0):F0} FPS · 가장 긴 프레임 {worstFrame*1000:F0} ms (녹화 중 측정)");
    r.AppendLine($"참가 슬롯: {joinedSlot} · 이동 거리: {moved:F0} m · 점프 입력: {jumps} · 점프 확인: {jumpsSeen} · 발사: {shots}");
    r.AppendLine($"아군 밀침 전체: {shoves} (내가 밀림 {localShoved}, 내가 밈 {localShovedOthers}) · 동물 경직: {staggers} · 공격 변신: {transforms}");
    r.AppendLine($"동물 계단 진입: {onStairs.Count} · 경사로 진입: {onRamp.Count} · 계단→경사로 우회: {detours.Count} · 2층 도달: {reachedDeck.Count}");

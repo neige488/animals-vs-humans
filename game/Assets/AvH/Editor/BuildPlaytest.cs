@@ -14,7 +14,7 @@ namespace AvH.Editor {
    // Owned sounds live in the Git-ignored catalog; refresh it so every build carries them when the assets exist.
    ConfigureOwnedAssets.ConfigureSounds();
    // A village generated before pushable props existed keeps every crate fixed; rebuild it from the owned assets.
-   if(ConfigureOwnedAssets.VillageNeedsRebuild())ConfigureOwnedAssets.Configure();
+   if(ConfigureOwnedAssets.VillageNeedsRebuild()||ConfigureOwnedAssets.CrossingNeedsRebuild())ConfigureOwnedAssets.Configure();
    var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions {scenes=new[]{"Assets/Scenes/SampleScene.unity"},locationPathName=path,target=target,options=BuildOptions.Development});
    if(report.summary.result!=BuildResult.Succeeded) throw new InvalidOperationException("빌드 실패: "+report.summary.result);
    if(target==BuildTarget.StandaloneOSX)ConfigureMacPrivacy(path);

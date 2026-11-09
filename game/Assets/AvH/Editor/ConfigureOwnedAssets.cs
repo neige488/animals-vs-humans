@@ -17,7 +17,7 @@ namespace AvH.Editor {
    foreach(var file in Directory.GetFiles(Root,"*.mat",SearchOption.AllDirectories).Where(p=>!p.StartsWith(Generated))) {
     var mat=AssetDatabase.LoadAssetAtPath<Material>(file);if(mat==null)continue;
     var text=File.ReadAllText(file);var match=Regex.Match(text,@"- _Albedo_Map:\s*m_Texture: \{fileID: \d+, guid: ([a-f0-9]{32})");
-    if(!match.Success)continue;
+    if(!match.Success){ConvertFlat(file,mat,text);continue;}
     var tex=AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(match.Groups[1].Value));
     var convertedPath=Generated+Path.GetFileNameWithoutExtension(file)+"_Builtin.mat";
     var converted=AssetDatabase.LoadAssetAtPath<Material>(convertedPath);
@@ -32,11 +32,12 @@ namespace AvH.Editor {
    var animals=animalFiles.Select((file,i)=>Owned(file,animalNames[i],false)).ToArray();
    var map=BuildVillage();
    var village=PrefabUtility.SaveAsPrefabAsset(map,Generated+"Village.prefab");UnityEngine.Object.DestroyImmediate(map);
+   var (crossing,crate)=BuildCrossing();
    var path=Root+"Resources/OwnedAssetCatalog.asset";
    var catalog=AssetDatabase.LoadAssetAtPath<OwnedAssetCatalog>(path);
    if(catalog==null){catalog=ScriptableObject.CreateInstance<OwnedAssetCatalog>();AssetDatabase.CreateAsset(catalog,path);}
    catalog.ShelterPoints=PrototypeVillage.DefaultShelters.ToArray();
-   catalog.Humans=humans;catalog.Animals=animals;catalog.Human=humans[0].Prefab;catalog.Animal=animals[0].Prefab;catalog.Village=village;
+   catalog.Humans=humans;catalog.Animals=animals;catalog.Human=humans[0].Prefab;catalog.Animal=animals[0].Prefab;catalog.Village=village;catalog.Crossing=crossing;catalog.Crate=crate;
    catalog.AnimalDisplayName="여우";catalog.Rarity="일반";catalog.RarityColor=new Color(.85f,.95f,1);
    catalog.HumanSource="Polyperfect Low Poly Animated People 3.02 / man_casual";
    catalog.AnimalSource="Polyperfect Low Poly Animated Animals 4.1.1 / Fox";

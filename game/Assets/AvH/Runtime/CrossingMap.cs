@@ -41,6 +41,9 @@ namespace AvH {
   public static Vector3 RampBFoot=>new Vector3(28-RampLength-.8f,0,26);
   public static readonly Vector3 ShelterA=new Vector3(-38,Upper,31),ShelterB=new Vector3(38,Upper,31),ShelterTower=new Vector3(0,Upper,32);
   public static readonly Vector3[] Recovery={new Vector3(0,1,-28),new Vector3(-46,1,0),new Vector3(40,1,0),new Vector3(0,1,21.5f),new Vector3(8,1,0)};
+  /// <summary>Market stalls along the plaza's south wall (centre on the ground, yaw): solid, clear of the spawn and the animal start row.</summary>
+  public static readonly (Vector3 p,float yaw)[] Stalls={(new Vector3(-46,0,-34.3f),0),(new Vector3(-19,0,-34.3f),0),(new Vector3(19,0,-34.3f),0),(new Vector3(46,0,-34.3f),0)};
+  public static readonly Vector3 StallSize=new Vector3(3.4f,3,2.9f);
   /// <summary>Jump-down gaps in the bridge railings (x, side z).</summary>
   public static readonly (float x,float z)[] BridgeGaps={(-16,30),(16,30),(-22,33),(22,33)};
   /// <summary>The bot grid covering the whole town, with a second layer for the bridge over the courtyard.</summary>
@@ -69,8 +72,17 @@ namespace AvH {
   public static IReadOnlyList<Vector3> Shelters {get;}=Array.AsReadOnly(new[]{CrossingLayout.ShelterA,CrossingLayout.ShelterB,CrossingLayout.ShelterTower});
   static readonly Color Sand=new Color(.84f,.72f,.5f),Roof=new Color(.72f,.4f,.26f);
 
+  /// <summary>
+  /// With the owned Synty assets configured, a generated dressing (Generated/Crossing.prefab, see the editor's
+  /// ConfigureOwnedAssets) replaces every Blender module: the modules then leave only their colliders behind.
+  /// </summary>
+  static bool dressed;
+  public const string DressingName="Synty dressing";
   public static IReadOnlyList<Vector3> Build(Transform parent) {
    var root=new GameObject(RootName).transform;root.SetParent(parent,false);
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   dressed=catalog!=null&&catalog.Crossing!=null;crateModel=catalog!=null?catalog.Crate:null;
+   if(dressed){var dressing=UnityEngine.Object.Instantiate(catalog.Crossing,root);dressing.name=DressingName;TownDressing.Dress(dressing.transform);}
    MapKit.Solid(root,"Ground",new Vector3(0,-.5f,0),new Vector3(CrossingLayout.HalfX*2+2,1,CrossingLayout.HalfZ*2+2),Sand);
    for(float x=-CrossingLayout.HalfX+2;x<CrossingLayout.HalfX;x+=4)for(float z=-CrossingLayout.HalfZ+2;z<-20;z+=4)Module(root,"SD_Floor",new Vector3(x,.02f,z),0);
    Walls(root);foreach(var b in CrossingLayout.Blocks)Block(root,b);
@@ -92,7 +104,7 @@ namespace AvH {
    MapKit.Invisible(block,"Block collider",new Vector3(r.center.x,CrossingLayout.BlockHeight/2,r.center.y),new Vector3(r.width,CrossingLayout.BlockHeight,r.height));
    for(float x=r.xMin+2;x<r.xMax;x+=4)for(float z=r.yMin+2;z<r.yMax;z+=4)
     if(x<r.xMin+3||x>r.xMax-3||z<r.yMin+3||z>r.yMax-3)Module(block,"SD_Block",new Vector3(x,0,z),((int)(x+z)&3)*90);
-   if(r.width>8&&r.height>8)Visual(block,"Block roof",new Vector3(r.center.x,CrossingLayout.BlockHeight-.05f,r.center.y),new Vector3(r.width-8,.1f,r.height-8),Roof);
+   if(!dressed&&r.width>8&&r.height>8)Visual(block,"Block roof",new Vector3(r.center.x,CrossingLayout.BlockHeight-.05f,r.center.y),new Vector3(r.width-8,.1f,r.height-8),Roof);
   }
 
   // A raised site: solid stone base (nothing walkable under it), floor tiles on top.
@@ -122,6 +134,11 @@ namespace AvH {
   // 1 m parapets on every open deck edge, with openings at stair and ramp heads, the bridge ends and the jump-down gaps.
   static void Railings(Transform root) {
    var rails=new GameObject("Railings").transform;rails.SetParent(root,false);
+   foreach(var (from,to,at,alongX) in RailSegments())Rail(rails,from,to,at,alongX);
+  }
+  /// <summary>Every parapet piece (from, to along its axis, its fixed coordinate, whether it runs along x). Shared with the editor dressing.</summary>
+  public static List<(float from,float to,float at,bool alongX)> RailSegments() {
+   var segments=new List<(float,float,float,bool)>();var rails=segments;
    float half=CrossingLayout.StairWidth/2+.2f,ramp=CrossingLayout.RampWidth/2+.2f,bridge=CrossingLayout.BridgeWidth/2;
    (float,float) Open(float c,float h)=>(c-h,c+h);
    var a=CrossingLayout.SiteA;var b=CrossingLayout.SiteB;var t=CrossingLayout.Tower;
@@ -141,15 +158,17 @@ namespace AvH {
    float south=CrossingLayout.BridgeZ-bridge+.15f,north=CrossingLayout.BridgeZ+bridge-.15f;
    Run(rails,a.xMax,t.xMin,south,true,Open(-16,2));Run(rails,t.xMax,b.xMin,south,true,Open(16,2));
    Run(rails,a.xMax,t.xMin,north,true,Open(-22,2));Run(rails,t.xMax,b.xMin,north,true,Open(22,2));
+   return segments;
   }
-  static void Run(Transform parent,float from,float to,float at,bool alongX,params (float a,float b)[] openings) {
+  static void Run(List<(float,float,float,bool)> into,float from,float to,float at,bool alongX,params (float a,float b)[] openings) {
    var gaps=new List<(float a,float b)>(openings);gaps.Sort((p,q)=>p.a.CompareTo(q.a));
    float start=from;
-   foreach(var (a,b) in gaps){Rail(parent,start,Mathf.Min(a,to),at,alongX);start=Mathf.Max(start,b);}
-   Rail(parent,start,to,at,alongX);
+   foreach(var (a,b) in gaps){Add(start,Mathf.Min(a,to));start=Mathf.Max(start,b);}
+   Add(start,to);
+   void Add(float x0,float x1){if(x1-x0>=.3f)into.Add((x0,x1,at,alongX));}
   }
   static void Rail(Transform parent,float from,float to,float at,bool alongX) {
-   if(to-from<.3f)return;float length=to-from,mid=(from+to)/2;
+   float length=to-from,mid=(from+to)/2;
    var foot=alongX?new Vector3(mid,CrossingLayout.Upper,at):new Vector3(at,CrossingLayout.Upper,mid);
    var rail=Module(parent,"SD_Railing",foot,alongX?0:90);rail.localScale=new Vector3(length/4,1,1);
    MapKit.Collider(rail.gameObject,new Vector3(0,.5f,0),new Vector3(4,1,.3f));
@@ -162,10 +181,10 @@ namespace AvH {
   }
 
   // Sandbag walls and crate stacks: cover in the plaza, the lanes and the courtyard; never on a stair, ramp, gap or the spawn.
-  static readonly (Vector3 p,float yaw)[] LowWalls={
+  public static readonly (Vector3 p,float yaw)[] LowWalls={
    (new Vector3(-12,0,-24),0),(new Vector3(12,0,-24),0),(new Vector3(-46,0,-8),0),(new Vector3(-48,0,8),0),
    (new Vector3(8,0,0),0),(new Vector3(40,0,-16),0),(new Vector3(-22,0,21.5f),0),(new Vector3(22,0,21.5f),0)};
-  static readonly (Vector3 p,int high)[] CrateStacks={
+  public static readonly (Vector3 p,int high)[] CrateStacks={
    (new Vector3(-44,0,-15),2),(new Vector3(-50,0,13),1),(new Vector3(-26,0,-31),2),(new Vector3(28,0,-33),1),(new Vector3(30,0,-25),2),
    (new Vector3(13,0,-2),1),(new Vector3(-8,0,22.5f),1),(new Vector3(-40,CrossingLayout.Upper,34),1),(new Vector3(42,CrossingLayout.Upper,34),2)};
   public static IEnumerable<Vector3> CoverPositions(){foreach(var w in LowWalls)yield return w.p;foreach(var s in CrateStacks)yield return s.p;}
@@ -173,13 +192,17 @@ namespace AvH {
    var cover=new GameObject("Cover").transform;cover.SetParent(root,false);
    foreach(var (p,yaw) in LowWalls){var wall=Module(cover,"SD_LowWall",p,yaw);MapKit.Collider(wall.gameObject,new Vector3(0,.6f,0),new Vector3(4,1.2f,.6f));}
    foreach(var (p,high) in CrateStacks)for(int i=0;i<high;i++)for(int j=0;j<2;j++) {
-    var crate=MapKit.Module(cover,"Warehouse/WH_Crate",p+new Vector3(j*1.05f-.525f,i*1.0f,0),(i*17+j*9)%12-6);
+    var crate=Visual(cover,"Warehouse/WH_Crate",p+new Vector3(j*1.05f-.525f,i*1.0f,0),(i*17+j*9)%12-6);
     MapKit.Collider(crate.gameObject,new Vector3(0,.5f,0),Vector3.one);
    }
   }
 
   static void Decor(Transform root) {
    var decor=new GameObject("Decor").transform;decor.SetParent(root,false);
+   foreach(var (p,yaw) in CrossingLayout.Stalls) {
+    var stall=dressed?Holder(decor,"Stall",p,yaw):MapKit.Solid(decor,"Stall",p+Vector3.up*CrossingLayout.StallSize.y/2,CrossingLayout.StallSize,new Color(.6f,.42f,.28f));
+    if(dressed)MapKit.Collider(stall.gameObject,Vector3.up*CrossingLayout.StallSize.y/2,CrossingLayout.StallSize);
+   }
    foreach(var p in new[]{new Vector3(-36,0,-30),new Vector3(36,0,-30),new Vector3(-20,0,-23),new Vector3(20,0,-23)}){var palm=Module(decor,"SD_Palm",p,p.x*7);MapKit.Collider(palm.gameObject,new Vector3(0,2.5f,0),new Vector3(.5f,5,.5f));}
    // Shop awnings over the lanes, high enough to walk under.
    foreach(var (p,yaw) in new[]{(new Vector3(0,2.9f,-12),90f),(new Vector3(4,2.9f,-8),-90f),(new Vector3(-40,2.9f,-10),-90f),(new Vector3(-40,2.9f,12),-90f),(new Vector3(-20,2.9f,-20),180f),(new Vector3(20,2.9f,-20),180f),(new Vector3(16,2.9f,10),-90f),(new Vector3(36,2.9f,16),90f)})
@@ -194,10 +217,19 @@ namespace AvH {
   public static IEnumerable<Vector3> LightCratePositions()=>Light;
   static void LightCrates(Transform root) {
    var container=new GameObject(PushProps.Container).transform;container.SetParent(root,false);
-   for(int i=0;i<Light.Length;i++){var crate=MapKit.Module(container,"Warehouse/WH_Crate",Light[i],i*23%90);crate.name="Light crate "+i;crate.localScale=Vector3.one*.7f;}
+   for(int i=0;i<Light.Length;i++) {
+    Transform crate;
+    if(crateModel!=null){crate=UnityEngine.Object.Instantiate(crateModel,container).transform;crate.localPosition=Light[i];crate.localRotation=Quaternion.Euler(0,i*23%90,0);}
+    else crate=MapKit.Module(container,"Warehouse/WH_Crate",Light[i],i*23%90);
+    crate.name="Light crate "+i;crate.localScale=Vector3.one*.7f;
+   }
   }
 
-  static Transform Module(Transform parent,string name,Vector3 foot,float yaw)=>MapKit.Module(parent,"Crossing/"+name,foot,yaw);
+  static GameObject crateModel;
+  static Transform Module(Transform parent,string name,Vector3 foot,float yaw)=>Visual(parent,"Crossing/"+name,foot,yaw);
+  // In the dressed map a module is only an empty holder at the same place, so its colliders stay exactly where they were.
+  static Transform Visual(Transform parent,string resource,Vector3 foot,float yaw)=>dressed?Holder(parent,resource.Substring(resource.LastIndexOf('/')+1),foot,yaw):MapKit.Module(parent,resource,foot,yaw);
+  static Transform Holder(Transform parent,string name,Vector3 foot,float yaw){var go=new GameObject(name);go.transform.SetParent(parent,false);go.transform.localPosition=foot;go.transform.localRotation=Quaternion.Euler(0,yaw,0);return go.transform;}
   static void Visual(Transform parent,string name,Vector3 center,Vector3 size,Color color) {
    var box=MapKit.Solid(parent,name,center,size,color);UnityEngine.Object.DestroyImmediate(box.GetComponent<Collider>());
   }

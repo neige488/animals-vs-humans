@@ -39,6 +39,25 @@ namespace AvH.Editor {
    }
    Object.DestroyImmediate(floor);Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
   }
+  /// <summary>The sand crossing as the game builds it (dressed when the owned assets are configured), from player-height viewpoints.</summary>
+  public static void CaptureCrossing() {
+   Directory.CreateDirectory(Output);
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   var root=new GameObject("Crossing audit");CrossingMap.Build(root.transform);
+   var light=new GameObject("Audit sun").AddComponent<Light>();light.type=LightType.Directional;
+   var camera=new GameObject("Audit camera").AddComponent<Camera>();camera.fieldOfView=60;
+   TownLighting.Apply(camera,light);
+   if(catalog!=null){foreach(var p in CrossingMap.Shelters)Pose(catalog.Human,root.transform,p);Pose(catalog.Animal,root.transform,new Vector3(-46,0,-6));Pose(catalog.Human,root.transform,new Vector3(1,0,-27));}
+   Shot(camera,new Vector3(0,62,-78),new Vector3(0,0,4),"crossing-overview");
+   Shot(camera,new Vector3(2,2.6f,-31),new Vector3(-2,2,-10),"crossing-plaza");
+   Shot(camera,new Vector3(-46,2.6f,-24),new Vector3(-45,2.5f,20),"crossing-long-lane");
+   Shot(camera,new Vector3(2,2.6f,-21),new Vector3(4,2,-2),"crossing-alley");
+   Shot(camera,new Vector3(40,2.6f,-22),new Vector3(40,2,10),"crossing-passage");
+   Shot(camera,new Vector3(0,3,21.5f),new Vector3(-20,3.5f,32),"crossing-courtyard");
+   Shot(camera,new Vector3(-38,6.2f,27),new Vector3(10,3.5f,31.5f),"crossing-bridge");
+   Shot(camera,new Vector3(-44,2.4f,10),new Vector3(-44,4,26),"crossing-stair-a");
+   Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
+  }
   static GameObject Pose(GameObject prefab,Transform parent,Vector3 position) {
    var model=Object.Instantiate(prefab,parent);model.transform.position=position;
    foreach(var a in model.GetComponentsInChildren<Animator>()){a.Rebind();a.Update(0);a.Play("Idle",0,0);a.Update(.1f);}return model;
