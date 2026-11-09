@@ -138,6 +138,27 @@ namespace AvH.Tests {
    yield return null;
   }
 
+  // Humans run north during preparation; the first animals then leave from the south plaza and must come up the lanes.
+  [UnityTest] public IEnumerator FirstAnimalsStartInThePlazaWhileHumansStayPut() {
+   var root=new GameObject("crossing release");
+   try {
+    var game=Crossing(root);yield return null;
+    game.Session.BeginSettingsEdit(0);var edit=game.Session.ObserveSettings().Edit;edit.PreparationSeconds=2;edit.InitialAnimals=2;
+    game.Session.UpdateSettingsEdit(0,edit);Assert.IsTrue(game.Session.ApplySettingsNow(0));
+    // Everyone walks off north a little first.
+    for(int i=0;i<12;i++)game.SubmitInput(i,new PlayerInput{Forward=1,Yaw=0});
+    var before=game.Observe();int guard=0;
+    while(game.Observe().Phase==RoundPhase.Preparation&&guard++<400){before=game.Observe();for(int i=0;i<12;i++)game.SubmitInput(i,new PlayerInput{Forward=1,Yaw=0,RoundId=before.Round});game.Step(.02f);}
+    var after=game.Observe();Assert.AreEqual(RoundPhase.Chase,after.Phase);
+    var animals=after.Players.Where(p=>p.Faction==Faction.Animal).ToArray();Assert.AreEqual(2,animals.Length);
+    foreach(var a in animals){var body=game.PlayerTransform(a.Slot).position;Assert.Less(body.z,-31,"the animal body starts in the plaza's south row: "+body);Assert.Less(Mathf.Abs(V(a.Position).z-body.z),.5f,"session and body agree");}
+    foreach(var h in after.Players.Where(p=>p.Faction==Faction.Human))Assert.Less(Vector3.Distance(V(h.Position),V(before.Players[h.Slot].Position)),.5f,"humans are not moved");
+    var transform=after.Events.Where(e=>e.Kind==FeelEventKind.Transform).ToArray();Assert.AreEqual(2,transform.Length);Assert.IsTrue(transform.All(e=>e.Position.Z<-31),"the transformation shows where the animal starts");
+    Assert.IsFalse(GameMaps.AnimalsStartApart(GameMaps.Town));Assert.IsFalse(GameMaps.AnimalsStartApart(GameMaps.Warehouse));
+   } finally {Object.Destroy(root);}
+   yield return null;
+  }
+
   [UnityTest] public IEnumerator HostSwitchesFromTheCrossingBackToTheVillage() {
    var root=new GameObject("crossing switch");
    try {

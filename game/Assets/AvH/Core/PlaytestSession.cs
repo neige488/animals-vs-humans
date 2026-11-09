@@ -93,6 +93,7 @@ namespace AvH
                         AssignCharacter(players[slots[i]],animalRoster[nextAnimal++%animalRoster.Length]);
                         players[slots[i]].AttackGraceRemaining = settings.Current.InitialAttackGrace;
                     }
+                    if (GameMaps.AnimalsStartApart(map)) for (int i = 0; i < settings.Current.InitialAnimals; i++) players[slots[i]].Position = GameMaps.AnimalStart(map, i);
                     var born=players.Where(p=>p.Faction==Faction.Animal).ToArray();
                     PublishBirth(born);foreach(var p in born)Publish(FeelEventKind.Transform,-1,p.Slot,p.Position);
                     phase = RoundPhase.Chase; remaining = settings.Current.RoundSeconds;

@@ -92,7 +92,9 @@ namespace AvH {
    var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
-    if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; }
+    // A new round, or a first animal sent to its own start (crossing): the session decided the place, the body follows.
+    bool released=state.Phase==RoundPhase.Chase&&before.Phase==RoundPhase.Preparation&&state.Round==before.Round&&GameMaps.AnimalsStartApart(state.Map)&&p.Faction==Faction.Animal&&before.Players[i].Faction==Faction.Human;
+    if(state.Round!=before.Round||released) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; pushVelocity[i]=Vector3.zero; }
     if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId||p.Faction==Faction.Human&&p.Tool!=before.Players[i].Tool)ChangeVisual(before,state,i,body.transform.position);
     if(FishControls(i)) continue;
     if(state.Phase!=RoundPhase.Results) {
