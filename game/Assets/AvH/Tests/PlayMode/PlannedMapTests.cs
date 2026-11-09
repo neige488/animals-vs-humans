@@ -37,7 +37,7 @@ namespace AvH.Tests {
      }
      Assert.AreEqual(plan.LightCrates.Count,game.ObserveProps().Length,plan.Root+" light crates");
      var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
-     if(catalog!=null&&catalog.Dressing(map)!=null){var dressing=root.transform.Find(plan.Root).Find(PlannedMap.DressingName);Assert.IsNotNull(dressing,plan.Root+" is dressed");Assert.IsFalse(dressing.GetComponentsInChildren<Collider>().Any(),plan.Root+" dressing is visual only");}
+     if(catalog!=null&&catalog.Dressing(map)!=null){var dressing=root.transform.Find(plan.Root).Find(PlannedMap.DressingName);Assert.IsNotNull(dressing,plan.Root+" is dressed");Assert.IsFalse(dressing.GetComponentsInChildren<Collider>().Any(c=>c.gameObject.layer!=Layers.CameraOnly),plan.Root+" dressing only blocks the camera");}
      var spawn=V(game.Observe().Players[0].Position);var animal=V(GameMaps.AnimalStart(map,0));animal.y=0;
      foreach(var shelter in game.ShelterPoints) {
       var path=game.PlanBotRoute(spawn,shelter,out bool ok);Assert.IsTrue(ok,$"{plan.Root}: shelter {shelter} reachable from the spawn");Assert.IsFalse(Drops(path,spawn),$"{plan.Root}: no jump needed to reach {shelter}");

@@ -132,7 +132,7 @@ namespace AvH.Tests {
     var game=Warehouse(root);yield return null;
     var map=root.transform.Find(WarehouseMap.RootName);var dressing=map.Find(WarehouseMap.DressingName);Assert.IsNotNull(dressing);
     Assert.IsFalse(map.GetComponentsInChildren<Renderer>().Any(r=>r.enabled&&r.name.StartsWith("WH_")),"no Blender module is drawn");
-    Assert.IsFalse(dressing.GetComponentsInChildren<Collider>().Any(),"the dressing is visual only");
+    Assert.IsFalse(dressing.GetComponentsInChildren<Collider>().Any(c=>c.gameObject.layer!=Layers.CameraOnly),"the dressing only blocks the camera");
     Assert.AreEqual(10,game.ObserveProps().Length);
     Assert.Greater(dressing.GetComponent<TownDressing>().Observe().LanternLights,0,"hall lanterns are lit");
    } finally {Object.Destroy(root);}

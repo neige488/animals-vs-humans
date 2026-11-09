@@ -148,7 +148,7 @@ namespace AvH.Tests {
     var map=root.transform.Find(CrossingMap.RootName);Assert.IsNotNull(map.Find(CrossingMap.DressingName),"the Synty dressing is placed");
     Assert.IsFalse(map.GetComponentsInChildren<Renderer>().Any(r=>r.name.StartsWith("SD_")),"no Blender module is drawn under it");
     Assert.IsTrue(map.GetComponentsInChildren<MeshFilter>().Any(f=>f.name.StartsWith("Crossing ")),"static scenery is merged into chunk meshes");
-    Assert.IsFalse(map.Find(CrossingMap.DressingName).GetComponentsInChildren<Collider>().Any(),"the dressing is visual only");
+    Assert.IsFalse(map.Find(CrossingMap.DressingName).GetComponentsInChildren<Collider>().Any(c=>c.gameObject.layer!=Layers.CameraOnly),"the dressing only blocks the camera");
     Assert.AreEqual(12,game.ObserveProps().Length);
    } finally {Object.Destroy(root);}
    yield return null;

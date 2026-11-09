@@ -25,6 +25,19 @@ namespace AvH {
    float next=Math.Max(0,length-(grounded?GroundKnockbackFriction:AirKnockbackFriction)*(float)Math.Max(0,seconds));
    float scale=next/length;x*=scale;y*=scale;z*=scale;
   }
+  /// <summary>
+  /// Body radius (m) of the character's collision capsule, sized to its model so a bear no longer sinks into its
+  /// neighbours and a rabbit no longer bumps into air. Height stays 1.8 m for every body.
+  /// </summary>
+  public static float BodyRadius(Faction faction,string characterId) {
+   if(faction!=Faction.Animal)return .38f;
+   switch(characterId){case "animal-bear_grizzly":return .5f;case "animal-boar":return .46f;case "animal-wolf":return .42f;case "animal-fox":return .34f;case "animal-rabbit_brown":return .3f;case "animal-penguin":return .36f;default:return .38f;}
+  }
+  /// <summary>How fast a body turns toward where it moves (degrees per second): heavy animals swing round, light ones snap.</summary>
+  public static float TurnDegrees(Faction faction,string characterId) {
+   if(faction!=Faction.Animal)return 480;
+   switch(characterId){case "animal-bear_grizzly":return 240;case "animal-boar":return 300;case "animal-penguin":return 320;case "animal-wolf":return 460;case "animal-fox":return 620;case "animal-rabbit_brown":return 660;default:return 480;}
+  }
   public static MotionProfile Profile(PlaytestValues rules,PlayerState player) {
    var modifiers=AnimalBalance.For(rules,player);float start,stop;Weight(player,out start,out stop);
    return new MotionProfile{MaxSpeed=player.Faction==Faction.Human?rules.HumanSpeed:rules.AnimalSpeed*modifiers.Speed,

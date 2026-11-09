@@ -24,7 +24,7 @@ namespace AvH {
    Warp(bodies[slot],state.Position);bodies[slot].transform.rotation=state.Rotation;vertical[slot]=state.Vertical;motion[slot]=state.Motion;pushVelocity[slot]=state.Push;
   }
   internal void PresentFishMovement(int slot,FishMotorState state,float yaw,float pitch,float dt){
-   Animate(slot,new LocomotionState{VelocityX=state.Motion.VelocityX,VelocityZ=state.Motion.VelocityZ,VerticalSpeed=state.Vertical,Grounded=state.Grounded,AimYaw=yaw,TopSpeed=state.Profile.MaxSpeed,Action=state.Action,ActionProgress=state.ActionProgress},dt);
+   Animate(slot,new LocomotionState{VelocityX=state.Motion.VelocityX,VelocityZ=state.Motion.VelocityZ,VerticalSpeed=state.Vertical,Grounded=state.Grounded,AimYaw=yaw,TopSpeed=state.Profile.MaxSpeed,Action=state.Action,ActionProgress=state.ActionProgress,PushX=state.Push.x,PushZ=state.Push.z},dt);
    if(guns[slot]!=null)guns[slot].GetComponent<BubbleGunPose>().SetAim(yaw,pitch);
   }
   internal FishMotorState SimulateFishMovement(int slot,FishMotorState state,FishMoveData input,float dt,bool present,bool server){
@@ -43,7 +43,7 @@ namespace AvH {
    state.Grounded=(flags&CollisionFlags.Below)!=0;
    if((flags&CollisionFlags.Above)!=0&&state.Vertical>0)state.Vertical=0;
    if(state.Grounded&&state.Vertical<0)state.Vertical=-2;
-   if(direction.sqrMagnitude>.01f)body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540*dt);
+   if(direction.sqrMagnitude>.01f){var who=Observe().Players[slot];body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),CharacterMotion.TurnDegrees(who.Faction,who.CharacterId)*dt);}
    // Only the host judges a fall; a predicting guest keeps falling until the host's restart corrects it.
    if(body.transform.position.y<FallLine&&(server||!GameMaps.FallTurnsAnimal(builtMap))){Warp(body,server?Restart(slot,body.transform.position):NearestReturn(body.transform.position));state.Vertical=0;state.Motion=default;state.Push=Vector3.zero;state.Grounded=false;}
    state.Position=body.transform.position;state.Rotation=body.transform.rotation;vertical[slot]=state.Vertical;motion[slot]=state.Motion;

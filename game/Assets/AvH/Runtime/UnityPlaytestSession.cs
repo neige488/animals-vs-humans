@@ -28,7 +28,7 @@ namespace AvH {
   /// (bot grid, spawns) never see it, then destroyed.
   /// </summary>
   void BuildMap(int map) {
-   map=GameMaps.Clamp(map);if(map==builtMap)return;
+   map=GameMaps.Clamp(map);if(map==builtMap)return;Layers.Ensure();
    foreach(var name in new[]{"Village",WarehouseMap.RootName,CrossingMap.RootName,MapPlans.Sky.Root,MapPlans.Snow.Root,MapPlans.Ruins.Root}){var old=transform.Find(name);if(old!=null){old.gameObject.SetActive(false);old.name+=" (removed)";Destroy(old.gameObject);}}
    switch(map){
     case GameMaps.Warehouse:ShelterPoints=WarehouseMap.Build(transform);returns=WarehouseLayout.Recovery;props=PushProps.Adopt(transform.Find(WarehouseMap.RootName));break;
@@ -123,9 +123,9 @@ namespace AvH {
      // Animate what the body actually did: a wall-blocked body does not run at full cadence.
      var moved=body.transform.position-from;moved.y=0;float actual=moved.magnitude/seconds;
      var shown=planar.sqrMagnitude>actual*actual?planar.normalized*actual:planar;
-     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed,Action=p.Action,ActionProgress=ActionProgress(p,rules)},seconds);
+     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed,Action=p.Action,ActionProgress=ActionProgress(p,rules),PushX=pushVelocity[i].x,PushZ=pushVelocity[i].z},seconds);
      if(!wasGrounded&&body.isGrounded&&fallingSpeed< -PlaytestSession.HardLandingSpeed){Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);var landed=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(landed.x,landed.y,landed.z));Session.RecordLanding(i,-fallingSpeed);}
-     if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
+     if(direction.sqrMagnitude>.01f){Skid(body,planar,direction);body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),CharacterMotion.TurnDegrees(p.Faction,p.CharacterId)*seconds);}
      if(body.transform.position.y < FallLine) { Warp(body,Restart(i,body.transform.position)); vertical[i]=0; motion[i]=default; pushVelocity[i]=Vector3.zero; }
     } else {motion[i]=default;Animate(i,new LocomotionState{Grounded=true,AimYaw=PresentationYaw(i)},seconds);}
     var pos=body.transform.position;
@@ -174,6 +174,11 @@ namespace AvH {
   /// <summary>Locomotion animation currently shown for a slot (presentation only).</summary>
   public CharacterAnimationView ObserveAnimation(int slot)=>bodies[slot].GetComponent<CharacterAnimator>().Observe();
   readonly LocomotionState[] presented=new LocomotionState[12];
+  /// <summary>A hard turn at speed kicks up a puff of dust at the feet (presentation only).</summary>
+  void Skid(CharacterController body,Vector3 velocity,Vector3 wanted) {
+   if(!body.isGrounded||velocity.sqrMagnitude<16||Vector3.Angle(velocity,wanted)<100)return;
+   if(Time.frameCount%4==0)Effects.Emit(body.transform.position+velocity.normalized*.3f,new Color(.85f,.78f,.6f,.5f),3,.5f);
+  }
   void Animate(int slot,LocomotionState state,float seconds){presented[slot]=state;bodies[slot].GetComponent<CharacterAnimator>().Apply(state,seconds);}
   /// <summary>Host presentation frame for remote viewers: each body's position, facing, aim pitch and the motion it was animated with.</summary>
   public NetworkMotionFrame CaptureMotion(bool refreshAll=false) {
@@ -201,6 +206,7 @@ namespace AvH {
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   void RefreshVisual(int slot,Faction faction,bool transformation=false) {
+   bodies[slot].radius=CharacterMotion.BodyRadius(faction,Observe().Players[slot].CharacterId);
    var body=bodies[slot].transform;var parent=body.Find("Predicted presentation")??body;
    if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Tool(parent,Observe().Players[slot].Tool):null;
    var old=parent.Find("Visual");

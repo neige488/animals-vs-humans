@@ -41,7 +41,7 @@ namespace AvH {
     bool popped=false,bounced=false;
     // Light props have no colliders; the nearest one the sweep meets takes the bubble when nothing solid comes first.
     int prop=-1;float propAt=float.MaxValue;bool propHit=props!=null&&props.Hit(bubble.Position,bubble.Direction,bubble.Radius,distance,out prop,out propAt);
-    foreach(var hit in Physics.SphereCastAll(bubble.Position,bubble.Radius,bubble.Direction,distance,~0,QueryTriggerInteraction.Ignore).OrderBy(h=>h.distance)) {
+    foreach(var hit in Physics.SphereCastAll(bubble.Position,bubble.Radius,bubble.Direction,distance,Layers.World,QueryTriggerInteraction.Ignore).OrderBy(h=>h.distance)) {
      var hitWorld=hit.collider.GetComponentInParent<UnityPlaytestSession>();if(hitWorld!=null&&hitWorld!=this)continue;
      int target=bodies.IndexOf(hit.collider as CharacterController);
      if(target==bubble.Owner)continue;
@@ -105,7 +105,7 @@ namespace AvH {
     if(distance>reach+.38f)continue;
     if(distance>.05f&&Vector3.Angle(facing,offset)>halfAngle)continue;
     if(state.Players[i].Faction==Faction.Human&&!rules.FriendlyPush)continue;
-    if(Physics.Linecast(origin,other+Vector3.up*1.1f,out var block,~0,QueryTriggerInteraction.Ignore)&&block.collider.GetComponentInParent<CharacterController>()==null)continue;
+    if(Physics.Linecast(origin,other+Vector3.up*1.1f,out var block,Layers.World,QueryTriggerInteraction.Ignore)&&block.collider.GetComponentInParent<CharacterController>()==null)continue;
     hits.Add((i,distance,distance>.05f?Vector3.Lerp(offset.normalized,facing,.35f).normalized:facing));
    }
    foreach(var hit in nearestOnly?hits.OrderBy(h=>h.distance).Take(1):hits) {
@@ -135,11 +135,11 @@ namespace AvH {
    var input=inputs[slot];float yaw=input.RoundId==round?input.Yaw:bodies[slot].transform.eulerAngles.y;
    var direction=Quaternion.Euler(0,yaw,0)*Vector3.forward;
    var origin=bodies[slot].transform.position+Vector3.up*.9f;
-   foreach(var collider in Physics.OverlapSphere(origin,CombatRules.MeleeDistance-.1f,~0,QueryTriggerInteraction.Ignore).OrderBy(c=>(c.bounds.center-origin).sqrMagnitude)) {
+   foreach(var collider in Physics.OverlapSphere(origin,CombatRules.MeleeDistance-.1f,Layers.World,QueryTriggerInteraction.Ignore).OrderBy(c=>(c.bounds.center-origin).sqrMagnitude)) {
     int victim=bodies.IndexOf(collider as CharacterController);if(victim<0||victim==slot)continue;
     var offset=bodies[victim].transform.position-bodies[slot].transform.position;
     if(offset.sqrMagnitude>.04f && Vector3.Dot(direction,offset.normalized)<.2f)continue;
-    if(Physics.Linecast(origin,bodies[victim].transform.position+Vector3.up*.9f,out var obstruction,~0,QueryTriggerInteraction.Ignore) && obstruction.collider!=bodies[victim])continue;
+    if(Physics.Linecast(origin,bodies[victim].transform.position+Vector3.up*.9f,out var obstruction,Layers.World,QueryTriggerInteraction.Ignore) && obstruction.collider!=bodies[victim])continue;
     if(Session.TryMeleeHit(slot,victim,round))return;
    }
    Session.ResolveAttackMiss(slot,round);

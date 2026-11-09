@@ -138,7 +138,7 @@ namespace AvH {
   }
   // Pushed out of any static scenery it was squeezed into (another body may have shoved it against a wall).
   static void Depenetrate(Prop p,Vector3 center,float radius) {
-   foreach(var collider in Physics.OverlapSphere(center,radius,~0,QueryTriggerInteraction.Ignore)) {
+   foreach(var collider in Physics.OverlapSphere(center,radius,Layers.World,QueryTriggerInteraction.Ignore)) {
     if(collider is CharacterController||collider is MeshCollider mesh&&!mesh.convex)continue;
     var closest=collider.ClosestPoint(center);var away=center-closest;away.y=0;float distance=away.magnitude;
     if(distance<1e-4f||distance>=radius)continue;
@@ -148,7 +148,7 @@ namespace AvH {
   }
   static bool Sweep(Vector3 center,float radius,Vector3 direction,float distance,out RaycastHit nearest) {
    nearest=default;bool found=false;
-   foreach(var hit in Physics.SphereCastAll(center,radius,direction,distance,~0,QueryTriggerInteraction.Ignore)) {
+   foreach(var hit in Physics.SphereCastAll(center,radius,direction,distance,Layers.World,QueryTriggerInteraction.Ignore)) {
     if(hit.collider is CharacterController||hit.distance<=0)continue;
     if(!found||hit.distance<nearest.distance){nearest=hit;found=true;}
    }
@@ -157,7 +157,7 @@ namespace AvH {
   // Rides gentle slopes; falls off a ledge or the map edge (the sweep stops it at any real step).
   static void Ground(Prop p,float seconds) {
    float drop=.05f+Mathf.Max(0,-p.Fall*seconds),best=float.NegativeInfinity;
-   foreach(var hit in Physics.RaycastAll(p.Position+Vector3.up*StepUp,Vector3.down,StepUp+drop,~0,QueryTriggerInteraction.Ignore))
+   foreach(var hit in Physics.RaycastAll(p.Position+Vector3.up*StepUp,Vector3.down,StepUp+drop,Layers.World,QueryTriggerInteraction.Ignore))
     if(!(hit.collider is CharacterController)&&hit.normal.y>.5f&&hit.point.y>best)best=hit.point.y;
    if(best>float.NegativeInfinity){p.Position.y=best;p.Fall=0;return;}
    p.Fall-=Gravity*seconds;p.Position.y+=p.Fall*seconds;

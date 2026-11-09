@@ -205,7 +205,7 @@ namespace AvH {
   static Vector3 Flat(Vector3 v)=>new Vector3(v.x,0,v.z);
   static bool Sight(Vector3 from,Vector3 to) {
    var a=from+Vector3.up*1.3f;var b=to+Vector3.up*.9f;
-   return !Physics.RaycastAll(a,(b-a).normalized,Vector3.Distance(a,b),~0,QueryTriggerInteraction.Ignore).Any(h=>h.collider.GetComponentInParent<CharacterController>()==null);
+   return !Physics.RaycastAll(a,(b-a).normalized,Vector3.Distance(a,b),Layers.World,QueryTriggerInteraction.Ignore).Any(h=>h.collider.GetComponentInParent<CharacterController>()==null);
   }
 
   // ---------- camera: an overview while the stair is held, the player's own view otherwise ----------
@@ -216,7 +216,7 @@ namespace AvH {
    if(!overview)return;
    var view=Camera.main;if(view==null)return;
    if(s.Map==GameMaps.Crossing){view.transform.position=new Vector3(16,17,8);view.transform.rotation=Quaternion.LookRotation(new Vector3(-2,2,28)-view.transform.position);return;}
-   view.transform.position=new Vector3(-2,15,-25);view.transform.rotation=Quaternion.LookRotation(new Vector3(-1,1.5f,5)-view.transform.position);
+   view.transform.position=new Vector3(3,5,-11);view.transform.rotation=Quaternion.LookRotation(new Vector3(-9,2.5f,7)-view.transform.position);
   }
 
   bool finished;

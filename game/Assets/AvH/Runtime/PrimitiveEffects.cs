@@ -182,7 +182,7 @@ namespace AvH {
   void Update() {
    float dt=Time.deltaTime;age+=dt;if(age>=Life){Destroy(gameObject);return;}
    Velocity+=Vector3.down*Gravity*dt;var next=transform.position+Velocity*dt;
-   if(Velocity.y<0&&Physics.Raycast(transform.position+Vector3.up*.05f,Vector3.down,out var hit,.05f-Velocity.y*dt,~0,QueryTriggerInteraction.Ignore)&&hit.collider.GetComponentInParent<CharacterController>()==null)
+   if(Velocity.y<0&&Physics.Raycast(transform.position+Vector3.up*.05f,Vector3.down,out var hit,.05f-Velocity.y*dt,Layers.World,QueryTriggerInteraction.Ignore)&&hit.collider.GetComponentInParent<CharacterController>()==null)
     {next.y=hit.point.y+.03f;Velocity=new Vector3(Velocity.x*.6f,-Velocity.y*.45f,Velocity.z*.6f);}
    transform.position=next;transform.Rotate(spinAxis,720*dt*Mathf.Clamp01(Velocity.magnitude/3),Space.Self);
    if(age>Life-.25f)transform.localScale=new Vector3(.11f,.06f,.11f)*Mathf.Clamp01((Life-age)/.25f);

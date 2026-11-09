@@ -11,26 +11,47 @@ namespace AvH {
   public List<Vector3> Plan(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null)=>routes.Find(from,to,out reachable,allowDrop,avoid);
   /// <summary>New map geometry: the grid is rebuilt on the next route and every bot re-plans.</summary>
   public void ResetMap(RouteGrid grid){routes.Reset(grid);foreach(var brain in brains){brain.Round=-1;brain.Path.Clear();}}
-  sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;public BotAim Aim;public Vector3 Avoid;public float AvoidTime;}
+  sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;public BotAim Aim;public Vector3 Avoid;public float AvoidTime;
+   // Personality: idle shuffle at a shelter, boar charge, rabbit hop.
+   public Vector3 Fidget;public float FidgetTime,Charge=-3,Hop;public Vector3 ChargeDir;}
   readonly Brain[] brains=Enumerable.Range(0,12).Select(i=>new Brain{Shelter=i%3,Aim=new BotAim(i+1)}).ToArray();
   double clock;
   readonly VillageRoutes routes=new VillageRoutes();
   
   public void Step(UnityPlaytestSession game,float seconds) {
    var Shelters=game.ShelterPoints;var state=game.Observe();var rules=game.Session.ObserveSettings().Current;routes.BeginStep(seconds);clock+=seconds;
+   // Animals share out the humans: each takes the nearest one that is not already well covered, so a pack
+   // spreads over several targets instead of all piling onto the closest body.
+   var hunted=new Dictionary<int,List<int>>();var prey=new Dictionary<int,PlayerState>();
+   foreach(var a in state.Players.Where(p=>p.IsBot&&p.Faction==Faction.Animal)) {
+    var at=V(a.Position);PlayerState best=null;float score=float.MaxValue;
+    foreach(var h in state.Players.Where(p=>p.Faction==Faction.Human)){float s=Vector3.Distance(at,V(h.Position))+SpreadPenalty*(hunted.TryGetValue(h.Slot,out var l)?l.Count:0);if(s<score){score=s;best=h;}}
+    if(best==null)continue;prey[a.Slot]=best;if(!hunted.TryGetValue(best.Slot,out var list))hunted[best.Slot]=list=new List<int>();list.Add(a.Slot);
+   }
    foreach(var player in state.Players) {
     if(!player.IsBot)continue;
     var brain=brains[player.Slot];var position=V(player.Position);
     if(brain.Round!=state.Round||brain.Faction!=player.Faction) {brain.Round=state.Round;brain.Faction=player.Faction;brain.Replan=0;brain.Path.Clear();brain.Stuck=0;brain.Shelter=player.Slot%3;brain.Flee=0;brain.ProgressTime=0;brain.LastDistance=float.MaxValue;brain.Aim.Reset();brain.AvoidTime=0;}
     if(state.Phase==RoundPhase.Results){game.SubmitInput(player.Slot,new PlayerInput{RoundId=state.Round});continue;}
-    var target=state.Players.Where(p=>p.Faction!=player.Faction).OrderBy(p=>(V(p.Position)-position).sqrMagnitude).FirstOrDefault();
+    var target=player.Faction==Faction.Animal&&prey.TryGetValue(player.Slot,out var chosen)?chosen:state.Players.Where(p=>p.Faction!=player.Faction).OrderBy(p=>(V(p.Position)-position).sqrMagnitude).FirstOrDefault();
     float distance=target==null?float.MaxValue:Vector3.Distance(position,V(target.Position));
     brain.Flee-=seconds;brain.Replan-=seconds;brain.AvoidTime-=seconds;
     Vector3 goal;
     if(player.Faction==Faction.Human) {
      if(distance<4 && brain.Flee<=0) {brain.Shelter=Enumerable.Range(0,3).Where(i=>i!=brain.Shelter).OrderByDescending(i=>(Shelters[i]-V(target.Position)).sqrMagnitude).First();brain.Flee=5;brain.Replan=0;}
      goal=Shelters[brain.Shelter]+new Vector3((player.Slot/3-1.5f)*.75f,0,0);
-    } else goal=target==null?position:V(target.Position);
+     // At the shelter a person never stands like a statue: every few seconds they shift half a step.
+     brain.FidgetTime-=seconds;
+     if(brain.FidgetTime<=0){float a=Hash(player.Slot,clock)*Mathf.PI*2,r=.35f+Hash(player.Slot+7,clock)*.55f;brain.Fidget=new Vector3(Mathf.Cos(a)*r,0,Mathf.Sin(a)*r);brain.FidgetTime=2.2f+Hash(player.Slot+13,clock)*2.4f;}
+     if(brain.Flee<=0&&Flat(goal-position).magnitude<2.5f)goal+=brain.Fidget;
+    } else if(target==null)goal=position;
+    else {
+     var prey3=V(target.Position);goal=prey3;var toward=Flat(prey3-position);float d=toward.magnitude;var dir=d>.01f?toward/d:Vector3.forward;var side=Vector3.Cross(Vector3.up,dir)*(player.Slot%2==0?1:-1);
+     // Several animals on one human close in from different sides rather than queueing behind each other.
+     if(hunted.TryGetValue(target.Slot,out var pack)&&pack.Count>1&&d>1.8f&&d<7){float a=(pack.IndexOf(player.Slot)*Mathf.PI*2/pack.Count)+target.Slot;goal=prey3+new Vector3(Mathf.Cos(a),0,Mathf.Sin(a))*1.3f;}
+     // The wolf circles in from the side.
+     else if(player.CharacterId=="animal-wolf"&&d>4&&d<14)goal=prey3+side*3.5f-dir*1;
+    }
     if(brain.Replan<=0 && brain.Stuck>2){routes.Invalidate();brain.Stuck=.8f;}
     // An animal held at a choke point (bodies, shots) marks the spot just ahead and plans round it for a while:
     // a blocked staircase sends it to the far ramp instead of pushing into the same wall of humans.
@@ -82,6 +103,29 @@ namespace AvH {
       move+=away.normalized*(1.05f-away.magnitude)*1.5f;
     }
     if(brain.Stuck>.8f)move+=Vector3.Cross(move,Vector3.up)*(player.Slot%2==0?1:-1);
+    bool hop=false;
+    if(target!=null) {
+     var toward=Flat(V(target.Position)-position);var across=Vector3.Cross(Vector3.up,toward.normalized);
+     if(player.Faction==Faction.Human) {
+      // Shooting from a shelter: drift side to side instead of standing still.
+      if(brain.Flee<=0&&distance>4&&distance<18&&Flat(goal-position).magnitude<2.5f)move+=across*Mathf.Sin((float)clock*1.6f+player.Slot)*.5f;
+     } else {
+      brain.Charge-=seconds;brain.Hop-=seconds;
+      switch(player.CharacterId) {
+       case "animal-boar":
+        // A boar lowers its head and charges in a straight line, often past where the human was.
+        if(brain.Charge<=-2.5f&&distance>2.5f&&distance<9){brain.Charge=1.1f;brain.ChargeDir=toward.normalized;}
+        if(brain.Charge>0)move=brain.ChargeDir;
+        break;
+       case "animal-rabbit_brown":
+        if(move.sqrMagnitude>.2f&&distance>2.2f&&brain.Hop<=0){hop=true;brain.Hop=.9f+(player.Slot%3)*.15f;}
+        break;
+       case "animal-fox":
+        if(distance>3)move+=across*Mathf.Sin((float)clock*5+player.Slot)*.4f;
+        break;
+      }
+     }
+    }
     move=Vector3.ClampMagnitude(move,1);
     // Crowd spacing and stuck side-steps must not carry a bot over a bottomless edge (sky bridges, the chasm, the map rim).
     // A route that plans a jump down keeps it; otherwise the bot heads straight for its waypoint, or stops.
@@ -93,31 +137,38 @@ namespace AvH {
     }
     Vector3 aim=target==null?move:V(target.Position)-position;
     float yaw=Mathf.Atan2(aim.x,aim.z)*Mathf.Rad2Deg,pitch=-Mathf.Atan2(aim.y,Flat(aim).magnitude)*Mathf.Rad2Deg;
+    bool scanning=player.Faction==Faction.Human&&(target==null||distance>Tools.Range(player.Tool,rules)+6)&&Flat(goal-position).magnitude<2.5f;
     bool visible=target!=null;
     // Linecast normally ends at the target controller; accept that nearest hit.
-    if(target!=null && Physics.Linecast(position+Vector3.up*.9f,V(target.Position)+Vector3.up*.9f,out var sight,~0,QueryTriggerInteraction.Ignore)) visible=sight.collider.transform==game.PlayerTransform(target.Slot);
+    if(target!=null && Physics.Linecast(position+Vector3.up*.9f,V(target.Position)+Vector3.up*.9f,out var sight,Layers.World,QueryTriggerInteraction.Ignore)) visible=sight.collider.transform==game.PlayerTransform(target.Slot);
     // Human-like aim: lags the seen heading and wanders slightly; zero settings return the exact aim above.
     bool canFire=visible;
     if(target!=null){var aimed=brain.Aim.Step(clock,target.Slot,visible,yaw,pitch,rules.BotAimDelaySeconds,rules.BotAimErrorDegrees);yaw=aimed.Yaw;pitch=aimed.Pitch;canFire=aimed.CanFire;}
+    // Nothing in reach: the human looks around the approaches instead of staring at one spot.
+    if(scanning){yaw+=Mathf.Sin((float)clock*.45f+player.Slot*1.3f)*65;pitch=-4;canFire=false;}
     // Movement input is relative to the submitted aim, so aim lag never bends the path.
     var local=Quaternion.Euler(0,-yaw,0)*move;
     game.SubmitInput(player.Slot,new PlayerInput {Right=local.x,Forward=local.z,Yaw=yaw,
      Pitch=pitch,
-     Jump=brain.Stuck>1.5f,Attack=target!=null&&canFire&&distance<(player.Faction==Faction.Human?Tools.Range(player.Tool,rules):CombatRules.MeleeDistance-.15f),
+     Jump=brain.Stuck>1.5f||hop,Attack=target!=null&&canFire&&distance<(player.Faction==Faction.Human?Tools.Range(player.Tool,rules):CombatRules.MeleeDistance-.15f),
      Reload=player.Faction==Faction.Human&&Tools.UsesAmmo(player.Tool)&&player.Ammo==0,RoundId=state.Round});
    }
   }
   static float FloorBelow(Vector3 position) {
    float best=float.NegativeInfinity;
-   foreach(var hit in Physics.RaycastAll(position+Vector3.up*.3f,Vector3.down,6,~0,QueryTriggerInteraction.Ignore))
+   foreach(var hit in Physics.RaycastAll(position+Vector3.up*.3f,Vector3.down,6,Layers.World,QueryTriggerInteraction.Ignore))
     if(!(hit.collider is CharacterController)&&hit.collider.GetComponentInParent<CharacterController>()==null)best=Mathf.Max(best,hit.point.y);
    return float.IsNegativeInfinity(best)?position.y:best;
   }
+  /// <summary>How much farther (m) an animal will go for a human nobody else is chasing.</summary>
+  public const float SpreadPenalty=4;
+  /// <summary>A repeatable 0..1 number for this slot and moment (bots stay deterministic for tests).</summary>
+  static float Hash(int slot,double time){var x=Mathf.Sin((float)(slot*12.9898+Math.Floor(time*10)*78.233))*43758.547f;return x-Mathf.Floor(x);}
   /// <summary>True when a body taking this step still lands on a floor (a ledge up to 6 m is fine; a void is not).</summary>
   static bool FloorAhead(Vector3 position,Vector3 move) {
    if(move.sqrMagnitude<.0025f)return true;
    var probe=position+Vector3.up*.6f+Flat(move).normalized*.75f;
-   foreach(var hit in Physics.RaycastAll(probe,Vector3.down,6.6f,~0,QueryTriggerInteraction.Ignore))
+   foreach(var hit in Physics.RaycastAll(probe,Vector3.down,6.6f,Layers.World,QueryTriggerInteraction.Ignore))
     if(!(hit.collider is CharacterController)&&hit.collider.GetComponentInParent<CharacterController>()==null)return true;
    return false;
   }
@@ -156,13 +207,13 @@ namespace AvH {
    Physics.SyncTransforms();Array.Clear(walkable,0,walkable.Length);
    for(int z=0;z<grid.SizeZ;z++)for(int x=0;x<grid.SizeX;x++) {
     int id=z*grid.SizeX+x,layer=0;var top=new Vector3(grid.OriginX+x*grid.Cell,grid.Top,grid.OriginZ+z*grid.Cell);
-    var hits=Physics.RaycastAll(top,Vector3.down,grid.Top+10,~0,QueryTriggerInteraction.Ignore).Where(h=>Terrain(h.collider)&&h.normal.y>.7f).OrderByDescending(h=>h.distance).ToArray();
+    var hits=Physics.RaycastAll(top,Vector3.down,grid.Top+10,Layers.World,QueryTriggerInteraction.Ignore).Where(h=>Terrain(h.collider)&&h.normal.y>.7f).OrderByDescending(h=>h.distance).ToArray();
     foreach(var hit in hits) {
      var p=hit.point;
      // Reject a floor hidden under a low stair. The standing capsule alone leaves
      // foot clearance and can otherwise connect ground directly to a .5m step.
-     if(Physics.OverlapSphere(p+Vector3.up*.05f,.015f,~0,QueryTriggerInteraction.Ignore).Any(Terrain))continue;
-     if(Physics.OverlapCapsule(p+Vector3.up*.75f,p+Vector3.up*1.47f,.32f,~0,QueryTriggerInteraction.Ignore).Any(Terrain))continue;
+     if(Physics.OverlapSphere(p+Vector3.up*.05f,.015f,Layers.World,QueryTriggerInteraction.Ignore).Any(Terrain))continue;
+     if(Physics.OverlapCapsule(p+Vector3.up*.75f,p+Vector3.up*1.47f,.32f,Layers.World,QueryTriggerInteraction.Ignore).Any(Terrain))continue;
      // A second floor counts only well above the first (a bridge over a street), never a step or a crate top.
      if(layer>0&&p.y-points[id+(layer-1)*Cells].y<2)continue;
      points[id+layer*Cells]=p;walkable[id+layer*Cells]=true;if(++layer>=grid.Layers)break;
@@ -188,7 +239,7 @@ namespace AvH {
   static bool ClearDrop(Vector3 from,Vector3 to) {
    var delta=to-from;delta.y=0;
    return !Physics.CapsuleCastAll(from+Vector3.up*.42f,from+Vector3.up*1.42f,.36f,
-    delta.normalized,delta.magnitude,~0,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
+    delta.normalized,delta.magnitude,Layers.World,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
   }
   // String pulling: replace runs of grid cells with straight segments the full body can walk, so bots stop
   // zigzagging between 8-direction cells. Only flat stretches are pulled; stairs and roof drops keep their cells.
@@ -217,7 +268,7 @@ namespace AvH {
    }
    // The body sweep uses the grid's own clearance radius; on a stair slope it rides above the step edges.
    var direction=(end-anchor).normalized;float lift=sloped?.75f:.42f;
-   return !Physics.CapsuleCastAll(anchor+Vector3.up*lift,anchor+Vector3.up*1.42f,.33f,direction,Vector3.Distance(anchor,end),~0,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
+   return !Physics.CapsuleCastAll(anchor+Vector3.up*lift,anchor+Vector3.up*1.42f,.33f,direction,Vector3.Distance(anchor,end),Layers.World,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
   }
   public List<Vector3> Find(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null) {
    if(!rebuiltThisStep && (!built || rebuildRequested&&sinceBuild>=1))Build();

@@ -313,6 +313,8 @@ namespace AvH.Editor {
     var mesh=new Mesh{name=$"{asset} {g.Key.mat.name} {g.Key.cx},{g.Key.cz}",indexFormat=IndexFormat.UInt32};mesh.CombineMeshes(g.Value.ToArray(),true,true);mesh.RecalculateBounds();
     if(container==null){AssetDatabase.CreateAsset(mesh,path);container=mesh;}else AssetDatabase.AddObjectToAsset(mesh,container);
     var go=new GameObject(mesh.name);go.transform.SetParent(parent.transform,false);go.AddComponent<MeshFilter>().sharedMesh=mesh;go.AddComponent<MeshRenderer>().sharedMaterial=g.Key.mat;n++;
+    // The camera keeps clear of what you can see; bodies and shots ignore this copy (Layers.CameraOnly).
+    go.layer=Layers.CameraOnly;go.AddComponent<MeshCollider>().sharedMesh=mesh;
    }
    foreach(var r in merged){var go=r.gameObject;Object.DestroyImmediate(r.GetComponent<MeshFilter>());Object.DestroyImmediate(r);}
    // Drop holders left with nothing to show.

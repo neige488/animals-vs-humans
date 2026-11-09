@@ -1,6 +1,18 @@
 using UnityEngine;
 namespace AvH {
  /// <summary>
+ /// Physics layers. <see cref="CameraOnly"/> holds collision copies of the dressed maps' visible-only scenery
+ /// (truss beams, handrails, awnings): the third person camera keeps clear of them, while bodies, shots, props and
+ /// the bot grid ignore them (<see cref="World"/> is the mask every game query uses).
+ /// </summary>
+ public static class Layers {
+  public const int CameraOnly=29;
+  public const int World=Physics.DefaultRaycastLayers&~(1<<CameraOnly);
+  static bool set;
+  /// <summary>Bodies and props never touch camera-only scenery.</summary>
+  public static void Ensure(){if(set)return;set=true;for(int i=0;i<32;i++)Physics.IgnoreLayerCollision(CameraOnly,i,true);}
+ }
+ /// <summary>
  /// Building blocks shared by the module maps (warehouse, sand crossing): Blender modules are visual only,
  /// colliders are plain boxes, stepped stair columns and solid ramp wedges the bot grid reads as one floor.
  /// </summary>
