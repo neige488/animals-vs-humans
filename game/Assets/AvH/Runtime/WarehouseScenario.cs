@@ -40,6 +40,7 @@ namespace AvH {
   void Note(string text){var line=$"[{Now,6:F1}s] {text}";log.AppendLine(line);Debug.Log("[scenario] "+line);}
 
   // ---------- what happened (read from the public session state every viewer has) ----------
+  int falls,shovedFalls;
   int lastEvent,round,shoves,localShoved,localShovedOthers,staggers,transforms,drops,dropChases,jumps,shots,joinedSlot=-1;
   readonly HashSet<int> onStairs=new HashSet<int>(),onRamp=new HashSet<int>(),detours=new HashSet<int>(),reachedDeck=new HashSet<int>();
   readonly Dictionary<int,(double at,Vector3 where)> lastHigh=new Dictionary<int,(double,Vector3)>();
@@ -63,6 +64,7 @@ namespace AvH {
     if(e.Kind==FeelEventKind.Shoved){shoves++;var where=V(s.Players[e.Target].Position);var line=$"아군 밀침: {Name(e.Actor)} → {Name(e.Target)} @({where.x:F1},{where.y:F1},{where.z:F1}){(Crossing&&CrossingLayout.OnBridge(where)?" [다리 위]":OnDeck(where)||OnStairs(where)?" [계단/2층]":"")}";if(Crossing&&CrossingLayout.OnBridge(where))bridgeShoves++;shoveLines.Add(line);Note(line);
      if(e.Target==network.LocalSlot)localShoved++;if(e.Actor==network.LocalSlot)localShovedOthers++;}
     else if(e.Kind==FeelEventKind.Stagger)staggers++;
+    else if(e.Kind==FeelEventKind.FellOff){falls++;if(e.Actor>=0)shovedFalls++;Note($"추락 변신: {Name(e.Target)}"+(e.Actor>=0?$" ← {Name(e.Actor)}의 {Tools.Short(s.Players[e.Actor].Tool)}":""));}
     else if(e.Kind==FeelEventKind.Transform&&e.Actor>=0){transforms++;Note($"변신: {Name(e.Target)} ← {Name(e.Actor)} @({e.Position.X:F1},{e.Position.Y:F1},{e.Position.Z:F1})");}
    }
    if(s.Phase!=RoundPhase.Chase)return;
@@ -119,6 +121,7 @@ namespace AvH {
    var nearest=animals.OrderBy(a=>(V(a.Position)-at).sqrMagnitude).FirstOrDefault();float distance=nearest==null?999:Vector3.Distance(V(nearest.Position),at);
    if(!fleeing&&s.Phase==RoundPhase.Chase&&at.y>3&&(animals.Any(a=>OnDeck(V(a.Position))&&Vector3.Distance(V(a.Position),at)<7)||distance<2.6f)){fleeing=true;path.Clear();replan=0;Note("2층이 뚫림 → 난간 틈으로 뛰어내림");}
    if(Crossing)return HostCrossing(s,me,at,nearest,distance);
+   if(MapPlans.For(s.Map)!=null)return HostPlanned(s,me,at,nearest,distance,MapPlans.For(s.Map));
    if(fleeing) {
     // Through the nearest railing gap, then out to the yard and keep away from the closest animal.
     if(at.y>2.5f)goal=new Vector3(WarehouseLayout.DropGaps.OrderBy(g=>Mathf.Abs(g-at.x)).First(),0,WarehouseLayout.DeckFront-3);
@@ -149,6 +152,21 @@ namespace AvH {
    var target=animals.Where(a=>Vector3.Distance(V(a.Position),at)<20&&Sight(at,V(a.Position))).OrderBy(a=>(V(a.Position)-at).sqrMagnitude).FirstOrDefault();
    if(target!=null){var aim=Fire(at,V(target.Position),false);aim.Attack=Vector3.Distance(V(target.Position),at)<Tools.Range(me.Tool,world.ObserveActiveSettings().Current)+.3f;return aim;}
    presentation.SetLookAngles(90,22);return new PlayerInput{Yaw=90,Pitch=12};
+  }
+  // Planned maps: hold the first shelter and shoot at what comes; when it is breached, run to the shelter farthest from the nearest animal.
+  PlayerInput HostPlanned(SessionState s,PlayerState me,Vector3 at,PlayerState nearest,float distance,MapPlan plan) {
+   var animals=s.Players.Where(p=>p.Faction==Faction.Animal).ToArray();
+   if(fleeing) {
+    goal=nearest==null?plan.Shelters[0]:plan.Shelters.OrderByDescending(r=>(r-V(nearest.Position)).sqrMagnitude).First();
+    if(Vector3.Distance(at,goal)<1.5f){fleeing=false;Note("다른 거점으로 피신 완료");}
+    if(nearest!=null&&distance<9&&distance>2.5f&&Sight(at,V(nearest.Position)))return Fire(at,V(nearest.Position),true);
+    return Walk(at,goal,true);
+   }
+   var post=plan.Shelters[0];
+   if(Vector2.Distance(new Vector2(at.x,at.z),new Vector2(post.x,post.z))>.6f||at.y<post.y-.5f)return Walk(at,post,false);
+   var target=animals.Where(a=>Vector3.Distance(V(a.Position),at)<20&&Sight(at,V(a.Position))).OrderBy(a=>(V(a.Position)-at).sqrMagnitude).FirstOrDefault();
+   if(target!=null){var aim=Fire(at,V(target.Position),false);aim.Attack=Vector3.Distance(V(target.Position),at)<Tools.Range(me.Tool,world.ObserveActiveSettings().Current)+.3f;return aim;}
+   presentation.SetLookAngles(0,22);return new PlayerInput{Yaw=0,Pitch=12};
   }
   PlayerInput Guest(SessionState s,PlayerState me,Vector3 at) {
    if(me.Faction==Faction.Animal)return Hunt(s,me,at);
@@ -211,6 +229,7 @@ namespace AvH {
    r.AppendLine($"아군 밀침 전체: {shoves} (내가 밀림 {localShoved}, 내가 밈 {localShovedOthers}) · 동물 경직: {staggers} · 공격 변신: {transforms}");
    r.AppendLine($"동물 계단 진입: {onStairs.Count} · 경사로 진입: {onRamp.Count} · 계단→경사로 우회: {detours.Count} · 2층 도달: {reachedDeck.Count}");
    r.AppendLine($"인간 낙하 탈출: {drops} · 낙하 후 1층 추격: {dropChases}");
+   if(falls>0)r.AppendLine($"추락 변신: {falls} (밀려서 떨어짐 {shovedFalls})");
    if(lanes.Count>0)r.AppendLine($"동물 갈래 사용: "+string.Join(", ",lanes.Values.SelectMany(l=>l).GroupBy(l=>l).Select(g=>$"{g.Key} {g.Count()}"))+$" · 갈래 우회: {laneDetours} · 다리 위 밀침: {bridgeShoves}");
    r.AppendLine("도구별 명중(밀침+경직): "+string.Join(", ",toolHits.OrderByDescending(p=>p.Value).Select(p=>$"{p.Key} {p.Value}")));
    foreach(var line in shoveLines.Take(20))r.AppendLine("- "+line);

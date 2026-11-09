@@ -110,8 +110,9 @@ namespace AvH {
  /// floors one cell may hold (2 lets a bridge and the courtyard under it both be walkable).
  /// </summary>
  public readonly struct RouteGrid {
-  public readonly float OriginX,OriginZ,Cell;public readonly int SizeX,SizeZ,Layers;
-  public RouteGrid(float originX,float originZ,float cell,int sizeX,int sizeZ,int layers){OriginX=originX;OriginZ=originZ;Cell=cell;SizeX=sizeX;SizeZ=sizeZ;Layers=layers;}
+  public readonly float OriginX,OriginZ,Cell,Top;public readonly int SizeX,SizeZ,Layers;
+  /// <param name="top">Height the grid rays start from: above every floor and roof of the map.</param>
+  public RouteGrid(float originX,float originZ,float cell,int sizeX,int sizeZ,int layers,float top=12){OriginX=originX;OriginZ=originZ;Cell=cell;SizeX=sizeX;SizeZ=sizeZ;Layers=layers;Top=top;}
   /// <summary>The village and the warehouse: 90 m square round the centre, one floor per cell.</summary>
   public static readonly RouteGrid Default=new RouteGrid(-45,-45,.75f,121,121,1);
  }
@@ -132,8 +133,8 @@ namespace AvH {
    builds++;maxPerStep=Math.Max(maxPerStep,++thisStep);
    Physics.SyncTransforms();Array.Clear(walkable,0,walkable.Length);
    for(int z=0;z<grid.SizeZ;z++)for(int x=0;x<grid.SizeX;x++) {
-    int id=z*grid.SizeX+x,layer=0;var top=new Vector3(grid.OriginX+x*grid.Cell,12,grid.OriginZ+z*grid.Cell);
-    var hits=Physics.RaycastAll(top,Vector3.down,15,~0,QueryTriggerInteraction.Ignore).Where(h=>Terrain(h.collider)&&h.normal.y>.7f).OrderByDescending(h=>h.distance).ToArray();
+    int id=z*grid.SizeX+x,layer=0;var top=new Vector3(grid.OriginX+x*grid.Cell,grid.Top,grid.OriginZ+z*grid.Cell);
+    var hits=Physics.RaycastAll(top,Vector3.down,grid.Top+10,~0,QueryTriggerInteraction.Ignore).Where(h=>Terrain(h.collider)&&h.normal.y>.7f).OrderByDescending(h=>h.distance).ToArray();
     foreach(var hit in hits) {
      var p=hit.point;
      // Reject a floor hidden under a low stair. The standing capsule alone leaves

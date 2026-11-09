@@ -29,13 +29,17 @@ namespace AvH {
   /// </summary>
   void BuildMap(int map) {
    map=GameMaps.Clamp(map);if(map==builtMap)return;
-   foreach(var name in new[]{"Village",WarehouseMap.RootName,CrossingMap.RootName}){var old=transform.Find(name);if(old!=null){old.gameObject.SetActive(false);old.name+=" (removed)";Destroy(old.gameObject);}}
+   foreach(var name in new[]{"Village",WarehouseMap.RootName,CrossingMap.RootName,MapPlans.Sky.Root,MapPlans.Snow.Root,MapPlans.Ruins.Root}){var old=transform.Find(name);if(old!=null){old.gameObject.SetActive(false);old.name+=" (removed)";Destroy(old.gameObject);}}
    switch(map){
     case GameMaps.Warehouse:ShelterPoints=WarehouseMap.Build(transform);returns=WarehouseLayout.Recovery;props=PushProps.Adopt(transform.Find(WarehouseMap.RootName));break;
     case GameMaps.Crossing:ShelterPoints=CrossingMap.Build(transform);returns=CrossingLayout.Recovery;props=PushProps.Adopt(transform.Find(CrossingMap.RootName));break;
+    case GameMaps.Sky:case GameMaps.Snow:case GameMaps.Ruins: {
+     var plan=MapPlans.For(map);var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+     ShelterPoints=PlannedMap.Build(transform,plan,catalog!=null?catalog.Dressing(map):null,catalog!=null?catalog.Crate:null);returns=plan.Recovery;props=PushProps.Adopt(transform.Find(plan.Root));break;
+    }
     default:ShelterPoints=PrototypeVillage.Build(transform);returns=TownReturns;props=PushProps.Adopt(transform.Find("Village"));break;
    }
-   builtMap=map;botDirector.ResetMap(map==GameMaps.Crossing?CrossingLayout.Grid:RouteGrid.Default);Physics.SyncTransforms();
+   builtMap=map;botDirector.ResetMap(map==GameMaps.Crossing?CrossingLayout.Grid:MapPlans.For(map)?.Grid??RouteGrid.Default);Physics.SyncTransforms();
   }
   public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null, int? map = null) {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");
@@ -122,11 +126,7 @@ namespace AvH {
      Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed,Action=p.Action,ActionProgress=ActionProgress(p,rules)},seconds);
      if(!wasGrounded&&body.isGrounded&&fallingSpeed< -PlaytestSession.HardLandingSpeed){Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);var landed=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(landed.x,landed.y,landed.z));Session.RecordLanding(i,-fallingSpeed);}
      if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
-     if(body.transform.position.y < -12) {
-      var closest=returns[0]; float distance=float.MaxValue;
-      foreach(var point in returns) { var d=Vector2.SqrMagnitude(new Vector2(point.x-body.transform.position.x,point.z-body.transform.position.z)); if(d<distance) {distance=d;closest=point;} }
-      Warp(body,closest); vertical[i]=0; motion[i]=default;
-     }
+     if(body.transform.position.y < FallLine) { Warp(body,Restart(i,body.transform.position)); vertical[i]=0; motion[i]=default; pushVelocity[i]=Vector3.zero; }
     } else {motion[i]=default;Animate(i,new LocomotionState{Grounded=true,AimYaw=PresentationYaw(i)},seconds);}
     var pos=body.transform.position;
     Session.RecordWorldPosition(i,new WorldPosition(pos.x,pos.y,pos.z));
@@ -185,6 +185,19 @@ namespace AvH {
   }
   double nextPropRefresh;
   internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
+  /// <summary>Height below which a body has fallen off this map.</summary>
+  float FallLine=>GameMaps.FallTurnsAnimal(builtMap)?MapPlans.SkyFallLine:-12;
+  /// <summary>
+  /// Where a fallen body starts again. On the sky islands the session judges the fall (a human turns animal) and names
+  /// the restart; elsewhere the nearest recovery point.
+  /// </summary>
+  Vector3 Restart(int slot,Vector3 at) {
+   if(GameMaps.FallTurnsAnimal(builtMap)&&Session!=null){Session.RecordFall(slot,out var restart);return ToVector(restart);}
+   var closest=returns[0];float distance=float.MaxValue;
+   foreach(var point in returns){var d=Vector2.SqrMagnitude(new Vector2(point.x-at.x,point.z-at.z));if(d<distance){distance=d;closest=point;}}
+   return closest;
+  }
+  Vector3 NearestReturn(Vector3 at){var closest=returns[0];float distance=float.MaxValue;foreach(var p in returns){float d=(p-at).sqrMagnitude;if(d<distance){closest=p;distance=d;}}return closest;}
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   void RefreshVisual(int slot,Faction faction,bool transformation=false) {

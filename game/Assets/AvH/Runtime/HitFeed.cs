@@ -19,7 +19,13 @@ namespace AvH {
    int newest=0;foreach(var e in state.Events)newest=Mathf.Max(newest,e.Id);
    if(!primed||newest<lastId){primed=true;lastId=newest;return;}
    foreach(var e in state.Events) {
-    if(e.Id<=lastId||(e.Kind!=FeelEventKind.Shoved&&e.Kind!=FeelEventKind.Stagger))continue;
+    if(e.Id<=lastId)continue;
+    if(e.Kind==FeelEventKind.FellOff&&e.Target>=0&&e.Target<state.Players.Length) {
+     var fallen=state.Players[e.Target];bool shoved=e.Actor>=0&&e.Actor<state.Players.Length;
+     entries.Add(new Entry{Id=e.Id,Shooter=e.Actor,Target=e.Target,Friendly=true,Text=Fell(fallen.Nickname,shoved?state.Players[e.Actor].Nickname:null,shoved?state.Players[e.Actor].Tool:ToolKind.Cork)});
+     continue;
+    }
+    if(e.Kind!=FeelEventKind.Shoved&&e.Kind!=FeelEventKind.Stagger)continue;
     if(e.Actor<0||e.Actor>=state.Players.Length||e.Target<0||e.Target>=state.Players.Length)continue;
     bool friendly=e.Kind==FeelEventKind.Shoved;var shooter=state.Players[e.Actor];var target=state.Players[e.Target];
     entries.Add(new Entry{Id=e.Id,Shooter=e.Actor,Target=e.Target,Friendly=friendly,Text=Describe(shooter.Nickname,target.Nickname,target.CharacterName,friendly,shooter.Tool)});
@@ -29,6 +35,8 @@ namespace AvH {
   }
   /// <summary>"민지의 글러브 → 준호 (아군!)" / "민지의 코르크 → 여우".</summary>
   public static string Describe(string shooter,string target,string targetCharacter,bool friendly,ToolKind tool=ToolKind.Cork)=>friendly?$"{shooter}의 {Tools.Short(tool)} → {target} (아군!)":$"{shooter}의 {Tools.Short(tool)} → {targetCharacter}";
+  /// <summary>"민지의 글러브 → 준호 추락!" / "준호 추락!": the fall turned a human into an animal.</summary>
+  public static string Fell(string fallen,string shover,ToolKind tool)=>shover==null?$"{fallen} 추락! 동물로 변신":$"{shover}의 {Tools.Short(tool)} → {fallen} 추락! 동물로 변신";
   public void Reset(){entries.Clear();primed=false;lastId=0;}
 
   GUIStyle tag,line;

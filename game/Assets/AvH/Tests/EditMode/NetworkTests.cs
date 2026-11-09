@@ -198,7 +198,7 @@ namespace AvH.Tests {
    Assert.LessOrEqual(RoomProtocol.EncodedBytes(frame)-RoomProtocol.EncodedBytes(new NetworkMotionFrame()),12*10);
   }
   [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
-   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-14"));
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-15"));
    Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("W9bWZ4DoVPSxp9DSTMFk7HuAoBMuUi10kbywSwThpFs="),"Schema changes require explicit protocol version and guard update");
    foreach(var t in new[]{typeof(NetworkMotionFrame),typeof(NetworkBodyMotion),typeof(NetworkPropMotion),typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent)}) {
     Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");

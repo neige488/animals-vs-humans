@@ -42,7 +42,7 @@ namespace AvH.Editor {
   }
   public static bool CrossingNeedsRebuild() {
    var catalog=AssetDatabase.LoadAssetAtPath<OwnedAssetCatalog>(Root+"Resources/OwnedAssetCatalog.asset");
-   return catalog!=null&&(catalog.Crossing==null||catalog.Crate==null||catalog.Warehouse==null);
+   return catalog!=null&&(catalog.Crossing==null||catalog.Crate==null||catalog.Warehouse==null||catalog.Sky==null||catalog.Snow==null||catalog.Ruins==null);
   }
   /// <summary>Builds and saves the crossing dressing and the pushable crate model; returns (dressing, crate).</summary>
   static (GameObject dressing,GameObject crate) BuildCrossing() {

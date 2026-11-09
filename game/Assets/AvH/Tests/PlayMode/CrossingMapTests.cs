@@ -36,7 +36,7 @@ namespace AvH.Tests {
   }
 
   [Test] public void CrossingIsTheThirdMapAndMuchWiderThanTheOthers() {
-   Assert.AreEqual(3,GameMaps.Count);Assert.AreEqual("모래 교차로",GameMaps.Name(GameMaps.Crossing));Assert.AreEqual(GameMaps.Crossing,GameMaps.Clamp(GameMaps.Crossing));
+   Assert.Greater(GameMaps.Count,GameMaps.Crossing);Assert.AreEqual("모래 교차로",GameMaps.Name(GameMaps.Crossing));Assert.AreEqual(GameMaps.Crossing,GameMaps.Clamp(GameMaps.Crossing));
    Assert.GreaterOrEqual(CrossingLayout.HalfX*2*CrossingLayout.HalfZ*2,(WarehouseLayout.YardHalfX*2*WarehouseLayout.YardHalfZ*2)*2.2f,"at least twice the warehouse yard");
    var g=CrossingLayout.Grid;
    Assert.LessOrEqual(g.OriginX,-CrossingLayout.HalfX);Assert.GreaterOrEqual(g.OriginX+(g.SizeX-1)*g.Cell,CrossingLayout.HalfX);

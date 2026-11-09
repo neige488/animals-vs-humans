@@ -16,7 +16,7 @@ namespace AvH {
   readonly HashSet<int> dueAttacks=new HashSet<int>();
   int nextEventId;
   void ResetCombat() {
-   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();propKnocks.Clear();ClearActions();
+   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();propKnocks.Clear();lastShove.Clear();ClearActions();
    foreach(var p in players){p.Ammo=settings.Current.Magazine;p.ReloadRemaining=0;p.AttackGraceRemaining=0;p.FireCooldownRemaining=0;}
   }
   // Round end cuts every tell, freeze and stun in progress.
@@ -75,7 +75,7 @@ namespace AvH {
   public bool RecordFriendlyShove(int victimSlot,int ownerSlot) {
    if(victimSlot<0||victimSlot>=players.Length||ownerSlot<0||ownerSlot>=players.Length||victimSlot==ownerSlot||phase==RoundPhase.Results)return false;
    if(players[victimSlot].Faction!=Faction.Human)return false;
-   Publish(FeelEventKind.Shoved,ownerSlot,victimSlot,players[victimSlot].Position);return true;
+   lastShove[victimSlot]=(ownerSlot,hostTime);Publish(FeelEventKind.Shoved,ownerSlot,victimSlot,players[victimSlot].Position);return true;
   }
   /// <summary>
   /// Called only by the authoritative physics adapter when any tool use reaches a character.
@@ -85,6 +85,7 @@ namespace AvH {
   public bool RecordToolHit(int victimSlot,int ownerSlot,ToolKind tool) {
    if(victimSlot<0||victimSlot>=players.Length||ownerSlot<0||ownerSlot>=players.Length||victimSlot==ownerSlot||phase==RoundPhase.Results)return false;
    var p=players[victimSlot];
+   if(p.Faction==Faction.Human)lastShove[victimSlot]=(ownerSlot,hostTime);
    if(tool==ToolKind.Blower){double last;var key=ownerSlot*64+victimSlot;if(toolHits.TryGetValue(key,out last)&&hostTime-last<GustEventSeconds)return false;toolHits[key]=hostTime;}
    if(p.Faction==Faction.Human){Publish(FeelEventKind.Shoved,ownerSlot,victimSlot,p.Position);return true;}
    if(phase!=RoundPhase.Chase)return false;
@@ -92,6 +93,31 @@ namespace AvH {
    Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
   public const double GustEventSeconds=.8;
+  /// <summary>A fall within this long of a shove is credited to the shover.</summary>
+  public const double FallCreditSeconds=4;
+  readonly Dictionary<int,(int by,double at)> lastShove=new Dictionary<int,(int,double)>();
+  /// <summary>
+  /// Called only by the authoritative physics adapter when a body falls off the bottom of the map. On a map where a fall
+  /// turns a human (<see cref="GameMaps.FallTurnsAnimal"/>), a human in the chase becomes an animal, credited to whoever
+  /// shoved them in the last <see cref="FallCreditSeconds"/>. <paramref name="restart"/> is where the body starts again:
+  /// the animals' start for animals in the chase, the round spawn otherwise.
+  /// </summary>
+  public bool RecordFall(int slot,out WorldPosition restart) {
+   restart=default;if(slot<0||slot>=players.Length)return false;var p=players[slot];
+   bool turned=false;
+   if(phase==RoundPhase.Chase&&p.Faction==Faction.Human&&GameMaps.FallTurnsAnimal(map)) {
+    int by=lastShove.TryGetValue(slot,out var s)&&hostTime-s.at<=FallCreditSeconds?s.by:-1;
+    Publish(FeelEventKind.FellOff,by,slot,p.Position);
+    p.Faction=Faction.Animal;p.AttackGraceRemaining=settings.Current.TransformAttackGrace;
+    AssignCharacter(p,animalRoster[nextAnimal++%animalRoster.Length]);p.ReloadRemaining=0;p.FireCooldownRemaining=0;p.StunRemaining=0;
+    PublishBirth(new[]{p});turned=true;
+   }
+   p.Position=phase==RoundPhase.Chase&&p.Faction==Faction.Animal&&GameMaps.AnimalsStartApart(map)?GameMaps.AnimalStart(map,slot%6):Spawn(slot);
+   restart=p.Position;lastShove.Remove(slot);
+   if(turned){Publish(FeelEventKind.Transform,-1,slot,p.Position);
+    if(players.All(q=>q.Faction==Faction.Animal)){phase=RoundPhase.Results;remaining=settings.Current.ResultSeconds;phaseStartedAt=hostTime;phaseDeadline=hostTime+remaining;winner=Faction.Animal;ClearActions();}}
+   return turned;
+  }
   readonly Dictionary<int,double> toolHits=new Dictionary<int,double>();
   /// <summary>Called only by the authoritative physics adapter when a body or bubble knocks a light prop (presentation event).</summary>
   public bool RecordPropPush(int prop,int actor,WorldPosition position,float strength) {

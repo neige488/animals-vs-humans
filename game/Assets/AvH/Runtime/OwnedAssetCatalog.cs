@@ -20,6 +20,9 @@ namespace AvH {
   public GameObject Crossing, Crate;
   /// <summary>Generated Synty dressing of the two-storey warehouse (visual only).</summary>
   public GameObject Warehouse;
+  /// <summary>Generated dressings of the planned maps (<see cref="MapPlans"/>).</summary>
+  public GameObject Sky, Snow, Ruins;
+  public GameObject Dressing(int map)=>map==GameMaps.Sky?Sky:map==GameMaps.Snow?Snow:map==GameMaps.Ruins?Ruins:null;
   public Vector3[] ShelterPoints;
   public string AnimalDisplayName = "동물 종류 입력 필요";
   public string Rarity = "일반";

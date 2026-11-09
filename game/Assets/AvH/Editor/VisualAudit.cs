@@ -58,6 +58,23 @@ namespace AvH.Editor {
    Shot(camera,new Vector3(-44,2.4f,10),new Vector3(-44,4,26),"crossing-stair-a");
    Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
   }
+  /// <summary>The planned maps (sky islands, snowy village, forest ruins) as the game builds them.</summary>
+  public static void CapturePlanned() {
+   Directory.CreateDirectory(Output);
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   var light=new GameObject("Audit sun").AddComponent<Light>();light.type=LightType.Directional;
+   var camera=new GameObject("Audit camera").AddComponent<Camera>();camera.fieldOfView=60;TownLighting.Apply(camera,light);
+   foreach(var (map,name,views) in new[]{
+    (GameMaps.Sky,"sky",new[]{(new Vector3(0,45,-75),new Vector3(0,-4,4)),(new Vector3(0,2.6f,-38),new Vector3(0,2,-5)),(new Vector3(-28,2.4f,-2),new Vector3(-42,3,8)),(new Vector3(6,5.8f,-4),new Vector3(-36,0,38))}),
+    (GameMaps.Snow,"snow",new[]{(new Vector3(0,34,-62),new Vector3(0,3,8)),(new Vector3(2,2.6f,-31),new Vector3(0,4,-6)),(new Vector3(-12,5.6f,-6),new Vector3(0,9,26)),(new Vector3(0,11.5f,24),new Vector3(0,2,-20))}),
+    (GameMaps.Ruins,"ruins",new[]{(new Vector3(0,40,-62),new Vector3(0,0,6)),(new Vector3(2,2.6f,-26),new Vector3(0,1,0)),(new Vector3(-8,2.4f,2),new Vector3(0,4,22)),(new Vector3(-24,3,-14),new Vector3(-24,-3,-5))})}) {
+    var root=new GameObject("Planned audit");PlannedMap.Build(root.transform,MapPlans.For(map),catalog!=null?catalog.Dressing(map):null,catalog!=null?catalog.Crate:null);
+    if(catalog!=null){foreach(var p in MapPlans.For(map).Shelters)Pose(catalog.Human,root.transform,p);var start=GameMaps.AnimalStart(map,0);Pose(catalog.Animal,root.transform,new Vector3(start.X,0,start.Z));}
+    for(int i=0;i<views.Length;i++)Shot(camera,views[i].Item1,views[i].Item2,$"{name}-{i}");
+    Object.DestroyImmediate(root);
+   }
+   Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
+  }
   /// <summary>The village as the game builds it, from player-height viewpoints.</summary>
   public static void CaptureTown() {
    Directory.CreateDirectory(Output);

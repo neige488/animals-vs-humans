@@ -44,7 +44,8 @@ namespace AvH {
    if((flags&CollisionFlags.Above)!=0&&state.Vertical>0)state.Vertical=0;
    if(state.Grounded&&state.Vertical<0)state.Vertical=-2;
    if(direction.sqrMagnitude>.01f)body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540*dt);
-   if(body.transform.position.y< -12){var closest=returns[0];float distance=float.MaxValue;foreach(var at in returns){float d=(at-body.transform.position).sqrMagnitude;if(d<distance){closest=at;distance=d;}}Warp(body,closest);state.Vertical=0;state.Motion=default;state.Push=Vector3.zero;state.Grounded=false;}
+   // Only the host judges a fall; a predicting guest keeps falling until the host's restart corrects it.
+   if(body.transform.position.y<FallLine&&(server||!GameMaps.FallTurnsAnimal(builtMap))){Warp(body,server?Restart(slot,body.transform.position):NearestReturn(body.transform.position));state.Vertical=0;state.Motion=default;state.Push=Vector3.zero;state.Grounded=false;}
    state.Position=body.transform.position;state.Rotation=body.transform.rotation;vertical[slot]=state.Vertical;motion[slot]=state.Motion;
    CharacterMotion.DecayKnockback(ref state.Push.x,ref state.Push.y,ref state.Push.z,state.Grounded,dt);pushVelocity[slot]=state.Push;
    if(server){Session.RecordWorldPosition(slot,new WorldPosition(state.Position.x,state.Position.y,state.Position.z));if(!wasGrounded&&state.Grounded&&falling< -PlaytestSession.HardLandingSpeed)Session.RecordLanding(slot,-falling);}

@@ -46,7 +46,7 @@ namespace AvH {
   public int HostMap=StartupMap();
   /// <summary>Settings file for the next hosted room (development harnesses use an isolated one); null = this PC's saved settings.</summary>
   public string HostSettingsPath;
-  public static int StartupMap(){var args=System.Environment.GetCommandLineArgs();int i=System.Array.IndexOf(args,"-avhMap");var name=i>=0&&i+1<args.Length?args[i+1]:"";return name=="warehouse"?GameMaps.Warehouse:name=="crossing"?GameMaps.Crossing:GameMaps.Town;}
+  public static int StartupMap(){var args=System.Environment.GetCommandLineArgs();int i=System.Array.IndexOf(args,"-avhMap");var name=i>=0&&i+1<args.Length?args[i+1]:"";switch(name){case "warehouse":return GameMaps.Warehouse;case "crossing":return GameMaps.Crossing;case "sky":return GameMaps.Sky;case "snow":return GameMaps.Snow;case "ruins":return GameMaps.Ruins;default:return GameMaps.Town;}}
   public void StartHost(string nickname,string advertisedAddress=null){try{world.StartSolo(nickname,null,HostSettingsPath,HostMap);host=client;host.StartRoom(advertisedAddress??address);host.CaptureVisuals=()=>new NetworkVisualState{Bursts=world.ObserveBursts(),Motion=world.CaptureMotion(),Bubbles=world.ObserveBubbles().Select(b=>new NetworkBubble{Kind=(int)b.Kind,Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray()};message="";}catch(Exception){host?.Dispose();host=null;world.ResetSession();message="방을 열지 못했습니다. 호스트 주소와 네트워크 상태를 확인하세요.";}}
   public void JoinRoom(string roomCode,string nickname){code=roomCode;Join(nickname);}
   public void Join(string nickname){lastNickname=nickname;clientStarted=true;message="";client.Connect(code,nickname);}
