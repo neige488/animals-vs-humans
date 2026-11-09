@@ -128,7 +128,7 @@ namespace AvH {
     if(at.y>2.5f)goal=new Vector3(WarehouseLayout.DropGaps.OrderBy(g=>Mathf.Abs(g-at.x)).First(),0,WarehouseLayout.DeckFront-3);
     else if(at.z>-WarehouseLayout.HalfZ-2)goal=WarehouseLayout.YardShelter;
     else goal=nearest==null?WarehouseLayout.YardShelter:new Vector3(nearest.Position.X>0?-26:26,0,-20);
-    if(at.y<1&&nearest!=null&&distance<9&&distance>2.5f&&Sight(at,V(nearest.Position)))return Fire(at,V(nearest.Position),true);
+    if(at.y<1&&nearest!=null&&distance<9&&distance>2.5f&&Sight(at,V(nearest.Position))){Walk(at,goal,at.y>2.5f);return Fire(at,V(nearest.Position),true);}
     return Walk(at,goal,at.y>2.5f);
    }
    if(Vector2.Distance(new Vector2(at.x,at.z),new Vector2(StairPost.x,StairPost.z))>.5f||at.y<3)return Walk(at,StairPost,false);
@@ -146,7 +146,7 @@ namespace AvH {
    if(fleeing) {
     if(at.y>2.5f)goal=CrossingDrops.OrderBy(g=>Vector2.Distance(new Vector2(g.x,g.z),new Vector2(at.x,at.z))).First();
     else goal=nearest==null?CrossingLayout.Recovery[0]:CrossingLayout.Recovery.OrderByDescending(r=>(r-V(nearest.Position)).sqrMagnitude).First();
-    if(at.y<1&&nearest!=null&&distance<9&&distance>2.5f&&Sight(at,V(nearest.Position)))return Fire(at,V(nearest.Position),true);
+    if(at.y<1&&nearest!=null&&distance<9&&distance>2.5f&&Sight(at,V(nearest.Position))){Walk(at,goal,at.y>2.5f);return Fire(at,V(nearest.Position),true);}
     return Walk(at,goal,at.y>2.5f);
    }
    if(Vector2.Distance(new Vector2(at.x,at.z),new Vector2(TowerPost.x,TowerPost.z))>.5f||at.y<3)return Walk(at,TowerPost,false);
@@ -160,7 +160,7 @@ namespace AvH {
    if(fleeing) {
     goal=nearest==null?plan.Shelters[0]:plan.Shelters.OrderByDescending(r=>(r-V(nearest.Position)).sqrMagnitude).First();
     if(Vector3.Distance(at,goal)<1.5f){fleeing=false;Note("다른 거점으로 피신 완료");}
-    if(nearest!=null&&distance<9&&distance>2.5f&&Sight(at,V(nearest.Position)))return Fire(at,V(nearest.Position),true);
+    if(nearest!=null&&distance<9&&distance>2.5f&&Sight(at,V(nearest.Position))){Walk(at,goal,at.y>2.5f);return Fire(at,V(nearest.Position),true);}
     return Walk(at,goal,true);
    }
    var post=plan.Shelters[0];
@@ -188,21 +188,22 @@ namespace AvH {
    var aim=target+Vector3.up*.9f-(at+Vector3.up*1.3f);float yaw=Mathf.Atan2(aim.x,aim.z)*Mathf.Rad2Deg,pitch=-Mathf.Atan2(aim.y,new Vector2(aim.x,aim.z).magnitude)*Mathf.Rad2Deg;
    presentation.SetLookAngles(yaw,Mathf.Clamp(pitch+12,-20,65));
    var input=new PlayerInput{Yaw=yaw,Pitch=pitch,Attack=true,Reload=world.Observe().Players[network.LocalSlot].Ammo==0};
-   if(keepMoving){var away=(at-target);away.y=0;var local=Quaternion.Euler(0,-yaw,0)*away.normalized;input.Right=local.x;input.Forward=local.z;}
+   // Retreat along the planned route (Walk just ran), not straight back into whatever wall is behind.
+   if(keepMoving&&walkHeading.sqrMagnitude>.01f){var local=Quaternion.Euler(0,-yaw,0)*walkHeading.normalized;input.Right=local.x;input.Forward=local.z;}
    return input;
   }
   PlayerInput Walk(Vector3 at,Vector3 to,bool allowDrop) {
    replan-=Time.deltaTime;
    if(replan<=0||(goal-to).sqrMagnitude>1||cursor>=path.Count){goal=to;path=world.PlanBotRoute(at,to,out _,allowDrop);cursor=0;replan=.6;}
    while(cursor<path.Count&&Flat(path[cursor]-at).magnitude<.45f)cursor++;
-   var heading=cursor<path.Count?Flat(path[cursor]-at):Flat(to-at);
+   var heading=cursor<path.Count?Flat(path[cursor]-at):Flat(to-at);walkHeading=heading;
    if(Now-stuckCheck>.8){stuck=Vector3.Distance(at,stuckFrom)<.3f&&heading.magnitude>.5f?stuck+.8f:0;stuckFrom=at;stuckCheck=Now;}
    if(heading.magnitude<.2f){presentation.SetLookAngles(lookYaw,18);return new PlayerInput{Yaw=lookYaw};}
    float yaw=Mathf.Atan2(heading.x,heading.z)*Mathf.Rad2Deg;lookYaw=Mathf.LerpAngle(lookYaw,yaw,Time.deltaTime*5);presentation.SetLookAngles(lookYaw,18);
    var local=Quaternion.Euler(0,-lookYaw,0)*heading.normalized;
    return new PlayerInput{Yaw=lookYaw,Right=local.x,Forward=local.z,Jump=stuck>1.5f};
   }
-  float lookYaw;
+  float lookYaw;Vector3 walkHeading;
   static Vector3 Flat(Vector3 v)=>new Vector3(v.x,0,v.z);
   static bool Sight(Vector3 from,Vector3 to) {
    var a=from+Vector3.up*1.3f;var b=to+Vector3.up*.9f;
@@ -224,7 +225,7 @@ namespace AvH {
   void Finish(string why) {
    if(finished)return;finished=true;Note("종료: "+why);
    var r=new StringBuilder();
-   r.AppendLine($"# 시나리오 결과 ({role}) · 맵 {GameMaps.Name(world.Session==null?network.HostMap:world.Observe().Map)}");
+   r.AppendLine($"# 시나리오 결과 ({role}) · 맵 {GameMaps.Name(joinedSlot>=0?world.Observe().Map:network.HostMap)}");
    r.AppendLine($"화면 갱신: 평균 {(frames>0?frames/frameTime:0):F0} FPS · 가장 긴 프레임 {worstFrame*1000:F0} ms{(recorder!=null?" (녹화 중이라 낮게 나옴)":"")}");
    r.AppendLine($"참가 슬롯: {joinedSlot} · 이동 거리: {moved:F0} m · 점프 입력: {jumps} · 점프 확인: {jumpsSeen} · 발사: {shots}");
    r.AppendLine($"아군 밀침 전체: {shoves} (내가 밀림 {localShoved}, 내가 밈 {localShovedOthers}) · 동물 경직: {staggers} · 공격 변신: {transforms}");
