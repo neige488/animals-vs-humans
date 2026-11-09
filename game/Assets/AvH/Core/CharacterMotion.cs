@@ -10,6 +10,13 @@ namespace AvH {
  public static class CharacterMotion {
   /// <summary>Share of steering an animal keeps while stunned by a bubble.</summary>
   public const float StunnedControl=.35f;
+  /// <summary>
+  /// Jump forgiveness, as action games do it: a press this long before landing still jumps on touchdown (buffer),
+  /// and a press this long after walking off a ledge still jumps (coyote time).
+  /// </summary>
+  public const float JumpBufferSeconds=.12f,CoyoteSeconds=.12f;
+  /// <summary>Whether a buffered jump may start now: on the ground, or just off it while not already rising.</summary>
+  public static bool CanJump(bool grounded,float airborneSeconds,float verticalSpeed,float buffer)=>buffer>0&&(grounded||airborneSeconds<CoyoteSeconds&&verticalSpeed<=0);
   /// <summary>Knockback decay (m/s per second). Ground keeps the original value; the air slides further.</summary>
   public const float GroundKnockbackFriction=20, AirKnockbackFriction=6;
   /// <summary>Hit-stop: this character holds still (no steering, gravity or knockback) until it ends.</summary>

@@ -18,7 +18,7 @@ namespace AvH {
  public struct RoomError : IBroadcast {public string Message;}
  /// <summary>FishNet UDP room transport. Core match, slot takeover and reconnect rules remain authoritative.</summary>
  public sealed class FishRoomBridge : MonoBehaviour,IDisposable {
-  public const string Protocol="avh-fishnet-7";
+  public const string Protocol="avh-fishnet-8";
   public UnityPlaytestSession World {get;private set;}
   public NetworkManager Manager {get;private set;}
   public ConnectionStatus Status {get;private set;}

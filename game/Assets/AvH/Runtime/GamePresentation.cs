@@ -158,6 +158,26 @@ namespace AvH {
    feel.Observe(session.Observe(),network.LocalSlot,Time.unscaledDeltaTime);
    view.transform.rotation=look*feel.Shake();CameraShakeAngle=feel.LastShakeAngle;
   }
+  // ---------- hit marker: the shooter's own confirmation, as shooters do it ----------
+  int markerSeen=-1;float markerAge=9;bool markerFriend;
+  /// <summary>Age (s) of the newest hit marker and whether it was a friend (for tests).</summary>
+  public (float age,bool friend) HitMarker=>(markerAge,markerFriend);
+  public const float HitMarkerSeconds=.22f;
+  void DrawHitMarker(SessionState state,float w,float h) {
+   if(Event.current.type==EventType.Layout){
+    int newest=markerSeen;
+    foreach(var e in state.Events??new FeelEvent[0]) {
+     if(e.Id<=markerSeen)continue;newest=Mathf.Max(newest,e.Id);
+     if(markerSeen>=0&&e.Actor==network.LocalSlot&&(e.Kind==FeelEventKind.Stagger||e.Kind==FeelEventKind.Shoved||e.Kind==FeelEventKind.AttackHit)){markerAge=0;markerFriend=e.Kind==FeelEventKind.Shoved;}
+    }
+    markerSeen=Mathf.Max(markerSeen<0?newest:markerSeen,newest);markerAge+=Time.unscaledDeltaTime;
+   }
+   if(markerAge>HitMarkerSeconds)return;
+   float t=markerAge/HitMarkerSeconds,gap=7+5*t,len=8;var color=(markerFriend?new Color(1,.85f,.3f):new Color(1,.45f,.2f))*new Color(1,1,1,1-t*t);
+   var old=GUI.matrix;var oldColor=GUI.color;GUI.color=color;var center=new Vector2(w/2,h/2);
+   for(int k=0;k<4;k++){GUIUtility.RotateAroundPivot(45+90*k,center);GUI.DrawTexture(new Rect(center.x-1.5f,center.y-gap-len,3,len),Texture2D.whiteTexture);GUI.matrix=old;}
+   GUI.color=oldColor;
+  }
   static float ClearDistance(Vector3 target,Vector3 offset) {
    float distance=offset.magnitude;
    foreach(var hit in Physics.SphereCastAll(target,.18f,offset.normalized,distance,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore)) {
@@ -202,6 +222,7 @@ namespace AvH {
     GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
    }
    if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
+   if(state.Phase!=RoundPhase.Results)DrawHitMarker(state,w,h);
    // The tool drawn for this round, announced while everyone gets ready.
    var mine=state.Players[network.LocalSlot];
    if(state.Phase==RoundPhase.Preparation&&mine.Faction==Faction.Human)GUI.Label(new Rect(w/2-260,118,520,40),$"이번 도구: {Tools.Name(mine.Tool)}!",title);

@@ -8,7 +8,7 @@ using FishNet.Component.Transforming.Beta;
 using UnityEngine;
 namespace AvH {
  public struct FishMotorState {
-  public Vector3 Position,Push;public Quaternion Rotation;public float Vertical,JumpBuffer;
+  public Vector3 Position,Push;public Quaternion Rotation;public float Vertical,JumpBuffer,Airborne;
   public ActionPhase Action;public float ActionProgress;public MotionState Motion;public MotionProfile Profile;public float JumpHeight,Control;public bool Grounded,Frozen;public int Round;
  }
  public struct FishMoveData : IReplicateData {

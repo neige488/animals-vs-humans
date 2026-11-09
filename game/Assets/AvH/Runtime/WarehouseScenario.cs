@@ -40,7 +40,7 @@ namespace AvH {
   void Note(string text){var line=$"[{Now,6:F1}s] {text}";log.AppendLine(line);Debug.Log("[scenario] "+line);}
 
   // ---------- what happened (read from the public session state every viewer has) ----------
-  int falls,shovedFalls;
+  int falls,shovedFalls,markers;double lastMarker;
   int lastEvent,round,shoves,localShoved,localShovedOthers,staggers,transforms,drops,dropChases,jumps,shots,joinedSlot=-1;
   readonly HashSet<int> onStairs=new HashSet<int>(),onRamp=new HashSet<int>(),detours=new HashSet<int>(),reachedDeck=new HashSet<int>();
   readonly Dictionary<int,(double at,Vector3 where)> lastHigh=new Dictionary<int,(double,Vector3)>();
@@ -98,6 +98,7 @@ namespace AvH {
    var s=world.Observe();int slot=network.LocalSlot;var me=s.Players[slot];var at=world.PlayerTransform(slot).position;
    if(joinedSlot<0){joinedSlot=slot;Note($"참가 완료: 슬롯 {slot} · {me.Nickname} · {me.Faction} · 맵 {GameMaps.Name(s.Map)}");localFaction=me.Faction;}
    Observe(s);
+   if(presentation.HitMarker.age<=Time.unscaledDeltaTime+.001f&&Now-lastMarker>.05){markers++;lastMarker=Now;}
    if(me.Faction!=localFaction){Note($"내 캐릭터 변신: {localFaction} → {me.Faction} ({me.CharacterName})");localFaction=me.Faction;fleeing=false;path.Clear();}
    if(haveLocal){var d=at-lastLocal;d.y=0;moved+=d.magnitude;}
    if(moved>=nextMoveNote){Note($"이동 누적 {moved:F0} m · 위치 ({at.x:F1},{at.y:F1},{at.z:F1})");nextMoveNote+=25;}
@@ -229,6 +230,7 @@ namespace AvH {
    r.AppendLine($"아군 밀침 전체: {shoves} (내가 밀림 {localShoved}, 내가 밈 {localShovedOthers}) · 동물 경직: {staggers} · 공격 변신: {transforms}");
    r.AppendLine($"동물 계단 진입: {onStairs.Count} · 경사로 진입: {onRamp.Count} · 계단→경사로 우회: {detours.Count} · 2층 도달: {reachedDeck.Count}");
    r.AppendLine($"인간 낙하 탈출: {drops} · 낙하 후 1층 추격: {dropChases}");
+   r.AppendLine($"내 명중 표시: {markers}회");
    if(falls>0)r.AppendLine($"추락 변신: {falls} (밀려서 떨어짐 {shovedFalls})");
    if(lanes.Count>0)r.AppendLine($"동물 갈래 사용: "+string.Join(", ",lanes.Values.SelectMany(l=>l).GroupBy(l=>l).Select(g=>$"{g.Key} {g.Count()}"))+$" · 갈래 우회: {laneDetours} · 다리 위 밀침: {bridgeShoves}");
    r.AppendLine("도구별 명중(밀침+경직): "+string.Join(", ",toolHits.OrderByDescending(p=>p.Value).Select(p=>$"{p.Key} {p.Value}")));

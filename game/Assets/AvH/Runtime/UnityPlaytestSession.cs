@@ -15,6 +15,8 @@ namespace AvH {
   readonly PlayerInput[] inputs = new PlayerInput[12];
   readonly int[] simulatedInputSequences=new int[12];
   readonly float[] vertical = new float[12];
+  // Jump buffer and time since last grounded, per body (see CharacterMotion.CanJump).
+  readonly float[] jumpBuffer=new float[12],airborne=new float[12];
   readonly MotionState[] motion = new MotionState[12];
   readonly Transform[] guns=new Transform[12];
   static readonly Vector3[] TownReturns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
@@ -111,7 +113,8 @@ namespace AvH {
       var held=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(held.x,held.y,held.z));inputs[i].Jump=false;continue;
      }
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
-     if(body.isGrounded && input.Jump){vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
+     jumpBuffer[i]=input.Jump?CharacterMotion.JumpBufferSeconds:Mathf.Max(0,jumpBuffer[i]-seconds);airborne[i]=body.isGrounded?0:airborne[i]+seconds;
+     if(CharacterMotion.CanJump(body.isGrounded,airborne[i],vertical[i],jumpBuffer[i])){jumpBuffer[i]=0;airborne[i]=CharacterMotion.CoyoteSeconds;vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];

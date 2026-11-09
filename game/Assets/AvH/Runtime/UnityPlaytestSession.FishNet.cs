@@ -17,7 +17,7 @@ namespace AvH {
   internal void ApplyFishCombatInput(int slot,FishMoveData input){inputs[slot]=new PlayerInput{Yaw=input.Yaw,Pitch=Mathf.Clamp(input.Pitch,-80,80),Attack=input.Attack,Reload=input.Reload,RoundId=input.Round};}
   internal FishMotorState CaptureFishState(int slot){
    var p=Observe().Players[slot];var rules=ObserveActiveSettings().Current;var modifiers=AnimalBalance.For(rules,p);
-   return new FishMotorState{Position=bodies[slot].transform.position,Rotation=bodies[slot].transform.rotation,Vertical=vertical[slot],Motion=motion[slot],Push=pushVelocity[slot],Grounded=bodies[slot].isGrounded,Round=Observe().Round,
+   return new FishMotorState{Position=bodies[slot].transform.position,Rotation=bodies[slot].transform.rotation,Vertical=vertical[slot],Motion=motion[slot],Push=pushVelocity[slot],Grounded=bodies[slot].isGrounded,Airborne=airborne[slot],Round=Observe().Round,
     Action=p.Action,ActionProgress=ActionProgress(p,rules),Profile=CharacterMotion.Profile(rules,p),JumpHeight=p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump,Control=p.StunRemaining>0?CharacterMotion.StunnedControl:1,Frozen=CharacterMotion.Frozen(p)||Observe().Phase==RoundPhase.Results};
   }
   internal void RestoreFishState(int slot,FishMotorState state){
@@ -30,9 +30,10 @@ namespace AvH {
   internal FishMotorState SimulateFishMovement(int slot,FishMotorState state,FishMoveData input,float dt,bool present,bool server){
    var body=bodies[slot];body.enabled=true;
    if(state.Frozen)return state;
-   if(input.Jump)state.JumpBuffer=.12f;else state.JumpBuffer=Mathf.Max(0,state.JumpBuffer-dt);
+   if(input.Jump)state.JumpBuffer=CharacterMotion.JumpBufferSeconds;else state.JumpBuffer=Mathf.Max(0,state.JumpBuffer-dt);
    if(state.Grounded&&state.Vertical<0)state.Vertical=-2;
-   if(state.Grounded&&state.JumpBuffer>0){state.Vertical=Mathf.Sqrt(44*state.JumpHeight);state.Grounded=false;state.JumpBuffer=0;}
+   state.Airborne=state.Grounded?0:state.Airborne+dt;
+   if(CharacterMotion.CanJump(state.Grounded,state.Airborne,state.Vertical,state.JumpBuffer)){state.Vertical=Mathf.Sqrt(44*state.JumpHeight);state.Grounded=false;state.JumpBuffer=0;state.Airborne=CharacterMotion.CoyoteSeconds;}
    state.Vertical-=22*dt;
    var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(Mathf.Clamp(input.Right,-1,1),0,Mathf.Clamp(input.Forward,-1,1)),1);
    state.Motion=CharacterMotion.Next(state.Motion,new MotionIntent{DirectionX=direction.x*state.Control,DirectionZ=direction.z*state.Control,Grounded=state.Grounded},state.Profile,dt);
