@@ -107,6 +107,41 @@ namespace AvH.Editor {
    Shot(camera,new Vector3(10,2.4f,-3),WarehouseLayout.RampHead,"warehouse-ramp");
    Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
   }
+  /// <summary>
+  /// Every map as the game shows it at High quality (lighting, sky, post-processing), from one street view and one
+  /// wide view each, with a human and an animal in front of the camera. -avhLookPrefix names the files (before/after).
+  /// </summary>
+  public static void CaptureLooks() {
+   Directory.CreateDirectory(Output);
+   var args=System.Environment.GetCommandLineArgs();int at=System.Array.IndexOf(args,"-avhLookPrefix");string prefix=at>=0&&at+1<args.Length?args[at+1]:"look";
+   var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+   foreach(var (map,name,views) in new[]{
+    (GameMaps.Town,"town",new[]{(new Vector3(3,2.6f,-24),new Vector3(0,2,0)),(new Vector3(0,30,-52),new Vector3(0,0,2))}),
+    (GameMaps.Warehouse,"warehouse",new[]{(new Vector3(2,2.6f,-11),new Vector3(-4,3,8)),(new Vector3(4,2.6f,-22),new Vector3(-2,3,-14))}),
+    (GameMaps.Crossing,"crossing",new[]{(new Vector3(2,2.6f,-31),new Vector3(-2,2,-10)),(new Vector3(-38,6.2f,27),new Vector3(10,3.5f,31.5f))}),
+    (GameMaps.Sky,"sky",new[]{(new Vector3(0,2.6f,-38),new Vector3(0,2,-5)),(new Vector3(6,5.8f,-4),new Vector3(-36,0,38))}),
+    (GameMaps.Snow,"snow",new[]{(new Vector3(2,2.6f,-31),new Vector3(0,4,-6)),(new Vector3(0,11.5f,24),new Vector3(0,2,-20))}),
+    (GameMaps.Ruins,"ruins",new[]{(new Vector3(2,2.6f,-26),new Vector3(0,1,0)),(new Vector3(-8,2.4f,2),new Vector3(0,4,22))})}) {
+    var root=new GameObject("Look audit");
+    if(map==GameMaps.Town)PrototypeVillage.Build(root.transform);else if(map==GameMaps.Warehouse)WarehouseMap.Build(root.transform);else if(map==GameMaps.Crossing)CrossingMap.Build(root.transform);
+    else PlannedMap.Build(root.transform,MapPlans.For(map),catalog!=null?catalog.Dressing(map):null,catalog!=null?catalog.Crate:null);
+    var light=new GameObject("Audit sun").AddComponent<Light>();light.type=LightType.Directional;
+    var camera=new GameObject("Audit camera").AddComponent<Camera>();camera.fieldOfView=60;
+    TownLighting.Apply(camera,light,map);DisplayQuality.Apply(GraphicsQuality.High,camera);LowPolyLook.Scenery(root.transform);
+    Physics.SyncTransforms();
+    if(catalog!=null) {
+     // Two bodies a few steps into the street view, on whatever floor is there.
+     var forward=views[0].Item2-views[0].Item1;forward.y=0;forward.Normalize();var side=Vector3.Cross(Vector3.up,forward);
+     foreach(var (prefab,offset) in new[]{(catalog.Human,forward*5.5f-side*1.1f),(catalog.Animal,forward*7+side*1.4f)}) {
+      var above=views[0].Item1+offset+Vector3.up*3;
+      if(Physics.Raycast(above,Vector3.down,out var hit,12,Layers.World,QueryTriggerInteraction.Ignore)){var body=Pose(prefab,root.transform,hit.point);LowPolyLook.Character(body.transform);body.transform.rotation=Quaternion.LookRotation(-forward+side*.4f);}
+     }
+    }
+    for(int i=0;i<views.Length;i++){camera.transform.position=views[i].Item1;MapAir.Apply(camera,TownLighting.Current,GraphicsQuality.High);MapAir.Current.Simulate(9,true,true);Shot(camera,views[i].Item1,views[i].Item2,$"{prefix}-{name}-{i}");}
+    MapAir.Apply(null,null,GraphicsQuality.Low);
+    Object.DestroyImmediate(root);Object.DestroyImmediate(light.gameObject);Object.DestroyImmediate(camera.gameObject);
+   }
+  }
   static GameObject Pose(GameObject prefab,Transform parent,Vector3 position) {
    var model=Object.Instantiate(prefab,parent);model.transform.position=position;
    foreach(var a in model.GetComponentsInChildren<Animator>()){a.Rebind();a.Update(0);a.Play("Idle",0,0);a.Update(.1f);}return model;

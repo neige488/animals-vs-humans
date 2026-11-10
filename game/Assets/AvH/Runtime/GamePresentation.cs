@@ -35,7 +35,7 @@ namespace AvH {
   public Vector3 FollowPoint=>follow;
   /// <summary>Replaces the per-PC display preferences (tests and isolated profiles).</summary>
   public void UseDisplaySettings(LocalDisplaySettings settings){display=settings??new LocalDisplaySettings(null);appliedDisplay=-1;ApplyDisplay();}
-  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality,view);}
+  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;MapAir.Apply(view,TownLighting.Current,display.Quality);feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality,view);}
   GUIStyle label, title;
   // Override the fullscreen preference saved by older playtest builds on every desktop launch.
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
@@ -110,7 +110,11 @@ namespace AvH {
     yield return new WaitForSecondsRealtime(1f/30);
    }
   }
+  // Each map has its own time of day; follow whichever map the session has built.
+  int litMap=-1;
+  void FollowMapLook(){if(session==null||session.BuiltMap==litMap||view==null)return;litMap=session.BuiltMap;TownLighting.Apply(view,Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l=>l.type==LightType.Directional),litMap);appliedDisplay=-1;}
   void Update() {
+   FollowMapLook();
    if(display!=null&&appliedDisplay!=display.Version)ApplyDisplay();
    if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;debugOpen=false;hitFeed.Reset();return;}
    rosterHud.Present(session.Observe(),network.LocalSlot);hitFeed.Observe(session.Observe(),Time.deltaTime);

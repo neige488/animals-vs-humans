@@ -28,13 +28,24 @@ namespace AvH {
   // The global volume lives on the Default layer; post layers only listen to it.
   const int VolumeLayer=0;
   static PostProcessResources resources;static bool resourcesLoaded;
-  static PostProcessVolume volume;static ColorGrading grading;static Bloom bloom;static AmbientOcclusion occlusion;
+  static PostProcessVolume volume;static ColorGrading grading;static Bloom bloom;static AmbientOcclusion occlusion;static Vignette vignette;
+  static MapLook look=MapLook.For(GameMaps.Town);
+  /// <summary>The colour grade of a map's time of day (<see cref="TownLighting.Apply"/> sets it).</summary>
+  public static void SetLook(MapLook next){look=next??MapLook.For(GameMaps.Town);if(volume!=null)Grade();}
+  static void Grade() {
+   grading.postExposure.Override(look.Exposure);grading.temperature.Override(look.Temperature);grading.tint.Override(look.Tint);grading.saturation.Override(look.Saturation);grading.contrast.Override(look.Contrast);
+   // Split toning: the shade leans to the sky's colour and the lit side to the sun's (trackball offset from neutral grey).
+   var shade=look.ShadowTint;var bright=look.HighlightTint;
+   grading.lift.Override(new Vector4(shade.r-.5f,shade.g-.5f,shade.b-.5f,0)*.7f+new Vector4(1,1,1,0));
+   grading.gain.Override(new Vector4(bright.r-.5f,bright.g-.5f,bright.b-.5f,0)*.7f+new Vector4(1,1,1,0));
+   bloom.intensity.Override(look.Bloom);bloom.color.Override(Color.Lerp(Color.white,look.Sun,.6f));
+  }
 
   public static void Apply(Camera camera,GraphicsQuality quality) {
    Quality=quality;Version++;
    QualitySettings.pixelLightCount=quality==GraphicsQuality.High?4:quality==GraphicsQuality.Medium?2:0;
    if(!EnsureVolume())return;
-   grading.enabled.Override(quality!=GraphicsQuality.Low);bloom.enabled.Override(quality!=GraphicsQuality.Low);occlusion.enabled.Override(quality==GraphicsQuality.High);
+   grading.enabled.Override(quality!=GraphicsQuality.Low);bloom.enabled.Override(quality!=GraphicsQuality.Low);vignette.enabled.Override(quality!=GraphicsQuality.Low);occlusion.enabled.Override(quality==GraphicsQuality.High);
    bloom.fastMode.Override(quality!=GraphicsQuality.High);
    if(camera==null)return;
    var layer=camera.GetComponent<PostProcessLayer>();
@@ -66,8 +77,10 @@ namespace AvH {
    occlusion=ScriptableObject.CreateInstance<AmbientOcclusion>();occlusion.enabled.Override(true);// Multi-scale volumetric obscurance needs compute shaders (Metal, D3D11); otherwise the scalable variant.
    bool compute=SystemInfo.supportsComputeShaders;occlusion.mode.Override(compute?AmbientOcclusionMode.MultiScaleVolumetricObscurance:AmbientOcclusionMode.ScalableAmbientObscurance);
    occlusion.intensity.Override(.7f);occlusion.thicknessModifier.Override(1.2f);occlusion.radius.Override(.6f);occlusion.quality.Override(AmbientOcclusionQuality.Medium);
-   volume=PostProcessManager.instance.QuickVolume(VolumeLayer,100,grading,bloom,occlusion);
-   Object.DontDestroyOnLoad(volume.gameObject);
+   // A faint darkening toward the corners keeps the eye on the middle of the screen, where the crosshair is.
+   vignette=ScriptableObject.CreateInstance<Vignette>();vignette.enabled.Override(true);vignette.intensity.Override(.24f);vignette.smoothness.Override(.5f);vignette.roundness.Override(1);
+   volume=PostProcessManager.instance.QuickVolume(VolumeLayer,100,grading,bloom,occlusion,vignette);Grade();
+   if(Application.isPlaying)Object.DontDestroyOnLoad(volume.gameObject);
    return true;
   }
  }

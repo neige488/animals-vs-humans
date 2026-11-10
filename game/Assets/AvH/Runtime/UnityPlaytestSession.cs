@@ -41,6 +41,7 @@ namespace AvH {
     }
     default:ShelterPoints=PrototypeVillage.Build(transform);returns=TownReturns;props=PushProps.Adopt(transform.Find("Village"));break;
    }
+   LowPolyLook.Scenery(transform);
    builtMap=map;botDirector.ResetMap(map==GameMaps.Crossing?CrossingLayout.Grid:MapPlans.For(map)?.Grid??RouteGrid.Default);Physics.SyncTransforms();
   }
   public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null, int? map = null) {
@@ -227,7 +228,7 @@ namespace AvH {
     Destroy(visual.GetComponent<Collider>());
     visual.GetComponent<Renderer>().sharedMaterial=PrototypeVillage.Material(faction==Faction.Human?new Color(.15f,.7f,.95f):new Color(1,.48f,.16f));
    }
-   visual.name="Visual";
+   visual.name="Visual";LowPolyLook.Character(visual.transform);
    foreach(var animator in visual.GetComponentsInChildren<Animator>()){animator.fireEvents=false;animator.applyRootMotion=false;animator.Rebind();animator.Update(0);}
    var gunPose=guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>():null;
    if(gunPose!=null)gunPose.Bind(visual.transform);
