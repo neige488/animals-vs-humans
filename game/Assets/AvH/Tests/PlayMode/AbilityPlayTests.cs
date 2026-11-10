@@ -51,7 +51,7 @@ namespace AvH.Tests {
     Assert.AreEqual(0,game.AbilityPropKey(rider),"끝나면 소품도 사라진다");Assert.AreEqual(0,game.GadgetViewCount,"허수아비는 8초 뒤 쓰러진다");
     if(clown>=0&&game.Observe().Players[clown].Faction==Faction.Human) {
      float floor=game.Observe().Players[clown].Position.Y;Assert.IsTrue(game.Session.TryUseAbility(clown,round,0,0));
-     for(int i=0;i<140;i++)game.Step(.02f);yield return null;
+     for(int i=0;i<110;i++)game.Step(.02f);yield return null;
      if(game.Observe().Players[clown].AbilityActiveRemaining>0){Assert.Greater(game.Observe().Players[clown].Position.Y-floor,2.5f,"풍선은 사람을 들어 올린다");Assert.AreEqual((int)AbilityKind.Balloon,game.AbilityPropKey(clown));}
     }
    } finally {if(root!=null)Object.Destroy(root);}yield return null;

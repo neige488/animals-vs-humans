@@ -23,11 +23,11 @@ namespace AvH {
   public float BotAimDelaySeconds=.2f;
   public float BotAimErrorDegrees=3f;
   public float ReloadSeconds=1.5f, BubbleRadius=.35f, BubbleSpeed=18, BubbleRange=25, BubbleLifetime=2, FireInterval=.3f, PushForce=8;
-  public float FoxSpeedMultiplier=1.1f, FoxJumpMultiplier=1.1f, FoxKnockbackMultiplier=1.15f;
-  public float WolfSpeedMultiplier=1.15f, WolfJumpMultiplier=1.0f, WolfKnockbackMultiplier=1.0f;
+  public float FoxSpeedMultiplier=1.18f, FoxJumpMultiplier=1.1f, FoxKnockbackMultiplier=1.15f;
+  public float WolfSpeedMultiplier=1.2f, WolfJumpMultiplier=1.0f, WolfKnockbackMultiplier=1.0f;
   public float BearSpeedMultiplier=0.8f, BearJumpMultiplier=0.65f, BearKnockbackMultiplier=0.45f;
-  public float BoarSpeedMultiplier=1.05f, BoarJumpMultiplier=0.7f, BoarKnockbackMultiplier=0.65f;
-  public float RabbitSpeedMultiplier=1.05f, RabbitJumpMultiplier=1.55f, RabbitKnockbackMultiplier=1.4f;
+  public float BoarSpeedMultiplier=0.96f, BoarJumpMultiplier=0.7f, BoarKnockbackMultiplier=0.8f;
+  public float RabbitSpeedMultiplier=1.12f, RabbitJumpMultiplier=1.55f, RabbitKnockbackMultiplier=1.4f;
   public float PenguinSpeedMultiplier=0.9f, PenguinJumpMultiplier=0.9f, PenguinKnockbackMultiplier=0.8f;
   public bool FriendlyCollision=true, EnemyCollision=true, FriendlyPush=true;
   // Map for the next round (GameMaps): 0 village, 1 warehouse, 2 sand crossing, 3 sky islands, 4 snowy hill village, 5 forest ruins.
@@ -67,8 +67,8 @@ namespace AvH {
     case "animal-penguin":return new AnimalModifiers(rules.PenguinSpeedMultiplier,rules.PenguinJumpMultiplier,rules.PenguinKnockbackMultiplier);
     // Species without their own sliders.
     case "animal-cat_orange":return new AnimalModifiers(1.1f,1.2f,1.2f);
-    case "animal-hen":return new AnimalModifiers(.95f,1.1f,1.4f);
-    case "animal-squirrel":return new AnimalModifiers(1.1f,1.3f,1.5f);
+    case "animal-hen":return new AnimalModifiers(1.03f,1.1f,1.2f);
+    case "animal-squirrel":return new AnimalModifiers(1.13f,1.3f,1.3f);
     case "animal-deer":return new AnimalModifiers(1.15f,1.25f,1);
     case "animal-goat":return new AnimalModifiers(1,1.1f,.8f);
     case "animal-crocodile":return new AnimalModifiers(.85f,.6f,.5f);
@@ -76,7 +76,7 @@ namespace AvH {
     case "animal-gorilla_silver":return new AnimalModifiers(.9f,.9f,.5f);
     // Nothing stops a rhino in full charge.
     case "animal-rhino":return new AnimalModifiers(.85f,.6f,player.Ability==AbilityKind.Stampede&&player.AbilityActiveRemaining>0?0:.35f);
-    case "animal-tiger":return new AnimalModifiers(1.1f,1.1f,.8f);
+    case "animal-tiger":return new AnimalModifiers(1.02f,1.1f,.8f);
     default:return new AnimalModifiers(1,1,1);
    }
   }

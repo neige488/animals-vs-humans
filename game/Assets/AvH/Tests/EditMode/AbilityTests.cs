@@ -56,8 +56,8 @@ namespace AvH.Tests {
   [Test] public void StatusLineSaysWhatQDoesNow() {
    var s=Play("human-man_clown",Fox);int clown=Slots(s,Faction.Human)[0];
    Assert.AreEqual("Q 풍선 [에픽] · 준비됨",Abilities.Status(P(s,clown)));
-   Use(s,clown);StringAssert.Contains("사용 중 6.0초",Abilities.Status(P(s,clown)));
-   s.Advance(6.5);StringAssert.Contains("초 뒤",Abilities.Status(P(s,clown)));
+   Use(s,clown);StringAssert.Contains("사용 중 5.0초",Abilities.Status(P(s,clown)));
+   s.Advance(5.5);StringAssert.Contains("초 뒤",Abilities.Status(P(s,clown)));
    var chef=Play("human-man_chef",Fox);int cook=Slots(chef,Faction.Human)[0];StringAssert.Contains("남은 3번",Abilities.Status(P(chef,cook)));
    Assert.AreEqual("",Abilities.Status(new PlayerState()));
   }
@@ -192,7 +192,7 @@ namespace AvH.Tests {
   [Test] public void BalloonFloatsUnarmedAndPopsWhenAnAnimalTouchesIt() {
    var s=Play("human-man_clown",Fox);int clown=Slots(s,Faction.Human)[0],fox=Slots(s,Faction.Animal)[0],round=s.Observe().Round;
    At(s,clown,0,0);Assert.IsTrue(Use(s,clown));Assert.Greater(CharacterMotion.Air(P(s,clown)).Rise,0);Assert.IsFalse(s.TryFire(clown,round),"풍선을 잡은 손으로는 못 쏜다");
-   s.Advance(3.1);Assert.AreEqual(0,CharacterMotion.Air(P(s,clown)).Rise);Assert.Greater(CharacterMotion.Air(P(s,clown)).FallCap,0,"다 오르면 천천히 내려온다");
+   s.Advance(2.3);Assert.AreEqual(0,CharacterMotion.Air(P(s,clown)).Rise);Assert.Greater(CharacterMotion.Air(P(s,clown)).FallCap,0,"다 오르면 천천히 내려온다");
    At(s,fox,0,1);s.Advance(.05);Assert.AreEqual(0,P(s,clown).AbilityActiveRemaining);Assert.AreEqual(1,Hits(s,AbilityKind.Balloon,clown));Assert.IsTrue(s.TryFire(clown,round));
   }
   [Test] public void WhistleSlowsAnimalsWithinEarshot() {

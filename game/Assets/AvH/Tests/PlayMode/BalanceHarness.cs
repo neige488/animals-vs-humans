@@ -12,7 +12,7 @@ namespace AvH.Tests {
  /// Bot-only matches for balance numbers. Runs only when AVH_BALANCE_OUT names a result file:
  /// AVH_BALANCE_MAPS "0,1,2" (default all), AVH_BALANCE_SEEDS worlds per map (default 2), AVH_BALANCE_ROUNDS rounds per
  /// world (default 3), AVH_BALANCE_SET "AnimalSpeed=5.2;RoundSeconds=150" overrides PlaytestValues fields.
- /// One line per round: map;seed;round;winner;seconds;humansLeft;players (slot:human id:first animal 0/1:animal id:catches:turned at).
+ /// One line per round: map;seed;round;winner;seconds;humansLeft;players (slot:human id:first animal 0/1:animal id:catches:turned at);survivors (x/y/z).
  /// </summary>
  public class BalanceHarness {
   static string Env(string name,string fallback=null){var v=Environment.GetEnvironmentVariable(name);return string.IsNullOrEmpty(v)?fallback:v;}
@@ -21,6 +21,9 @@ namespace AvH.Tests {
    var maps=Env("AVH_BALANCE_MAPS","0,1,2,3,4,5").Split(',').Select(int.Parse).ToArray();
    int seeds=int.Parse(Env("AVH_BALANCE_SEEDS","2")),rounds=int.Parse(Env("AVH_BALANCE_ROUNDS","3")),firstSeed=int.Parse(Env("AVH_BALANCE_FIRST_SEED","1"));
    string overrides=Env("AVH_BALANCE_SET","");
+   // Matches are measured as players get them: with the per-map balance the test fixture turns off.
+   GameMaps.PerMapBalance=true;
+   try {
    foreach(int map in maps)for(int seed=firstSeed;seed<firstSeed+seeds;seed++) {
     string profile=Path.Combine(Path.GetTempPath(),Guid.NewGuid()+".xml");
     var setup=new PlaytestSession(1,profile);setup.BeginSettingsEdit(0);var values=setup.ObserveSettings().Edit;
@@ -48,13 +51,16 @@ namespace AvH.Tests {
       if(state.Phase==RoundPhase.Results)break;
      }
      var line=string.Join(";",new[]{map.ToString(),seed.ToString(),round.ToString(),state.Winner.HasValue?state.Winner.Value.ToString():"None",chaseSeconds.ToString("F1",CultureInfo.InvariantCulture),state.Players.Count(p=>p.Faction==Faction.Human).ToString(),
-      string.Join(",",state.Players.Select(p=>$"{p.Slot}:{human[p.Slot]}:{(first[p.Slot]?1:0)}:{(p.Faction==Faction.Animal?p.CharacterId:"")}:{catches[p.Slot]}:{turned[p.Slot].ToString("F1",CultureInfo.InvariantCulture)}"))});
+      string.Join(",",state.Players.Select(p=>$"{p.Slot}:{human[p.Slot]}:{(first[p.Slot]?1:0)}:{(p.Faction==Faction.Animal?p.CharacterId:"")}:{catches[p.Slot]}:{turned[p.Slot].ToString("F1",CultureInfo.InvariantCulture)}")),
+      // Where the humans who were never caught stood at the end: finds hiding spots the animals cannot reach.
+      string.Join(",",state.Players.Where(p=>p.Faction==Faction.Human).Select(p=>FormattableString.Invariant($"{p.Position.X:F1}/{p.Position.Y:F1}/{p.Position.Z:F1}")))});
      File.AppendAllText(output,line+"\n");
      // Through the result screen into the next round.
      while(game.Observe().Round==round){game.Step(.02f);if(++steps%200==0)yield return null;}
     }
     UnityEngine.Object.Destroy(root);if(File.Exists(profile))File.Delete(profile);yield return null;
    }
+   } finally {GameMaps.PerMapBalance=false;}
   }
  }
 }

@@ -62,7 +62,7 @@ namespace AvH {
    A(AbilityKind.Smoke,"human-man_ninja","연막",Epic,28,0,0,"연기 속에 숨는다."),
    A(AbilityKind.IceRay,"human-woman_scientist","얼음 광선",Epic,30,0,0,"동물 한 마리를 얼린다."),
    A(AbilityKind.ZeroG,"human-man_astronaut","무중력",Epic,30,0,0,"주변이 둥실 떠오른다."),
-   A(AbilityKind.Balloon,"human-man_clown","풍선",Epic,28,6,0,"풍선을 타고 떠올라 흘러간다. 동물이 닿으면 터진다."),
+   A(AbilityKind.Balloon,"human-man_clown","풍선",Epic,28,5,0,"풍선을 타고 떠올라 흘러간다. 동물이 닿으면 터진다."),
    A(AbilityKind.Vaccine,"human-woman_doctor","백신",Legend,0,8,1,"감염 공격을 한 번 막는다."),
   };
   public static IReadOnlyList<AbilityDefinition> All=>all;
@@ -78,7 +78,7 @@ namespace AvH {
   public const float AcornRange=14,LassoRange=9,BubbleRange=8,IceRange=10,CannonRange=7,HeadbuttRange=3;
   /// <summary>An animal bot that is not this close cannot make out a human inside smoke.</summary>
   public const float SmokeSightDistance=2.5f;
-  public const float BalloonRiseSeconds=3;
+  public const float BalloonRiseSeconds=2.2f;
  }
  [Serializable] public sealed class GadgetState {
   public int Id,Owner;public AbilityKind Kind;public WorldPosition Position;public double Remaining;

@@ -84,7 +84,7 @@ namespace AvH
         private void BeginRound() {
             settings.BeginRound(); map = GameMaps.Clamp(settings.Current.Map); round++; phase = RoundPhase.Preparation; remaining = settings.Current.PreparationSeconds; winner = null;
             births = Array.Empty<BirthNotice>();
-            nextAnimal=(round-1)*settings.Current.InitialAnimals;
+            nextAnimal=(round-1)*FirstAnimals;
             foreach (var player in players) { player.Faction = Faction.Human; player.CharacterId = null; }
             foreach (var player in players) { AssignCharacter(player,settings.Current.RandomCharacters?Draw(humanRoster,Faction.Human):humanRoster[player.Slot%humanRoster.Length]);player.Position = Spawn(player.Slot);
                 int tool = settings.Current.Tool; player.Tool = (ToolKind)(tool >= 0 && tool < Tools.Count ? tool : toolRandom.Next(Tools.Count)); }
@@ -99,17 +99,17 @@ namespace AvH
                 hostTime=phaseDeadline;
                 if (phase == RoundPhase.Preparation) {
                     var slots = Enumerable.Range(0, players.Length).ToArray();
-                    for (int i = 0; i < settings.Current.InitialAnimals; i++) {
+                    for (int i = 0; i < FirstAnimals; i++) {
                         int selected = random.Next(i, slots.Length);
                         int swap = slots[i]; slots[i] = slots[selected]; slots[selected] = swap;
                         players[slots[i]].Faction = Faction.Animal;
                         AssignCharacter(players[slots[i]],NextAnimal());
                         players[slots[i]].AttackGraceRemaining = settings.Current.InitialAttackGrace;
                     }
-                    if (GameMaps.AnimalsStartApart(map)) for (int i = 0; i < settings.Current.InitialAnimals; i++) players[slots[i]].Position = GameMaps.AnimalStart(map, i);
+                    if (GameMaps.AnimalsStartApart(map)) for (int i = 0; i < FirstAnimals; i++) players[slots[i]].Position = GameMaps.AnimalStart(map, i);
                     var born=players.Where(p=>p.Faction==Faction.Animal).ToArray();
                     PublishBirth(born);foreach(var p in born)Publish(FeelEventKind.Transform,-1,p.Slot,p.Position);
-                    phase = RoundPhase.Chase; remaining = settings.Current.RoundSeconds;
+                    phase = RoundPhase.Chase; remaining = GameMaps.ChaseSeconds(map,settings.Current.RoundSeconds);
                 } else if (phase == RoundPhase.Chase) {
                     phase = RoundPhase.Results; remaining = settings.Current.ResultSeconds; winner = Faction.Human; ClearActions();
                 } else BeginRound();
@@ -125,6 +125,7 @@ namespace AvH
             if(roster.Length==0||roster.Length>64||roster.Any(c=>c==null)||roster.Select(c=>c.Id).Distinct(StringComparer.Ordinal).Count()!=roster.Length)throw new ArgumentException("캐릭터 목록이 올바르지 않습니다.");
             return roster;
         }
+        int FirstAnimals=>GameMaps.FirstAnimals(map,settings.Current.InitialAnimals,players.Length);
         CharacterDefinition NextAnimal()=>settings.Current.RandomCharacters?Draw(animalRoster,Faction.Animal):animalRoster[nextAnimal++%animalRoster.Length];
         /// <summary>
         /// Random character: first the grade by <see cref="Abilities.Odds"/> (over the grades this roster has), then one of that
