@@ -4,7 +4,9 @@ using System.Linq;
 using UnityEngine;
 namespace AvH {
  // Generates normal player inputs. No teleport, hit claim, or faction mutation exists here.
- public struct BotNavigationDiagnostics {public int GridBuilds,MaxGridBuildsPerStep;}
+ public struct BotNavigationDiagnostics {public int GridBuilds,MaxGridBuildsPerStep;
+  /// <summary>Route cells planned by bots, and how many of them lie on (or within 1.5 m of) a teammate's route.</summary>
+  public long PlannedCells,SharedCells;}
  public sealed class BotDirector {
   public BotNavigationDiagnostics ObserveNavigation()=>routes.Observe();
   /// <summary>The bot route planner itself (tests and layout checks): grid route from one floor point to another.</summary>
@@ -12,6 +14,8 @@ namespace AvH {
   /// <summary>New map geometry: the grid is rebuilt on the next route and every bot re-plans.</summary>
   public void ResetMap(RouteGrid grid){routes.Reset(grid);foreach(var brain in brains){brain.Round=-1;brain.Path.Clear();}}
   sealed class Brain {public int Shelter,Round;public Faction Faction;public float Replan,Flee,Stuck,ProgressTime,LastDistance;public Vector3 Last;public List<Vector3> Path=new List<Vector3>();public int Cursor;public BotAim Aim;public Vector3 Avoid;public float AvoidTime;
+    // Grid nodes of the last route (teammates plan round them) and the side this animal closes in from.
+    public List<int> Ids=new List<int>();public int ApproachPrey=-1;public Vector3 ApproachDir;
    // Personality: idle shuffle at a shelter, boar charge, rabbit hop.
    public Vector3 Fidget;public float FidgetTime,Charge=-3,Hop;public Vector3 ChargeDir;}
   readonly Brain[] brains=Enumerable.Range(0,12).Select(i=>new Brain{Shelter=i%3,Aim=new BotAim(i+1)}).ToArray();
@@ -48,7 +52,15 @@ namespace AvH {
     else {
      var prey3=V(target.Position);goal=prey3;var toward=Flat(prey3-position);float d=toward.magnitude;var dir=d>.01f?toward/d:Vector3.forward;var side=Vector3.Cross(Vector3.up,dir)*(player.Slot%2==0?1:-1);
      // Several animals on one human close in from different sides rather than queueing behind each other.
-     if(hunted.TryGetValue(target.Slot,out var pack)&&pack.Count>1&&d>1.8f&&d<7){float a=(pack.IndexOf(player.Slot)*Mathf.PI*2/pack.Count)+target.Slot;goal=prey3+new Vector3(Mathf.Cos(a),0,Mathf.Sin(a))*1.3f;}
+     bool packed=hunted.TryGetValue(target.Slot,out var pack)&&pack.Count>1;
+     // From far off each pack member already heads for its own side of the human (straight on, left, right,
+     // behind), so the pack arrives as a pincer instead of a queue. The side is fixed when the hunt starts.
+     if(packed&&d>=7&&d<36) {
+      if(brain.ApproachPrey!=target.Slot){brain.ApproachPrey=target.Slot;var from=d>.01f?-dir:Vector3.forward;brain.ApproachDir=Quaternion.Euler(0,Sectors[pack.IndexOf(player.Slot)%Sectors.Length],0)*from;}
+      var flank=prey3+brain.ApproachDir*Mathf.Min(d*.55f,7);
+      if(HasFloor(flank,prey3.y))goal=flank;
+     } else if(!packed||d<7)brain.ApproachPrey=-1;
+     if(packed&&d>1.8f&&d<7){float a=(pack.IndexOf(player.Slot)*Mathf.PI*2/pack.Count)+target.Slot;goal=prey3+new Vector3(Mathf.Cos(a),0,Mathf.Sin(a))*1.3f;}
      // The wolf circles in from the side.
      else if(player.CharacterId=="animal-wolf"&&d>4&&d<14)goal=prey3+side*3.5f-dir*1;
     }
@@ -60,7 +72,10 @@ namespace AvH {
     // A human chased on the deck may jump down through a railing gap when that is the shorter way out.
     bool jumpDown=player.Faction==Faction.Human&&brain.Flee>0&&position.y>1.5f;
     if(brain.Replan<=0) {
-     brain.Path=routes.Find(position,goal,out bool reachable,jumpDown,brain.AvoidTime>0?brain.Avoid:(Vector3?)null);
+     // Teammates' routes cost extra: the next bot takes a parallel street or the other stair when that is not
+     // much longer, instead of walking in the first one's footsteps. A single bridge is still used by all.
+     routes.Share(brains.Where((b,i)=>i!=player.Slot&&b.Round==state.Round&&b.Faction==player.Faction).Select(b=>b.Ids));
+     brain.Path=routes.Find(position,goal,out bool reachable,jumpDown,brain.AvoidTime>0?brain.Avoid:(Vector3?)null,true);
      if(!reachable) {
       routes.Invalidate();
       if(player.Faction==Faction.Human) {
@@ -77,6 +92,7 @@ namespace AvH {
        }
       }
      }
+     brain.Ids.Clear();brain.Ids.AddRange(routes.LastIds);
      brain.Path=routes.Smooth(position,brain.Path);
      brain.Cursor=0;brain.Replan=.8f+player.Slot*.013f;
     }
@@ -162,6 +178,19 @@ namespace AvH {
   }
   /// <summary>How much farther (m) an animal will go for a human nobody else is chasing.</summary>
   public const float SpreadPenalty=4;
+  /// <summary>Approach sides (degrees from the line the animal starts on) handed out to a pack in order.</summary>
+  static readonly float[] Sectors={0,75,-75,145,-145};
+  /// <summary>
+  /// Extra cost per metre, for each teammate route on or next to a cell (counted up to 2). 0 turns route sharing
+  /// off; tests compare against it.
+  /// </summary>
+  public static float SharePenalty=.8f;
+  /// <summary>True when there is ground near this height under a point (a flank point is not over a void).</summary>
+  static bool HasFloor(Vector3 point,float height) {
+   foreach(var hit in Physics.RaycastAll(new Vector3(point.x,height+3,point.z),Vector3.down,6,Layers.World,QueryTriggerInteraction.Ignore))
+    if(!(hit.collider is CharacterController)&&hit.collider.GetComponentInParent<CharacterController>()==null&&Mathf.Abs(hit.point.y-height)<2.5f)return true;
+   return false;
+  }
   /// <summary>A repeatable 0..1 number for this slot and moment (bots stay deterministic for tests).</summary>
   static float Hash(int slot,double time){var x=Mathf.Sin((float)(slot*12.9898+Math.Floor(time*10)*78.233))*43758.547f;return x-Mathf.Floor(x);}
   /// <summary>True when a body taking this step still lands on a floor (a ledge up to 6 m is fine; a void is not).</summary>
@@ -192,11 +221,28 @@ namespace AvH {
  // A small terrain-derived grid supports the roof staircase and both ground shelters.
  sealed class VillageRoutes {
   RouteGrid grid=RouteGrid.Default;int Cells,Nodes;
-  Vector3[] points;bool[] walkable;float[] distance;int[] parent;bool[] closed;
+  Vector3[] points;bool[] walkable;float[] distance;int[] parent;bool[] closed;byte[] share;bool[] edge;long planned,sharedCells;
   public VillageRoutes(){Allocate();}
-  void Allocate(){Cells=grid.SizeX*grid.SizeZ;Nodes=Cells*grid.Layers;points=new Vector3[Nodes];walkable=new bool[Nodes];distance=new float[Nodes];parent=new int[Nodes];closed=new bool[Nodes];}
+  void Allocate(){Cells=grid.SizeX*grid.SizeZ;Nodes=Cells*grid.Layers;points=new Vector3[Nodes];walkable=new bool[Nodes];distance=new float[Nodes];parent=new int[Nodes];closed=new bool[Nodes];share=new byte[Nodes];edge=new bool[Nodes];}
   bool built,rebuildRequested,rebuiltThisStep;float sinceBuild=1;int builds,thisStep,maxPerStep;
-  public BotNavigationDiagnostics Observe()=>new BotNavigationDiagnostics{GridBuilds=builds,MaxGridBuildsPerStep=maxPerStep};
+  public BotNavigationDiagnostics Observe()=>new BotNavigationDiagnostics{GridBuilds=builds,MaxGridBuildsPerStep=maxPerStep,PlannedCells=planned,SharedCells=sharedCells};
+  /// <summary>Grid nodes of the last <see cref="Find"/> result, start to goal.</summary>
+  public readonly List<int> LastIds=new List<int>();
+  const int ShareCells=2;const float EdgePenalty=2.5f;
+  /// <summary>Marks the cells on and within 1.5 m of these routes (same floor only) for the next shared <see cref="Find"/>.</summary>
+  public void Share(IEnumerable<List<int>> routes) {
+   Array.Clear(share,0,share.Length);
+   foreach(var route in routes) {
+    if(route.Count==0)continue;
+    var mark=new HashSet<int>();
+    foreach(int id in route) {
+     if(id<0||id>=Nodes||!walkable[id])continue;int cell=id%Cells,x=cell%grid.SizeX,z=cell/grid.SizeX;float y=points[id].y;
+     for(int dz=-ShareCells;dz<=ShareCells;dz++)for(int dx=-ShareCells;dx<=ShareCells;dx++){int nx=x+dx,nz=z+dz;if(nx<0||nx>=grid.SizeX||nz<0||nz>=grid.SizeZ)continue;
+      for(int l=0;l<grid.Layers;l++){int n=nz*grid.SizeX+nx+l*Cells;if(walkable[n]&&Mathf.Abs(points[n].y-y)<1)mark.Add(n);}}
+    }
+    foreach(int n in mark)if(share[n]<255)share[n]++;
+   }
+  }
   readonly SortedSet<(float score,int id)> open=new SortedSet<(float,int)>();
   public void BeginStep(float seconds){sinceBuild+=seconds;rebuiltThisStep=false;thisStep=0;}
   public void Invalidate(){rebuildRequested=true;}
@@ -219,12 +265,22 @@ namespace AvH {
      points[id+layer*Cells]=p;walkable[id+layer*Cells]=true;if(++layer>=grid.Layers)break;
     }
    }
+   // Edge cells: a neighbour with no floor within 6 m below (a sky bridge rim, the chasm). Spreading out never
+   // pushes a bot onto them, so making room for a teammate does not walk anyone off into the void.
+   for(int n=0;n<Nodes;n++) {
+    edge[n]=false;if(!walkable[n])continue;int cell=n%Cells,x=cell%grid.SizeX,z=cell/grid.SizeX;
+    for(int dz=-1;dz<=1&&!edge[n];dz++)for(int dx=-1;dx<=1;dx++){int nx=x+dx,nz=z+dz;if(nx<0||nx>=grid.SizeX||nz<0||nz>=grid.SizeZ||!Landing(nz*grid.SizeX+nx,points[n].y)){edge[n]=true;break;}}
+   }
    built=true;rebuildRequested=false;rebuiltThisStep=true;sinceBuild=0;
   }
   // A diagonal step must not cut a corner: both side cells need a floor near this height.
   bool Floor(int cell,float y) {
    if(grid.Layers==1)return walkable[cell];
    for(int l=0;l<grid.Layers;l++){int n=cell+l*Cells;if(walkable[n]&&Mathf.Abs(points[n].y-y)<1)return true;}
+   return false;
+  }
+  bool Landing(int cell,float y) {
+   for(int l=0;l<grid.Layers;l++){int n=cell+l*Cells;if(walkable[n]&&points[n].y<y+1&&points[n].y>y-6.5f)return true;}
    return false;
   }
   bool Covered(int cell,float low,float high) {
@@ -270,7 +326,8 @@ namespace AvH {
    var direction=(end-anchor).normalized;float lift=sloped?.75f:.42f;
    return !Physics.CapsuleCastAll(anchor+Vector3.up*lift,anchor+Vector3.up*1.42f,.33f,direction,Vector3.Distance(anchor,end),Layers.World,QueryTriggerInteraction.Ignore).Any(hit=>Terrain(hit.collider));
   }
-  public List<Vector3> Find(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null) {
+  public List<Vector3> Find(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null,bool shared=false) {
+   LastIds.Clear();
    if(!rebuiltThisStep && (!built || rebuildRequested&&sinceBuild>=1))Build();
    int start=Nearest(from),goal=Nearest(to);var result=new List<Vector3>();reachable=false;if(start<0||goal<0)return result;
    for(int i=0;i<distance.Length;i++){distance[i]=float.MaxValue;parent[i]=-1;closed[i]=false;}open.Clear();
@@ -288,16 +345,19 @@ namespace AvH {
      } else if(dx!=0&&dz!=0&&(!Floor(z*grid.SizeX+nx,points[id].y)||!Floor(nz*grid.SizeX+x,points[id].y)))continue;
      // On a layered grid a drop must really fall: nothing to land on first (the bridge deck itself) and no parapet in the way.
      if(grid.Layers>1&&points[id].y-points[next].y>.4f&&(Covered(nz*grid.SizeX+nx,points[next].y,points[id].y)||span==1&&!ClearDrop(points[id],points[next])))continue;
-     float cost=distance[id]+Vector3.Distance(points[id],points[next]);
+     float step=Vector3.Distance(points[id],points[next]);
+     float cost=distance[id]+step*(shared&&BotDirector.SharePenalty>0?1+BotDirector.SharePenalty*Mathf.Min(share[next],2)+(edge[next]?EdgePenalty:0):1);
      if(avoid.HasValue&&(points[next]-avoid.Value).sqrMagnitude<BotDirector.AvoidRadius*BotDirector.AvoidRadius)cost+=BotDirector.AvoidPenalty;
      if(cost>=distance[next])continue;
      distance[next]=cost;parent[next]=id;open.Add((cost+Vector3.Distance(points[next],points[goal]),next));
     }
    }
    reachable=start==goal||parent[goal]>=0;
-   if(!reachable&&!allowDrop)return Find(from,to,out reachable,true,avoid);
+   if(!reachable&&!allowDrop)return Find(from,to,out reachable,true,avoid,shared);
    if(!reachable)goal=nearestReachable;
-   for(int id=goal;id!=start;id=parent[id]){if(id<0)return new List<Vector3>();result.Add(points[id]);}result.Reverse();return result;
+   for(int id=goal;id!=start;id=parent[id]){if(id<0){LastIds.Clear();return new List<Vector3>();}result.Add(points[id]);LastIds.Add(id);}result.Reverse();LastIds.Reverse();
+   if(shared){planned+=LastIds.Count;foreach(int id in LastIds)if(share[id]>0)sharedCells++;}
+   return result;
   }
  }
 }
