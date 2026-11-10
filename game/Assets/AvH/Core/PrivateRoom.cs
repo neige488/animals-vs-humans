@@ -12,7 +12,7 @@ namespace AvH {
   public static string Create(){var bytes=new byte[16];using(var rng=System.Security.Cryptography.RandomNumberGenerator.Create())rng.GetBytes(bytes);return BitConverter.ToString(bytes).Replace("-","").ToLowerInvariant();}
  }
  public static class RoomProtocol {
-  public const string Version="avh-private-15";
+  public const string Version="avh-private-16";
   public static string SchemaFingerprint()=>BuildVersion();
   /// <summary>Encoded size of one wire value in bytes (bandwidth checks).</summary>
   public static int EncodedBytes(object value)=>RoomWire.Encode(value).Length;
@@ -27,7 +27,7 @@ namespace AvH {
   public NetworkVisualState WithBubbles(NetworkBubble[] bubbles){var copy=(NetworkVisualState)MemberwiseClone();copy.Bubbles=bubbles;return copy;}
  }
  public enum ConnectionStatus { Idle, Connecting, Loading, Waiting, Playing, Failed, Interrupted }
- [Serializable] public struct NetworkInput { public float Right,Forward,Yaw,Pitch; public bool Jump,Attack,Reload; public int RoundId,Sequence; }
+ [Serializable] public struct NetworkInput { public float Right,Forward,Yaw,Pitch; public bool Jump,Attack,Reload,Ability; public int RoundId,Sequence; }
  // Discovery is independent of the authoritative world. Codes contain a reachable IPv4 endpoint and random capability.
  public static class PrivateRoomCode {
   public static string Create(string address,int port,string key)=>Convert.ToBase64String(Encoding.UTF8.GetBytes(address+":"+port+":"+key));

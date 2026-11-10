@@ -2,7 +2,9 @@ using System;
 namespace AvH {
  /// <summary>What a character is doing beyond locomotion, derived by the host from its rule timers.</summary>
  public enum ActionPhase { None, Windup, Swing, Stunned, HitStop }
- public enum FeelEventKind { AttackWindup, AttackHit, AttackMiss, Transform, Stagger, Landing, PropPushed, Shoved, FellOff }
+ public enum FeelEventKind { AttackWindup, AttackHit, AttackMiss, Transform, Stagger, Landing, PropPushed, Shoved, FellOff,
+  /// <summary>An ability was used (Strength = its AbilityKind), reached a target, or ended early (popped balloon, broken disguise, crash).</summary>
+  Ability, AbilityHit, AbilityEnd }
  /// <summary>
  /// One public fact the host judged (tell, hit, miss, transformation, bubble stagger, hard landing, shoved prop,
  /// a human shoved by a friend's shot).

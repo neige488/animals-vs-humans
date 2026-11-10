@@ -127,7 +127,7 @@ namespace AvH {
     SetLookAngles(yaw+Input.GetAxisRaw("Mouse X")*2,pitch-Input.GetAxisRaw("Mouse Y")*2);
    }
    var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
-   if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=!debugOpen&&Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
+   if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=!debugOpen&&Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);input.Ability=Input.GetKeyDown(KeyCode.Q);}
    if(!AutomatedProbeInput)network.SubmitInput(input);session.PresentTrigger(network.LocalSlot,input.Attack);
   }
   void LateUpdate() {
@@ -162,7 +162,7 @@ namespace AvH {
    if(hide){foreach(var renderer in session.PlayerTransform(network.LocalSlot).GetComponentsInChildren<Renderer>()){if(!hiddenLocal.ContainsKey(renderer))hiddenLocal[renderer]=renderer.shadowCastingMode;renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;}}
    else RestoreLocalRenderers();
    var look=Quaternion.LookRotation(target+rotation*Vector3.forward*8-view.transform.position);
-   feel.Observe(session.Observe(),network.LocalSlot,Time.unscaledDeltaTime);
+   session.AbilityViewerSlot=network.LocalSlot;feel.Observe(session.Observe(),network.LocalSlot,Time.unscaledDeltaTime);
    view.transform.rotation=look*feel.Shake();CameraShakeAngle=feel.LastShakeAngle;
   }
   // ---------- hit marker: the shooter's own confirmation, as shooters do it ----------
@@ -236,9 +236,22 @@ namespace AvH {
    var mine=state.Players[network.LocalSlot];
    if(state.Phase==RoundPhase.Preparation&&mine.Faction==Faction.Human)GUI.Label(new Rect(w/2-260,118,520,40),$"이번 도구: {Tools.Name(mine.Tool)}!",title);
    hitFeed.Draw(view,session.PlayerTransform,network.LocalSlot);
+   // This round's character and what Q does, read aloud while everyone gets ready (and again when a human turns animal).
+   var skill=Abilities.Of(mine.Ability);var tint=Abilities.Tint(mine.CharacterRarity);var gradeColor=new Color(tint.r,tint.g,tint.b);
+   if(skill!=null&&session.ObserveActiveSettings().Current.Abilities) {
+    if(shownCharacter!=mine.CharacterId||shownRound!=state.Round){shownCharacter=mine.CharacterId;shownRound=state.Round;introAge=0;}
+    if(Event.current.type==EventType.Repaint)introAge+=Time.unscaledDeltaTime;
+    if(state.Phase==RoundPhase.Preparation||introAge<4&&state.Phase==RoundPhase.Chase) {
+     var old=GUI.color;GUI.color=gradeColor;GUI.Label(new Rect(w/2-320,mine.Faction==Faction.Human&&state.Phase==RoundPhase.Preparation?160:118,640,34),$"[{mine.CharacterRarity}] {mine.CharacterName} — Q {skill.Name}",label);GUI.color=old;
+     GUI.Label(new Rect(w/2-320,mine.Faction==Faction.Human&&state.Phase==RoundPhase.Preparation?190:148,640,26),skill.Hint,new GUIStyle(label){fontSize=16});
+    }
+    GUI.Box(new Rect(w/2-280,h-126,560,34),"");
+    bool ready=mine.AbilityCooldownRemaining<=0&&mine.AbilityActiveRemaining<=0&&(skill.Uses==0||mine.AbilityUsesRemaining>0)&&state.Phase==RoundPhase.Chase;
+    var before=GUI.color;GUI.color=ready?gradeColor:new Color(.7f,.72f,.75f);GUI.Label(new Rect(w/2-275,h-125,550,32),Abilities.Status(mine),label);GUI.color=before;
+   }
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
    GUI.Label(new Rect(w/2-275,h-85,550,35),$"{state.Players[network.LocalSlot].CharacterName} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · {GameMaps.Name(state.Map)} · 라운드 {state.Round}",label);
-   GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전 · Esc 메뉴 · F1 디버그",new GUIStyle(label){fontSize=15});
+   GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · Q 능력 · R 재장전 · Esc 메뉴 · F1 디버그",new GUIStyle(label){fontSize=15});
 
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
    network.DrawRoom(label);
@@ -257,6 +270,7 @@ namespace AvH {
    if(!(network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))){Cursor.lockState=CursorLockMode.None;Cursor.visible=true;settingsPanel.DrawError(session.Session);if((network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error)))SetCursor();}
 
   }
+  string shownCharacter;int shownRound=-1;float introAge=9;
   static string WeaponLabel(PlayerState player,int magazine) {
    if(player.Faction==Faction.Animal)return player.AttackGraceRemaining>0?$"공격 대기 {player.AttackGraceRemaining:F1}초":"근접 공격";
    var name=Tools.Name(player.Tool);

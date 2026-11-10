@@ -7,7 +7,7 @@ namespace AvH.Tests {
  public class RosterWorldTests {
   [UnityTest] public IEnumerator EveryOwnedCharacterRendersAtGroundAndRemoteUsesHostIdentity() {
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");Assert.IsNotNull(catalog);
-   Assert.AreEqual(6,catalog.Humans.Length);Assert.AreEqual(6,catalog.Animals.Length);
+   Assert.AreEqual(16,catalog.Humans.Length);Assert.AreEqual(16,catalog.Animals.Length);
    Assert.AreEqual(12,catalog.Humans.Concat(catalog.Animals).Select(c=>c.Id).Distinct().Count());
    var source=new PlaytestSession(42);source.BeginSettingsEdit(0);var rules=source.ObserveSettings().Edit;rules.InitialAnimals=6;source.UpdateSettingsEdit(0,rules);source.ApplySettings(0);
    source.StartSolo("roster",humans:catalog.Humans.Select(c=>c.Definition()).ToArray(),animals:catalog.Animals.Select(c=>c.Definition()).ToArray());

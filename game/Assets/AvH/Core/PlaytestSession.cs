@@ -23,6 +23,16 @@ namespace AvH
         public ToolKind Tool;
         public double ToolUseRemaining;
         public ActionPhase Action;
+        // Special ability (Abilities): its wait, the uses left this round (limited abilities) and how long its own effect still runs.
+        public AbilityKind Ability;
+        public double AbilityCooldownRemaining, AbilityActiveRemaining;
+        public int AbilityUsesRemaining;
+        /// <summary>Heading (degrees) of a straight-line ability in progress (charge, kickboard).</summary>
+        public float AbilityYaw;
+        // Effects other characters put on this one: slowed, held in place (and by what), lifted in a bubble, shaken view,
+        // immune to infection, floating in low gravity.
+        public double SlowRemaining, RootRemaining, LiftRemaining, ShakeRemaining, InvulnerableRemaining, LowGravityRemaining;
+        public AbilityKind Hold;
         public Faction Faction;
         public WorldPosition Position;
         public PlayerState Copy() => (PlayerState)MemberwiseClone();
@@ -41,11 +51,13 @@ namespace AvH
         public FeelEvent[] Events;
         /// <summary>Map of the current round (GameMaps). Changes only at a round start.</summary>
         public int Map;
+        /// <summary>Things abilities left in the world: banana peels, spring pads, scarecrows, smoke, a zero-gravity zone.</summary>
+        public GadgetState[] Gadgets;
     }
     public sealed partial class PlaytestSession
     {
         private PlayerState[] players = Array.Empty<PlayerState>();
-        private readonly Random random, toolRandom;
+        private readonly Random random, toolRandom, characterRandom;
         private RoundPhase phase;
         private double remaining, hostTime, phaseDeadline, phaseStartedAt;
         private int round, map;
@@ -53,7 +65,7 @@ namespace AvH
         private CharacterDefinition[] humanRoster,animalRoster;
         private int nextAnimal;
         private BirthNotice[] births = Array.Empty<BirthNotice>();
-        public PlaytestSession(int randomSeed, string settingsPath = null) { random = new Random(randomSeed); toolRandom = new Random(randomSeed * 31 + 7); settings.Load(settingsPath); }
+        public PlaytestSession(int randomSeed, string settingsPath = null) { random = new Random(randomSeed); toolRandom = new Random(randomSeed * 31 + 7); characterRandom = new Random(randomSeed * 17 + 3); settings.Load(settingsPath); }
         /// <param name="map">Map for this run from the first round (start screen choice); null keeps the loaded settings' map.</param>
         public void StartSolo(string nickname, string animalKind = "임시 동물", string animalRarity = "일반", CharacterDefinition[] humans=null, CharacterDefinition[] animals=null, int? map=null)
         {
@@ -73,7 +85,8 @@ namespace AvH
             settings.BeginRound(); map = GameMaps.Clamp(settings.Current.Map); round++; phase = RoundPhase.Preparation; remaining = settings.Current.PreparationSeconds; winner = null;
             births = Array.Empty<BirthNotice>();
             nextAnimal=(round-1)*settings.Current.InitialAnimals;
-            foreach (var player in players) { player.Faction = Faction.Human; AssignCharacter(player,humanRoster[player.Slot%humanRoster.Length]);player.Position = Spawn(player.Slot);
+            foreach (var player in players) { player.Faction = Faction.Human; player.CharacterId = null; }
+            foreach (var player in players) { AssignCharacter(player,settings.Current.RandomCharacters?Draw(humanRoster,Faction.Human):humanRoster[player.Slot%humanRoster.Length]);player.Position = Spawn(player.Slot);
                 int tool = settings.Current.Tool; player.Tool = (ToolKind)(tool >= 0 && tool < Tools.Count ? tool : toolRandom.Next(Tools.Count)); }
             ResetCombat(); phaseStartedAt=hostTime; phaseDeadline=hostTime+remaining;
         }
@@ -90,7 +103,7 @@ namespace AvH
                         int selected = random.Next(i, slots.Length);
                         int swap = slots[i]; slots[i] = slots[selected]; slots[selected] = swap;
                         players[slots[i]].Faction = Faction.Animal;
-                        AssignCharacter(players[slots[i]],animalRoster[nextAnimal++%animalRoster.Length]);
+                        AssignCharacter(players[slots[i]],NextAnimal());
                         players[slots[i]].AttackGraceRemaining = settings.Current.InitialAttackGrace;
                     }
                     if (GameMaps.AnimalsStartApart(map)) for (int i = 0; i < settings.Current.InitialAnimals; i++) players[slots[i]].Position = GameMaps.AnimalStart(map, i);
@@ -112,7 +125,21 @@ namespace AvH
             if(roster.Length==0||roster.Length>64||roster.Any(c=>c==null)||roster.Select(c=>c.Id).Distinct(StringComparer.Ordinal).Count()!=roster.Length)throw new ArgumentException("캐릭터 목록이 올바르지 않습니다.");
             return roster;
         }
-        static void AssignCharacter(PlayerState player,CharacterDefinition character){player.CharacterId=character.Id;player.CharacterName=character.Name;player.CharacterRarity=character.Rarity;}
+        CharacterDefinition NextAnimal()=>settings.Current.RandomCharacters?Draw(animalRoster,Faction.Animal):animalRoster[nextAnimal++%animalRoster.Length];
+        /// <summary>
+        /// Random character: first the grade by <see cref="Abilities.Odds"/> (over the grades this roster has), then one of that
+        /// grade. Within the grade a character nobody on that side plays yet is preferred, so the grade odds stay exact.
+        /// </summary>
+        CharacterDefinition Draw(CharacterDefinition[] roster,Faction faction) {
+            int total=0,grade=0;for(int g=0;g<Abilities.Grades.Length;g++)if(roster.Any(c=>Abilities.Grade(c.Rarity)==g))total+=Abilities.Odds[g];
+            int roll=characterRandom.Next(Math.Max(1,total));
+            for(int g=0;g<Abilities.Grades.Length;g++){if(!roster.Any(c=>Abilities.Grade(c.Rarity)==g))continue;grade=g;if(roll<Abilities.Odds[g])break;roll-=Abilities.Odds[g];}
+            var pool=roster.Where(c=>Abilities.Grade(c.Rarity)==grade).ToArray();
+            var fresh=pool.Where(c=>!players.Any(p=>p.Faction==faction&&p.CharacterId==c.Id)).ToArray();
+            if(fresh.Length>0)pool=fresh;
+            return pool[characterRandom.Next(pool.Length)];
+        }
+        void AssignCharacter(PlayerState player,CharacterDefinition character){player.CharacterId=character.Id;player.CharacterName=character.Name;player.CharacterRarity=character.Rarity;ResetAbility(player);}
         /// <summary>Authoritative simulation clock in seconds since the session started (frame timestamps).</summary>
         public double HostTime => hostTime;
         /// <summary>Current round number (frame tagging without copying the whole state).</summary>
@@ -128,7 +155,8 @@ namespace AvH
             Players = players.Select(p => {var copy=p.Copy();copy.Action=ActionOf(p);return copy;}).ToArray(), Phase = phase, SecondsRemaining = remaining, Round = round, Map = map, Winner = winner,
             BirthSecondsRemaining = birthSecondsRemaining,
             Births = births.Select(b => new BirthNotice { Kind = b.Kind, Rarity = b.Rarity, Count = b.Count }).ToArray(),
-            Events = events.Select(e => e.Copy()).ToArray()
+            Events = events.Select(e => e.Copy()).ToArray(),
+            Gadgets = gadgets.Select(g => g.Copy()).ToArray()
         };
     }
 }

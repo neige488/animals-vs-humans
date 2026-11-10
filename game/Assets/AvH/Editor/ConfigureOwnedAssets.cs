@@ -24,10 +24,10 @@ namespace AvH.Editor {
     if(converted==null){converted=new Material(Shader.Find("Standard"));AssetDatabase.CreateAsset(converted,convertedPath);}
     converted.mainTexture=tex;converted.color=Color.white;converted.SetFloat("_Glossiness",.15f);EditorUtility.SetDirty(converted);Converted[mat]=converted;
    }
-   var humanFiles=new[]{"man_casual","woman_casual","man_fire","woman_police","man_construction_worker","woman_explorer"};
-   var humanNames=new[]{"산책객","여행객","소방관","경찰관","건설 작업자","탐험가"};
-   var animalFiles=new[]{"Fox","Wolf","Bear_Grizzly","Boar","Rabbit_Brown","Penguin"};
-   var animalNames=new[]{"여우","늑대","불곰","멧돼지","토끼","펭귄"};
+   var humanFiles=new[]{"man_casual","woman_casual","man_fire","woman_police","man_construction_worker","woman_explorer","man_chef","man_farm","woman_mechanic","man_cowboy","woman_soldier","man_ninja","woman_scientist","man_astronaut","man_clown","woman_doctor"};
+   var humanNames=new[]{"산책객","여행객","소방관","경찰관","건설 작업자","탐험가","요리사","농부","정비사","카우보이","군인","닌자","과학자","우주비행사","광대","의사"};
+   var animalFiles=new[]{"Fox","Wolf","Bear_Grizzly","Boar","Rabbit_Brown","Penguin","Cat_Orange","Hen","Squirrel","Deer","Goat","Crocodile","Eagle","Gorilla_Silver","Rhino","Tiger"};
+   var animalNames=new[]{"여우","늑대","불곰","멧돼지","토끼","펭귄","고양이","암탉","다람쥐","사슴","염소","악어","독수리","고릴라","코뿔소","호랑이"};
    var humans=humanFiles.Select((file,i)=>Owned(file,humanNames[i],true)).ToArray();
    var animals=animalFiles.Select((file,i)=>Owned(file,animalNames[i],false)).ToArray();
    var map=BuildVillage();
@@ -44,7 +44,7 @@ namespace AvH.Editor {
    catalog.HumanSource="Polyperfect Low Poly Animated People 3.02 / man_casual";
    catalog.AnimalSource="Polyperfect Low Poly Animated Animals 4.1.1 / Fox";
    catalog.VillageSource="Synty POLYGON Adventure 1.8.2 / village 01/02, wall 01, tree 05 + Generic base floor 01";
-   EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();ConfigureSounds();BuildPortraits.Generate();Debug.Log("Owned assets configured: six humans, six animals and Synty village; source assets remain Git ignored.");
+   EditorUtility.SetDirty(catalog);AssetDatabase.SaveAssets();ConfigureSounds();BuildPortraits.Generate();Debug.Log($"Owned assets configured: {humans.Length} humans, {animals.Length} animals and Synty village; source assets remain Git ignored.");
   }
   const string OwnedSounds=Root+"polyperfect/Low Poly Animated Animals/Sounds/";
   /// <summary>
@@ -61,8 +61,10 @@ namespace AvH.Editor {
   }
   static OwnedCharacter Owned(string file,string display,bool human) {
    var source=human?"polyperfect/Low Poly Animated People/- Prefabs/":"polyperfect/Low Poly Animated Animals/Prefabs/Animals/";
-   return new OwnedCharacter{Id=(human?"human-":"animal-")+file.ToLowerInvariant(),DisplayName=display,Source=source+file,Prefab=Character(source+file+".prefab",(human?"Human_":"Animal_")+file,human?1.8f:file=="Rabbit_Brown"?.65f:(float?)null)};
+   return new OwnedCharacter{Id=(human?"human-":"animal-")+file.ToLowerInvariant(),DisplayName=display,Rarity=Abilities.Rarity((human?"human-":"animal-")+file.ToLowerInvariant()),Source=source+file,Prefab=Character(source+file+".prefab",(human?"Human_":"Animal_")+file,human?1.8f:SmallAnimals.TryGetValue(file,out var tall)?tall:(float?)null)};
   }
+  /// <summary>Animals whose authored size would be too small to read from a human's eye height.</summary>
+  static readonly Dictionary<string,float> SmallAnimals=new Dictionary<string,float>{{"Rabbit_Brown",.65f},{"Cat_Orange",.6f},{"Hen",.55f},{"Squirrel",.5f},{"Eagle",.85f}};
   static GameObject Load(string path) {var prefab=AssetDatabase.LoadAssetAtPath<GameObject>(Root+path);if(prefab==null)throw new InvalidOperationException("Missing owned prefab: "+path);return prefab;}
   static GameObject Character(string path,string name,float? height) {
    var instance=UnityEngine.Object.Instantiate(Load(path));Clean(instance);

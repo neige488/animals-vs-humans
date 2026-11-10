@@ -10,9 +10,11 @@ namespace AvH {
  public struct FishMotorState {
   public Vector3 Position,Push;public Quaternion Rotation;public float Vertical,JumpBuffer,Airborne;
   public ActionPhase Action;public float ActionProgress;public MotionState Motion;public MotionProfile Profile;public float JumpHeight,Control;public bool Grounded,Frozen;public int Round;
+  // Ability effects on this body (server-decided): bent gravity and a straight-line run that steers itself.
+  public AirRule Air;public bool Locked;public float LockYaw;
  }
  public struct FishMoveData : IReplicateData {
-  public float Right,Forward,Yaw,Pitch;public bool Jump,Attack,Reload;public int Round;uint tick;
+  public float Right,Forward,Yaw,Pitch;public bool Jump,Attack,Reload,Ability;public int Round;uint tick;
   public uint GetTick()=>tick;public void SetTick(uint value)=>tick=value;public void Dispose(){}
  }
  public struct FishReconcileData : IReconcileData {
@@ -51,10 +53,11 @@ namespace AvH {
    processedServerInput=false;
    if(!TryAttach()||!IsServerStarted&&!IsOwner)return;
    // Server owns tuning, combat restraints, knockback and round resets. Input contains no client position or velocity.
-   if(IsServerStarted){var authority=world.CaptureFishState(slot.Value);state.Profile=authority.Profile;state.JumpHeight=authority.JumpHeight;state.Control=authority.Control;state.Frozen=authority.Frozen;state.Action=authority.Action;state.ActionProgress=authority.ActionProgress;state.Push=authority.Push;
+   if(IsServerStarted){var authority=world.CaptureFishState(slot.Value);state.Profile=authority.Profile;state.JumpHeight=authority.JumpHeight;state.Control=authority.Control;state.Frozen=authority.Frozen;state.Action=authority.Action;state.ActionProgress=authority.ActionProgress;state.Push=authority.Push;state.Air=authority.Air;state.Locked=authority.Locked;state.LockYaw=authority.LockYaw;
+    if(world.TakeFishKick(slot.Value,out var kick)){state.Vertical=kick;state.Grounded=false;state.Airborne=CharacterMotion.CoyoteSeconds;}
     if(state.Round!=authority.Round||Vector3.Distance(state.Position,authority.Position)>NetworkBodyMotion.TeleportDistance)state=authority;}
    FishMoveData input=default;
-   if(IsOwner||IsServerStarted&&!Owner.IsValid){var value=bridge.TakeInput(slot.Value);input=new FishMoveData{Right=value.Right,Forward=value.Forward,Yaw=value.Yaw,Pitch=value.Pitch,Jump=value.Jump,Attack=value.Attack,Reload=value.Reload,Round=value.RoundId};}
+   if(IsOwner||IsServerStarted&&!Owner.IsValid){var value=bridge.TakeInput(slot.Value);input=new FishMoveData{Right=value.Right,Forward=value.Forward,Yaw=value.Yaw,Pitch=value.Pitch,Jump=value.Jump,Attack=value.Attack,Reload=value.Reload,Ability=value.Ability,Round=value.RoundId};}
    Move(input);
   }
   void BeforeTick(){smoother?.OnPreTick();}

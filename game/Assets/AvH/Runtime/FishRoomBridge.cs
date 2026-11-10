@@ -137,11 +137,11 @@ namespace AvH {
   public void Ready(){connectionStage="slot-assignment";ready=true;Manager.ClientManager.Broadcast(new RoomReady());}
   public NetworkMotionFrame[] TakeMotionFrames(){var result=frames.ToArray();frames.Clear();return result;}
   public void SubmitInput(NetworkInput input){
-   var p=new PlayerInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,RoundId=input.RoundId};
+   var p=new PlayerInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,Ability=input.Ability,RoundId=input.RoundId};
    QueueInput(Slot,p);
   }
-  public void QueueInput(int slot,PlayerInput input){if(slot<0||slot>=12)return;input.Jump|=pending[slot].Jump;input.Attack|=pending[slot].Attack;input.Reload|=pending[slot].Reload;pending[slot]=input;}
-  internal PlayerInput TakeInput(int slot){var value=pending[slot];pending[slot].Jump=false;pending[slot].Attack=false;pending[slot].Reload=false;return value;}
+  public void QueueInput(int slot,PlayerInput input){if(slot<0||slot>=12)return;input.Jump|=pending[slot].Jump;input.Attack|=pending[slot].Attack;input.Reload|=pending[slot].Reload;input.Ability|=pending[slot].Ability;pending[slot]=input;}
+  internal PlayerInput TakeInput(int slot){var value=pending[slot];pending[slot].Jump=false;pending[slot].Attack=false;pending[slot].Reload=false;pending[slot].Ability=false;return value;}
   internal void RegisterMotor(int slot,FishPredictedMotor motor){motors[slot]=motor;}
   public bool Controls(int slot)=>motors.TryGetValue(slot,out var motor)&&motor!=null&&motor.Attached&&(hosting||motor.IsOwner);
   void Fail(string text){Error=text;Status=ConnectionStatus.Failed;Debug.Log(ConnectionDiagnostics);Manager?.ClientManager.StopConnection();}

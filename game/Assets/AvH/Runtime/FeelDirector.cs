@@ -21,6 +21,8 @@ namespace AvH {
   public void Observe(SessionState state,int viewer,float seconds) {
    if(seconds>0&&!float.IsInfinity(seconds)){trauma=Mathf.Max(0,trauma-DecayPerSecond*seconds);clock+=seconds;}
    if(state?.Events==null||state.Players==null||viewer<0||viewer>=state.Players.Length)return;
+   // Dizzy (acorn to the head, a slam right beside): the view keeps rattling for as long as it lasts.
+   if(state.Players[viewer].ShakeRemaining>0)trauma=Mathf.Max(trauma,.8f);
    int newest=0;foreach(var e in state.Events)newest=Mathf.Max(newest,e.Id);
    if(!primed||newest<lastId){primed=true;lastId=newest;return;}
    foreach(var e in state.Events)if(e.Id>lastId)trauma=Mathf.Min(1,trauma+Relevance(e,state,viewer));
@@ -33,6 +35,7 @@ namespace AvH {
     case FeelEventKind.AttackMiss:return e.Actor==viewer?.12f:0;
     case FeelEventKind.Stagger:return e.Target==viewer?.4f:0;
     case FeelEventKind.Shoved:return e.Target==viewer?.3f:0;
+    case FeelEventKind.AbilityHit:return e.Target==viewer?.45f:e.Actor==viewer?.2f:0;
     case FeelEventKind.Landing:
      float weight=.2f+.4f*Mathf.Clamp01(e.Strength);if(e.Actor==viewer)return weight;
      var me=state.Players[viewer].Position;float d=Vector3.Distance(new Vector3(me.X,me.Y,me.Z),new Vector3(e.Position.X,e.Position.Y,e.Position.Z));

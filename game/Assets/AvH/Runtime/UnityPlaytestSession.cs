@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 namespace AvH {
- [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload; public int RoundId,Sequence; }
+ [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload, Ability; public int RoundId,Sequence; }
  /// <summary>Public game execution boundary. Inputs flow through real CharacterControllers.</summary>
  public sealed partial class UnityPlaytestSession : MonoBehaviour {
   public bool AutomaticStep = true;
   public bool BotAutomationEnabled=true;
+  /// <summary>Bot-only matches (balance runs): the bot director also plays slot 0.</summary>
+  public bool BotsDriveEveryone;
   public IReadOnlyList<Vector3> ShelterPoints {get;private set;}
   readonly BotDirector botDirector=new BotDirector();
   public PlaytestSession Session { get; private set; }
@@ -83,7 +85,7 @@ namespace AvH {
    inputs[slot]=input;
    if(slot==0&&FishBridge!=null&&!IsRemote)FishBridge.QueueInput(slot,input);
   }
-  void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);}else if(AutomaticStep && Session!=null) Step(Time.deltaTime); if(Session!=null)PresentTools(Observe()); }
+  void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);}else if(AutomaticStep && Session!=null) Step(Time.deltaTime); if(Session!=null){PresentTools(Observe());PresentAbilities(Observe(),Time.deltaTime);} }
   /// <summary>Advances the host simulation, or on a remote view advances frame playback by the same time.</summary>
   public void Step(float seconds) {
    if(remoteSnapshot!=null){InterpolateRemote(seconds);return;}
@@ -97,8 +99,9 @@ namespace AvH {
    if(state.Phase==RoundPhase.Results&&before.Phase!=RoundPhase.Results)CutTransformations();
    if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;
+   ApplyImpulses();
    for(int i=0;i<bodies.Count;i++) {
-    var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
+    var body=bodies[i]; var p=state.Players[i];
     // A new round, or a first animal sent to its own start (crossing): the session decided the place, the body follows.
     bool released=state.Phase==RoundPhase.Chase&&before.Phase==RoundPhase.Preparation&&state.Round==before.Round&&GameMaps.AnimalsStartApart(state.Map)&&p.Faction==Faction.Animal&&before.Players[i].Faction==Faction.Human;
     // Sent to the animals' start: a puff where the body stood, so nobody just vanishes.
@@ -117,9 +120,12 @@ namespace AvH {
      }
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
      jumpBuffer[i]=input.Jump?CharacterMotion.JumpBufferSeconds:Mathf.Max(0,jumpBuffer[i]-seconds);airborne[i]=body.isGrounded?0:airborne[i]+seconds;
-     if(CharacterMotion.CanJump(body.isGrounded,airborne[i],vertical[i],jumpBuffer[i])){jumpBuffer[i]=0;airborne[i]=CharacterMotion.CoyoteSeconds;vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
-     vertical[i]-=22*seconds;
-     var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
+     float jumpHeight=CharacterMotion.JumpHeight(rules,p);
+     if(jumpHeight>0&&CharacterMotion.CanJump(body.isGrounded,airborne[i],vertical[i],jumpBuffer[i])){jumpBuffer[i]=0;airborne[i]=CharacterMotion.CoyoteSeconds;vertical[i]=Mathf.Sqrt(2*22*jumpHeight);Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
+     vertical[i]=CharacterMotion.Fall(vertical[i],CharacterMotion.Air(p),seconds);
+     // A charge or a kickboard steers for its user.
+     bool locked=CharacterMotion.Locked(p);
+     var direction=locked?Quaternion.Euler(0,p.AbilityYaw,0)*Vector3.forward:Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];
      var profile=CharacterMotion.Profile(rules,p);
      motion[i]=CharacterMotion.Next(motion[i],CharacterMotion.Restrain(new MotionIntent{DirectionX=direction.x,DirectionZ=direction.z,Grounded=wasGrounded},p),profile,seconds);
@@ -129,6 +135,8 @@ namespace AvH {
      // Animate what the body actually did: a wall-blocked body does not run at full cadence.
      var moved=body.transform.position-from;moved.y=0;float actual=moved.magnitude/seconds;
      var shown=planar.sqrMagnitude>actual*actual?planar.normalized*actual:planar;
+     if(locked&&Crashed(p,planar.magnitude,actual))Session.RecordCrash(i);
+     if(!wasGrounded&&body.isGrounded)Session.RecordTouchdown(i);
      Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed,Action=p.Action,ActionProgress=ActionProgress(p,rules),PushX=pushVelocity[i].x,PushZ=pushVelocity[i].z},seconds);
      if(!wasGrounded&&body.isGrounded&&fallingSpeed< -PlaytestSession.HardLandingSpeed){Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);var landed=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(landed.x,landed.y,landed.z));Session.RecordLanding(i,-fallingSpeed);}
      if(direction.sqrMagnitude>.01f){Skid(body,planar,direction);body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),CharacterMotion.TurnDegrees(p.Faction,p.CharacterId)*seconds);}
@@ -144,6 +152,24 @@ namespace AvH {
    if(props!=null)foreach(var knock in props.TakeKnocks()){var at=props.Observe()[knock.prop].Position;Session.RecordPropPush(knock.prop,knock.actor,new WorldPosition(at.x,at.y,at.z),knock.strength);}
    var presented=Session.Observe();PresentEvents(presented);PresentStateAudio(presented,false);PresentMotionAudio(presented,seconds);
   }
+  readonly float?[] fishKicks=new float?[12];
+  /// <summary>Shoves and bounces the rules decided (abilities) land on the bodies.</summary>
+  void ApplyImpulses() {
+   if(Session.Sight==null)Session.Sight=InSight;
+   foreach(var impulse in Session.TakeImpulses()) {
+    if(impulse.Slot<0||impulse.Slot>=bodies.Count)continue;
+    pushVelocity[impulse.Slot]+=new Vector3(impulse.X,impulse.Y,impulse.Z);
+    if(!impulse.SetVertical)continue;
+    if(FishControls(impulse.Slot))fishKicks[impulse.Slot]=impulse.Vertical;else{vertical[impulse.Slot]=impulse.Vertical;airborne[impulse.Slot]=CharacterMotion.CoyoteSeconds;}
+   }
+  }
+  internal bool TakeFishKick(int slot,out float speed){speed=fishKicks[slot]??0;bool any=fishKicks[slot].HasValue;fishKicks[slot]=null;return any;}
+  bool InSight(int from,int to) {
+   if(from<0||to<0||from>=bodies.Count||to>=bodies.Count)return false;
+   return !Physics.Linecast(bodies[from].transform.position+Vector3.up*1.1f,bodies[to].transform.position+Vector3.up*.9f,out var block,Layers.World,QueryTriggerInteraction.Ignore)||block.collider.GetComponentInParent<CharacterController>()!=null;
+  }
+  /// <summary>A straight-line run that a wall has stopped (after its first moments, so a standing start does not count).</summary>
+  internal static bool Crashed(PlayerState p,float wanted,float actual){var def=Abilities.Of(p.Ability);return def!=null&&def.Duration-p.AbilityActiveRemaining>.35&&wanted>2&&actual<wanted*.3f;}
   internal static float ActionProgress(PlayerState p,PlaytestValues rules) {
    double left,total;
    switch(p.Action) {
