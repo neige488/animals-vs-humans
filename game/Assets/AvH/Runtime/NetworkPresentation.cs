@@ -5,38 +5,70 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using UnityEngine;
 namespace AvH {
- /// <summary>Unity bridge: only hosts execute physics; peers render snapshots and submit inputs.</summary>
+ /// <summary>Room UI and authoritative snapshots; FishNet motors predict owner movement.</summary>
  [DefaultExecutionOrder(-100)] public sealed class NetworkPresentation : MonoBehaviour {
   SessionState lastAppliedState;NetworkVisualState lastAppliedVisual;
-  UnityPlaytestSession world;PrivateRoomHost host;readonly PrivateRoomClient client=new PrivateRoomClient();
-  readonly NetworkInput[] buffered=new NetworkInput[12];readonly bool[] hasInput=new bool[12];
-  string code="",address,lastNickname="",message="";bool clientStarted;float nextPump;
+  UnityPlaytestSession world;FishRoomBridge host;FishRoomBridge client;
+  string code="",address,lastNickname="",message="";bool clientStarted;float nextPump;int inputSequence;
+  readonly System.Diagnostics.Stopwatch pumpWatch=new System.Diagnostics.Stopwatch();
+  public double LastPumpMilliseconds {get;private set;}
+  // Opt-in development probe: emulate burst delivery without changing the host simulation or inputs.
+  public bool PauseReceiveForProbe;
+  public int SnapshotArrivals {get;private set;}
+  public double SnapshotAge=>clientStarted?Time.realtimeSinceStartupAsDouble-snapshotArrivalTime:0;
+  double snapshotArrivalTime;
+  double timingStarted=-1,maxFrameMs,maxPumpMs,maxSnapshotAgeMs;int timingFrames,timingGC,timingArrivals,timingPaused;
+  public string LastTimingSummary {get;private set;}="연결 후 10초 동안 측정 중입니다.";
+  void ReportTiming(){
+   if(!Debug.isDebugBuild||!clientStarted||client.Status!=ConnectionStatus.Playing){timingStarted=-1;return;}
+   double now=Time.realtimeSinceStartupAsDouble;
+   if(timingStarted<0){timingStarted=now;timingGC=System.GC.CollectionCount(0);timingArrivals=SnapshotArrivals;timingFrames=timingPaused=0;maxFrameMs=maxPumpMs=maxSnapshotAgeMs=0;}
+   timingFrames++;if(!world.FishControls(LocalSlot))timingPaused++;
+   maxFrameMs=System.Math.Max(maxFrameMs,Time.unscaledDeltaTime*1000);maxPumpMs=System.Math.Max(maxPumpMs,LastPumpMilliseconds);maxSnapshotAgeMs=System.Math.Max(maxSnapshotAgeMs,SnapshotAge*1000);
+   if(now-timingStarted<10)return;
+   LastTimingSummary=string.Format(System.Globalization.CultureInfo.InvariantCulture,"AVH-FISHNET 3 r6: duration={0:F1}s frames={1} frame-max={2:F1}ms receive-max={3:F1}ms snapshot-age-max={4:F1}ms updates={5} gc0={6} prediction-not-ready={7}",now-timingStarted,timingFrames,maxFrameMs,maxPumpMs,maxSnapshotAgeMs,SnapshotArrivals-timingArrivals,System.GC.CollectionCount(0)-timingGC,timingPaused);
+   var motor=client.LocalMotor;if(motor!=null)LastTimingSummary+=" ticks="+motor.ReplicateCount+" reconciles="+motor.ReconcileCount+" replays="+motor.ReplayCount+" correction-max="+motor.MaxCorrection.ToString("F3",System.Globalization.CultureInfo.InvariantCulture)+"m";
+   if(motor!=null)LastTimingSummary+=" acknowledged-tick="+motor.LastRestoredTick+" local-tick="+client.Manager.TimeManager.LocalTick+" input-history=300ticks";
+   LastTimingSummary+=" snapshot-bytes="+client.PacketBytes+"/"+client.DecodedBytes;
+   LastTimingSummary+=" rtt="+client.Manager.TimeManager.RoundTripTime+"ms local-input-queue="+client.Manager.GetComponent<FishNet.Managing.Predicting.PredictionManager>().GetMaximumServerReplicates();
+   if(motor!=null&&world.Session!=null&&LocalSlot>=0){var body=world.PlayerBodyTransform(LocalSlot);var graphics=world.CameraFollowTransform(LocalSlot);LastTimingSummary+=string.Format(System.Globalization.CultureInfo.InvariantCulture," body-y={0:F3}m view-y={1:F3}m view-offset-y={2:F3}m grounded={3} view-offset={4:F3}m",body.position.y,graphics.position.y,graphics.position.y-body.position.y,motor.Grounded,Vector3.Distance(body.position,graphics.position));}
+
+   Debug.Log(LastTimingSummary);timingStarted=-1;
+  }
   public bool IsClient=>clientStarted;
   public int LocalSlot=>IsClient?client.Slot:0;
   public bool CanPlay=>!IsClient||client.Status==ConnectionStatus.Playing;
   public string RoomCode=>host?.RoomCode;
   public NetworkVisualState RemoteVisuals=>client.Visuals;
-  public void Initialize(UnityPlaytestSession session){world=session;address=FindAddress();}
+  public void Initialize(UnityPlaytestSession session){world=session;address=FindAddress();client=gameObject.AddComponent<FishRoomBridge>();client.Initialize(world);}
   static string FindAddress(){try{return NetworkInterface.GetAllNetworkInterfaces().Where(n=>n.OperationalStatus==OperationalStatus.Up&&n.NetworkInterfaceType!=NetworkInterfaceType.Loopback).SelectMany(n=>n.GetIPProperties().UnicastAddresses).Select(a=>a.Address).FirstOrDefault(a=>a.AddressFamily==AddressFamily.InterNetwork&&!IPAddress.IsLoopback(a))?.ToString()??"127.0.0.1";}catch{return "127.0.0.1";}}
-  public void StartHost(string nickname,string advertisedAddress=null){try{world.StartSolo(nickname);host=new PrivateRoomHost(world.Session,advertisedAddress??address);host.InputReceived=(slot,input)=>{if(input.RoundId!=0){input.Jump|=buffered[slot].Jump;input.Attack|=buffered[slot].Attack;input.Reload|=buffered[slot].Reload;}buffered[slot]=input;hasInput[slot]=true;};host.CaptureVisuals=()=>new NetworkVisualState{Bursts=world.ObserveBursts(),Motion=world.CaptureMotion(),Bubbles=world.ObserveBubbles().Select(b=>new NetworkBubble{Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray()};message="";}catch(Exception){host?.Dispose();host=null;world.ResetSession();message="방을 열지 못했습니다. 호스트 주소와 네트워크 상태를 확인하세요.";}}
+  /// <summary>Map the next hosted room starts on (start screen toggle; <c>-avhMap warehouse|crossing</c> preselects it).</summary>
+  public int HostMap=StartupMap();
+  /// <summary>Settings file for the next hosted room (development harnesses use an isolated one); null = this PC's saved settings.</summary>
+  public string HostSettingsPath;
+  public static int StartupMap(){var args=System.Environment.GetCommandLineArgs();int i=System.Array.IndexOf(args,"-avhMap");var name=i>=0&&i+1<args.Length?args[i+1]:"";switch(name){case "warehouse":return GameMaps.Warehouse;case "crossing":return GameMaps.Crossing;case "sky":return GameMaps.Sky;case "snow":return GameMaps.Snow;case "ruins":return GameMaps.Ruins;default:return GameMaps.Town;}}
+  public void StartHost(string nickname,string advertisedAddress=null){try{world.StartSolo(nickname,null,HostSettingsPath,HostMap);host=client;host.StartRoom(advertisedAddress??address);host.CaptureVisuals=()=>new NetworkVisualState{Bursts=world.ObserveBursts(),Motion=world.CaptureMotion(),Bubbles=world.ObserveBubbles().Select(b=>new NetworkBubble{Kind=(int)b.Kind,Id=b.Id,OwnerSlot=b.OwnerSlot,Round=b.Round,Position=b.Position,Direction=b.Direction,RemainingLife=b.RemainingLife,Travelled=b.Travelled}).ToArray()};message="";}catch(Exception){host?.Dispose();host=null;world.ResetSession();message="방을 열지 못했습니다. 호스트 주소와 네트워크 상태를 확인하세요.";}}
   public void JoinRoom(string roomCode,string nickname){code=roomCode;Join(nickname);}
   public void Join(string nickname){lastNickname=nickname;clientStarted=true;message="";client.Connect(code,nickname);}
   void Update(){
-   if(host!=null&&Time.unscaledTime>=nextPump){host.Pump();for(int slot=1;slot<12;slot++)if(hasInput[slot]){var input=buffered[slot];world.SubmitInput(slot,new PlayerInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,RoundId=input.RoundId});hasInput[slot]=false;buffered[slot]=default(NetworkInput);}nextPump=Time.unscaledTime+.05f;}
-   if(!clientStarted)return;client.Pump();
+   pumpWatch.Restart();
+   if(host!=null){bool publish=Time.unscaledTime>=nextPump;host.Pump(publish);if(publish)nextPump=Time.unscaledTime+.05f;}
+   if(!clientStarted){LastPumpMilliseconds=pumpWatch.Elapsed.TotalMilliseconds;return;}if(!Debug.isDebugBuild||!PauseReceiveForProbe)client.Pump();
    if(client.Snapshot!=null){
-    if(!ReferenceEquals(lastAppliedState,client.Snapshot)){if(world.Session==null){world.StartRemote(client.Snapshot);client.Ready();}else world.ApplyRemoteSnapshot(client.Snapshot);lastAppliedState=client.Snapshot;}
+    if(!ReferenceEquals(lastAppliedState,client.Snapshot)){snapshotArrivalTime=Time.realtimeSinceStartupAsDouble;SnapshotArrivals++;if(world.Session==null){world.StartRemote(client.Snapshot);client.Ready();}else world.ApplyRemoteSnapshot(client.Snapshot);lastAppliedState=client.Snapshot;}
     world.LocalViewerSlot=client.Slot;foreach(var frame in client.TakeMotionFrames())world.ReceiveRemoteMotion(frame);
     if(!ReferenceEquals(lastAppliedVisual,client.Visuals)){world.ApplyRemoteVisuals(client.Visuals);lastAppliedVisual=client.Visuals;}
    }
+   LastPumpMilliseconds=pumpWatch.Elapsed.TotalMilliseconds;ReportTiming();
    if(client.Status==ConnectionStatus.Interrupted||client.Status==ConnectionStatus.Failed){if(world.Session!=null)world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
   }
-  public void SubmitInput(PlayerInput input){if(!CanPlay)return;if(!IsClient){world.SubmitInput(0,input);return;}input.RoundId=client.Snapshot.Round;client.SubmitInput(new NetworkInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,RoundId=input.RoundId});}
-  public void Leave(){host?.Dispose();host=null;client.Cancel();clientStarted=false;lastAppliedState=null;lastAppliedVisual=null;world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
+  public void SubmitInput(PlayerInput input){if(!CanPlay)return;if(!IsClient){input.RoundId=world.Observe().Round;client.QueueInput(0,input);world.SubmitInput(0,input);return;}input.RoundId=client.Snapshot.Round;input.Sequence=++inputSequence;client.SubmitInput(new NetworkInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,RoundId=input.RoundId,Sequence=input.Sequence});}
+  public void Leave(){host?.Dispose();host=null;client.Dispose();clientStarted=false;inputSequence=0;lastAppliedState=null;lastAppliedVisual=null;world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
   public void DrawStart(string nickname,GUIStyle label,float centerY=-1,System.Action<Rect> displayRows=null){
    var w=Screen.width;var h=Screen.height;float c=centerY<0?h/2:centerY;
    if(clientStarted){
     var status=StartScreenLayout.StatusPanel(w,c);GUI.Box(status,"");
+    if(Debug.isDebugBuild&&GUI.Button(new Rect(w/2-90,status.y+status.height+8,180,30),"접속 진단 복사"))GUIUtility.systemCopyBuffer=client.ConnectionDiagnostics;
     if(client.Status==ConnectionStatus.Interrupted){
      GUI.Label(new Rect(w/2-270,status.y+20,540,75),"호스트와의 연결이 종료되었습니다.\n이번 라운드는 중단되었습니다.",new GUIStyle(label){wordWrap=true});
      if(GUI.Button(new Rect(w/2-125,status.y+110,250,42),"시작 화면으로"))Leave();return;
@@ -50,7 +82,8 @@ namespace AvH {
    GUI.Label(new Rect(w/2-270,c+101,175,25),"호스트 IPv4 주소");address=GUI.TextField(new Rect(w/2-85,c+100,345,28),address,45);
    IPAddress ip;bool validAddress=IPAddress.TryParse(address,out ip)&&ip.AddressFamily==AddressFamily.InterNetwork;GUI.enabled=!string.IsNullOrWhiteSpace(nickname)&&validAddress;
    GUI.Label(new Rect(w/2-260,c+128,520,22),validAddress?"":"호스트 IPv4 주소를 확인하세요");
-   if(GUI.Button(new Rect(w/2-260,c+153,520,36),"비공개 방 만들기 · 11봇"))StartHost(nickname.Trim());GUI.enabled=true;
+   var enabled=GUI.enabled;GUI.enabled=true;if(GUI.Button(new Rect(w/2-260,c+153,170,36),"맵: "+GameMaps.Name(HostMap)+" ▸"))HostMap=(HostMap+1)%GameMaps.Count;GUI.enabled=enabled;
+   if(GUI.Button(new Rect(w/2-80,c+153,340,36),"비공개 방 만들기 · 11봇"))StartHost(nickname.Trim());GUI.enabled=true;
    GUI.Label(new Rect(w/2-270,c+196,90,25),"방 코드");code=GUI.TextField(new Rect(w/2-175,c+194,435,28),code,256);
    string endpoint,key;int port;GUI.enabled=!string.IsNullOrWhiteSpace(nickname)&&PrivateRoomCode.TryParse(code,out endpoint,out port,out key);
    GUI.Label(new Rect(w/2-260,c+224,520,22),string.IsNullOrWhiteSpace(code)?"방 코드를 입력해주세요.":PrivateRoomCode.TryParse(code,out endpoint,out port,out key)?"":"방 코드 형식을 확인하세요");
@@ -58,7 +91,7 @@ namespace AvH {
    displayRows?.Invoke(new Rect(w/2-260,c+292,520,DisplaySettingsMenu.Height));
    GUI.Label(new Rect(w/2-270,c+287+extra,540,48),message,new GUIStyle(label){fontSize=16,wordWrap=true});
   }
-  public void DrawRoom(GUIStyle label){if(IsClient&&client.VisualsDelayed)GUI.Label(new Rect(15,218,500,32),"버블 표현이 지연되고 있습니다",label);if(IsClient&&client.Visuals!=null)GUI.Label(new Rect(15,150,400,28),"호스트 설정 버전 "+client.Visuals.SettingsVersion+(client.Visuals.HasPending?" · 다음 라운드 적용 예정":""),label);if(host!=null){GUI.Label(new Rect(15,150,400,28),"비공개 방 · LAN/기존 VPN",label);if(GUI.Button(new Rect(20,184,170,30),"방 코드 복사"))GUIUtility.systemCopyBuffer=host.RoomCode;} }
+  public void DrawRoom(GUIStyle label){if(Debug.isDebugBuild&&IsClient&&GUI.Button(new Rect(20,184,170,30),"연결 진단 복사"))GUIUtility.systemCopyBuffer=LastTimingSummary;if(IsClient&&client.VisualsDelayed)GUI.Label(new Rect(15,218,500,32),"버블 표현이 지연되고 있습니다",label);if(IsClient&&client.Visuals!=null)GUI.Label(new Rect(15,150,400,28),"호스트 설정 버전 "+client.Visuals.SettingsVersion+(client.Visuals.HasPending?" · 다음 라운드 적용 예정":""),label);if(host!=null){GUI.Label(new Rect(15,150,400,28),"비공개 방 · LAN/기존 VPN",label);if(GUI.Button(new Rect(20,184,170,30),"방 코드 복사"))GUIUtility.systemCopyBuffer=host.RoomCode;} }
   void OnDestroy(){host?.Dispose();client.Dispose();}
  }
 }

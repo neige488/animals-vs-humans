@@ -6,6 +6,7 @@ namespace AvH {
  public static class PrototypeVillage {
   public static IReadOnlyList<Vector3> DefaultShelters {get;}=Array.AsReadOnly(new[]{TownLayout.Roof,TownLayout.Courtyard,TownLayout.Workshop});
   public static Material Material(Color color) {
+   var plain=LowPolyLook.Plain(color);if(plain!=null)return plain;
    var shader=Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
    var material=new Material(shader);material.color=color;return material;
   }

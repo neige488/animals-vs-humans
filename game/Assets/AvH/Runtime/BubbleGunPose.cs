@@ -9,9 +9,14 @@ namespace AvH {
   /// <summary>Leg heading relative to aim (degrees), set by CharacterAnimator for strafing and backpedalling.</summary>
   public float LegYaw {get;set;}
   Transform spine,chest;
+  /// <summary>Hit reaction from the animator (flinch, tumble, stumble) turned about the body's middle on top of the facing.</summary>
+  public Quaternion Reaction {get;set;}=Quaternion.identity;
+  /// <summary>Where the model rests in its parent before the reaction moves it.</summary>
+  public Vector3 RestLocalPosition {get;set;}
+  Quaternion heading;bool headingSet;
   public void SetAim(float yaw,float pitch){AimYaw=yaw;AimPitch=pitch;}
   public void Bind(Transform model) {
-   visual=model;SetAim(transform.eulerAngles.y,0);var animator=model.GetComponentInChildren<Animator>();
+   visual=model;headingSet=false;Reaction=Quaternion.identity;RestLocalPosition=model.localPosition;SetAim(transform.eulerAngles.y,0);var animator=model.GetComponentInChildren<Animator>();
    if(animator==null||!animator.isHuman)return;
    rightUpper=animator.GetBoneTransform(HumanBodyBones.RightUpperArm);rightLower=animator.GetBoneTransform(HumanBodyBones.RightLowerArm);rightHand=animator.GetBoneTransform(HumanBodyBones.RightHand);
    leftUpper=animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);leftLower=animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);leftHand=animator.GetBoneTransform(HumanBodyBones.LeftHand);
@@ -26,8 +31,15 @@ namespace AvH {
    // Aiming also turns the visible human. Legs may point along a side step (LegYaw);
    // the spine then counter-twists so the chest and arms stay on the aim.
    var facing=Quaternion.LookRotation(flat,Vector3.up);
-   visual.rotation=Quaternion.RotateTowards(visual.rotation,facing*Quaternion.Euler(0,LegYaw,0),720*Time.deltaTime);
-   float twist=Mathf.Clamp(Mathf.DeltaAngle(visual.eulerAngles.y,facing.eulerAngles.y),-90,90);
+   if(!headingSet){heading=Quaternion.Euler(0,visual.eulerAngles.y,0);headingSet=true;}
+   heading=Quaternion.RotateTowards(heading,facing*Quaternion.Euler(0,LegYaw,0),720*Time.deltaTime);
+   float twist=Mathf.Clamp(Mathf.DeltaAngle(heading.eulerAngles.y,facing.eulerAngles.y),-90,90);
+   if(Quaternion.Angle(Reaction,Quaternion.identity)>.1f) {
+    var rest=visual.parent!=null?visual.parent.TransformPoint(RestLocalPosition):RestLocalPosition;var pivot=visual.parent!=null?visual.parent.position+Vector3.up*.9f:rest+Vector3.up*.9f;
+    visual.SetPositionAndRotation(pivot+Reaction*(rest-pivot),Reaction*heading);
+    // Tumbling far off the aim: arms ride with the body instead of reaching for the aim.
+    if(Quaternion.Angle(Reaction,Quaternion.identity)>25)return;
+   } else visual.rotation=heading;
    if(spine!=null&&chest!=null&&Mathf.Abs(twist)>.01f){spine.rotation=Quaternion.AngleAxis(twist*.5f,Vector3.up)*spine.rotation;chest.rotation=Quaternion.AngleAxis(twist*.5f,Vector3.up)*chest.rotation;}
    var side=Quaternion.LookRotation(flat,Vector3.up)*Vector3.right;
    transform.position=(rightUpper.position+leftUpper.position)*.5f+side*.1f+transform.forward*.22f-Vector3.up*.14f;

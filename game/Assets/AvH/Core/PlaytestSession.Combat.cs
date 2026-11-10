@@ -16,11 +16,11 @@ namespace AvH {
   readonly HashSet<int> dueAttacks=new HashSet<int>();
   int nextEventId;
   void ResetCombat() {
-   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();propKnocks.Clear();ClearActions();
+   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();propKnocks.Clear();lastShove.Clear();ClearActions();
    foreach(var p in players){p.Ammo=settings.Current.Magazine;p.ReloadRemaining=0;p.AttackGraceRemaining=0;p.FireCooldownRemaining=0;}
   }
   // Round end cuts every tell, freeze and stun in progress.
-  void ClearActions(){dueAttacks.Clear();foreach(var p in players){p.AttackWindupRemaining=0;p.SwingRemaining=0;p.HitStopRemaining=0;p.StunRemaining=0;}}
+  void ClearActions(){dueAttacks.Clear();toolHits.Clear();foreach(var p in players){p.ToolUseRemaining=0;p.AttackWindupRemaining=0;p.SwingRemaining=0;p.HitStopRemaining=0;p.StunRemaining=0;}}
   static ActionPhase ActionOf(PlayerState p)=>p.HitStopRemaining>0?ActionPhase.HitStop:p.StunRemaining>0?ActionPhase.Stunned:p.AttackWindupRemaining>0?ActionPhase.Windup:p.SwingRemaining>0?ActionPhase.Swing:ActionPhase.None;
   void Publish(FeelEventKind kind,int actor,int target,WorldPosition position,float strength=1) {
    events.Add(new FeelEvent{Id=++nextEventId,Round=round,Kind=kind,Actor=actor,Target=target,Position=position,HostTime=hostTime,Strength=strength});
@@ -30,7 +30,7 @@ namespace AvH {
    birthSecondsRemaining=Math.Max(0,birthSecondsRemaining-elapsed);birthBatchAge+=elapsed;
    double now=hostTime+elapsed;events.RemoveAll(e=>now-e.HostTime>CombatRules.EventWindowSeconds);
    foreach(var p in players) {
-    p.FireCooldownRemaining=Math.Max(0,p.FireCooldownRemaining-elapsed);
+    p.FireCooldownRemaining=Math.Max(0,p.FireCooldownRemaining-elapsed);p.ToolUseRemaining=Math.Max(0,p.ToolUseRemaining-elapsed);
     p.AttackGraceRemaining=Math.Max(0,p.AttackGraceRemaining-elapsed);
     // A tell and a swing pause while their character is frozen: both resume after the freeze.
     double frozen=Math.Min(elapsed,p.HitStopRemaining);
@@ -43,12 +43,13 @@ namespace AvH {
   bool CanAct(int slot,int roundId)=>slot>=0 && slot<players.Length && roundId==round && phase!=RoundPhase.Results;
   public bool TryFire(int slot,int roundId) {
    if(!CanAct(slot,roundId))return false;var p=players[slot];
-   if(p.Faction!=Faction.Human || p.Ammo<=0 || p.ReloadRemaining>0 || p.FireCooldownRemaining>0)return false;
-   p.Ammo--;p.FireCooldownRemaining=settings.Current.FireInterval;return true;
+   bool ammo=Tools.UsesAmmo(p.Tool);
+   if(p.Faction!=Faction.Human || ammo&&p.Ammo<=0 || p.ReloadRemaining>0 || p.FireCooldownRemaining>0)return false;
+   if(ammo)p.Ammo--;p.FireCooldownRemaining=settings.Current.FireInterval*Tools.IntervalScale(p.Tool);p.ToolUseRemaining=Tools.ActionSeconds(p.Tool);return true;
   }
   public bool TryReload(int slot,int roundId) {
    if(!CanAct(slot,roundId))return false;var p=players[slot];
-   if(p.Faction!=Faction.Human || p.Ammo==settings.Current.Magazine || p.ReloadRemaining>0)return false;
+   if(p.Faction!=Faction.Human || !Tools.UsesAmmo(p.Tool) || p.Ammo==settings.Current.Magazine || p.ReloadRemaining>0)return false;
    p.ReloadRemaining=settings.Current.ReloadSeconds;return true;
   }
   void PublishBirth(PlayerState[] changed) {
@@ -67,6 +68,57 @@ namespace AvH {
    p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
    Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
+  /// <summary>
+  /// Called only by the authoritative physics adapter when a shot shoves a human (friendly push).
+  /// No stun and no faction change: the event only tells everyone who shoved whom.
+  /// </summary>
+  public bool RecordFriendlyShove(int victimSlot,int ownerSlot) {
+   if(victimSlot<0||victimSlot>=players.Length||ownerSlot<0||ownerSlot>=players.Length||victimSlot==ownerSlot||phase==RoundPhase.Results)return false;
+   if(players[victimSlot].Faction!=Faction.Human)return false;
+   lastShove[victimSlot]=(ownerSlot,hostTime);Publish(FeelEventKind.Shoved,ownerSlot,victimSlot,players[victimSlot].Position);return true;
+  }
+  /// <summary>
+  /// Called only by the authoritative physics adapter when any tool use reaches a character.
+  /// An animal staggers (with a stun unless the tool is a gust); a human is only shoved.
+  /// A blower hits many times a second: one public event per shooter and target per <see cref="GustEventSeconds"/>.
+  /// </summary>
+  public bool RecordToolHit(int victimSlot,int ownerSlot,ToolKind tool) {
+   if(victimSlot<0||victimSlot>=players.Length||ownerSlot<0||ownerSlot>=players.Length||victimSlot==ownerSlot||phase==RoundPhase.Results)return false;
+   var p=players[victimSlot];
+   if(p.Faction==Faction.Human)lastShove[victimSlot]=(ownerSlot,hostTime);
+   if(tool==ToolKind.Blower){double last;var key=ownerSlot*64+victimSlot;if(toolHits.TryGetValue(key,out last)&&hostTime-last<GustEventSeconds)return false;toolHits[key]=hostTime;}
+   if(p.Faction==Faction.Human){Publish(FeelEventKind.Shoved,ownerSlot,victimSlot,p.Position);return true;}
+   if(phase!=RoundPhase.Chase)return false;
+   if(Tools.Stuns(tool))p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
+   Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
+  }
+  public const double GustEventSeconds=.8;
+  /// <summary>A fall within this long of a shove is credited to the shover.</summary>
+  public const double FallCreditSeconds=4;
+  readonly Dictionary<int,(int by,double at)> lastShove=new Dictionary<int,(int,double)>();
+  /// <summary>
+  /// Called only by the authoritative physics adapter when a body falls off the bottom of the map. On a map where a fall
+  /// turns a human (<see cref="GameMaps.FallTurnsAnimal"/>), a human in the chase becomes an animal, credited to whoever
+  /// shoved them in the last <see cref="FallCreditSeconds"/>. <paramref name="restart"/> is where the body starts again:
+  /// the animals' start for animals in the chase, the round spawn otherwise.
+  /// </summary>
+  public bool RecordFall(int slot,out WorldPosition restart) {
+   restart=default;if(slot<0||slot>=players.Length)return false;var p=players[slot];
+   bool turned=false;
+   if(phase==RoundPhase.Chase&&p.Faction==Faction.Human&&GameMaps.FallTurnsAnimal(map)) {
+    int by=lastShove.TryGetValue(slot,out var s)&&hostTime-s.at<=FallCreditSeconds?s.by:-1;
+    Publish(FeelEventKind.FellOff,by,slot,p.Position);
+    p.Faction=Faction.Animal;p.AttackGraceRemaining=settings.Current.TransformAttackGrace;
+    AssignCharacter(p,animalRoster[nextAnimal++%animalRoster.Length]);p.ReloadRemaining=0;p.FireCooldownRemaining=0;p.StunRemaining=0;
+    PublishBirth(new[]{p});turned=true;
+   }
+   p.Position=phase==RoundPhase.Chase&&p.Faction==Faction.Animal&&GameMaps.AnimalsStartApart(map)?GameMaps.AnimalStart(map,slot%6):Spawn(slot);
+   restart=p.Position;lastShove.Remove(slot);
+   if(turned){Publish(FeelEventKind.Transform,-1,slot,p.Position);
+    if(players.All(q=>q.Faction==Faction.Animal)){phase=RoundPhase.Results;remaining=settings.Current.ResultSeconds;phaseStartedAt=hostTime;phaseDeadline=hostTime+remaining;winner=Faction.Animal;ClearActions();}}
+   return turned;
+  }
+  readonly Dictionary<int,double> toolHits=new Dictionary<int,double>();
   /// <summary>Called only by the authoritative physics adapter when a body or bubble knocks a light prop (presentation event).</summary>
   public bool RecordPropPush(int prop,int actor,WorldPosition position,float strength) {
    if(prop<0||prop>=short.MaxValue||float.IsNaN(strength)||float.IsInfinity(strength)||phase==RoundPhase.Results)return false;

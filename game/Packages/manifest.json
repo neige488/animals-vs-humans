@@ -10,6 +10,7 @@
     "com.unity.modules.physics": "1.0.0",
     "com.unity.modules.ui": "1.0.0",
     "com.unity.modules.screencapture": "1.0.0",
-    "com.unity.postprocessing": "3.5.4"
+    "com.unity.postprocessing": "3.5.4",
+    "com.firstgeargames.fishnet": "file:com.firstgeargames.fishnet"
   }
 }

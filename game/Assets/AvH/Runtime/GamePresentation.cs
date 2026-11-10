@@ -14,11 +14,15 @@ namespace AvH {
   string nickname="플레이어";
   float yaw, pitch=20;
   bool menu,debugOpen;
+  public bool AutomatedProbeInput;
   public bool DebugPanelOpen=>debugOpen;
   public void SetDebugPanelOpen(bool open){debugOpen=open;if(open)menu=false;if(!open&&session.Session!=null&&!network.IsClient)session.Session.CancelSettingsEdit(0);SetCursor();}
   Vector3 cameraOffset=new Vector3(.6f,.3f,-5.5f);
   readonly SettingsPanel settingsPanel=new SettingsPanel();
   readonly FeelDirector feel=new FeelDirector();
+  readonly HitFeed hitFeed=new HitFeed();
+  /// <summary>Recent shot hits as this viewer reads them (who shoved whom).</summary>
+  public HitFeed Hits=>hitFeed;
   readonly DisplaySettingsMenu displayMenu=new DisplaySettingsMenu();
   LocalDisplaySettings display;int appliedDisplay=-1;
   Vector3 follow,followVelocity;bool following;
@@ -31,7 +35,7 @@ namespace AvH {
   public Vector3 FollowPoint=>follow;
   /// <summary>Replaces the per-PC display preferences (tests and isolated profiles).</summary>
   public void UseDisplaySettings(LocalDisplaySettings settings){display=settings??new LocalDisplaySettings(null);appliedDisplay=-1;ApplyDisplay();}
-  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality,view);}
+  void ApplyDisplay(){if(display==null)return;appliedDisplay=display.Version;MapAir.Apply(view,TownLighting.Current,display.Quality);feel.Enabled=display.ScreenShake;feel.Scale=DisplayQuality.ShakeScale(display.Quality);DisplayQuality.Apply(display.Quality,view);}
   GUIStyle label, title;
   // Override the fullscreen preference saved by older playtest builds on every desktop launch.
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
@@ -58,6 +62,8 @@ namespace AvH {
   void Start() {
    if(!Debug.isDebugBuild||Application.isBatchMode)return;
    var args=System.Environment.GetCommandLineArgs();
+   if(WarehouseScenario.TryStart(this,network,session,args))return;
+   if(NetworkFrameProbe.TryStart(this,network,session,args))return;
    int menus=System.Array.IndexOf(args,"-avhMenuPreview");
    if(menus>=0&&menus+1<args.Length){StartCoroutine(CaptureMenuPreview(args[menus+1]));return;}
    int qualities=System.Array.IndexOf(args,"-avhQualityPreview");
@@ -104,10 +110,14 @@ namespace AvH {
     yield return new WaitForSecondsRealtime(1f/30);
    }
   }
+  // Each map has its own time of day; follow whichever map the session has built.
+  int litMap=-1;
+  void FollowMapLook(){if(session==null||session.BuiltMap==litMap||view==null)return;litMap=session.BuiltMap;TownLighting.Apply(view,Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l=>l.type==LightType.Directional),litMap);appliedDisplay=-1;}
   void Update() {
+   FollowMapLook();
    if(display!=null&&appliedDisplay!=display.Version)ApplyDisplay();
-   if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;debugOpen=false;return;}
-   rosterHud.Present(session.Observe(),network.LocalSlot);
+   if(session.Session==null||!network.CanPlay){rosterHud.Present(null,0);wasPlaying=false;debugOpen=false;hitFeed.Reset();return;}
+   rosterHud.Present(session.Observe(),network.LocalSlot);hitFeed.Observe(session.Observe(),Time.deltaTime);
    if(!wasPlaying){menu=false;SetCursor();wasPlaying=true;}
    if(Input.GetKeyDown(KeyCode.F1))SetDebugPanelOpen(!debugOpen);
    if(Input.GetKeyDown(KeyCode.Escape)&&debugOpen)SetDebugPanelOpen(false);
@@ -118,16 +128,19 @@ namespace AvH {
    }
    var input=new PlayerInput {Yaw=yaw,Pitch=pitch};
    if(!menu && (network.IsClient||string.IsNullOrEmpty(session.Session.ObserveSettings().Error))) {input.Right=(Input.GetKey(KeyCode.D)?1:0)-(Input.GetKey(KeyCode.A)?1:0);input.Forward=(Input.GetKey(KeyCode.W)?1:0)-(Input.GetKey(KeyCode.S)?1:0);input.Jump=Input.GetKeyDown(KeyCode.Space);input.Attack=!debugOpen&&Input.GetMouseButton(0);input.Reload=Input.GetKeyDown(KeyCode.R);}
-   network.SubmitInput(input);session.PresentTrigger(network.LocalSlot,input.Attack);
+   if(!AutomatedProbeInput)network.SubmitInput(input);session.PresentTrigger(network.LocalSlot,input.Attack);
   }
   void LateUpdate() {
    if(session.Session==null||!network.CanPlay){following=false;feel.Reset();CameraShakeAngle=0;return;}
    if(appliedDisplay!=display.Version)ApplyDisplay();
-   var target=session.PlayerTransform(network.LocalSlot).position+Vector3.up*1.35f;
+   var target=session.CameraFollowTransform(network.LocalSlot).position+Vector3.up*1.35f;
    // Spring follow softens steps and landings; spawns and recovery teleports snap.
    if(!following||(target-follow).sqrMagnitude>9){follow=target;followVelocity=Vector3.zero;following=true;}
    else follow=Vector3.SmoothDamp(follow,target,ref followVelocity,.07f,Mathf.Infinity,Time.unscaledDeltaTime);
-   target=follow;
+   // Landing dip springs back; a launch (our body tumbling) widens the view for a moment.
+   landDip=Mathf.MoveTowards(landDip,0,Time.unscaledDeltaTime*.9f);target=follow+Vector3.down*Mathf.Sin(Mathf.Min(1,landDip/.32f)*Mathf.PI*.5f)*landDip;
+   var anim=session.PlayerTransform(network.LocalSlot).GetComponent<CharacterAnimator>();bool launched=anim!=null&&anim.Observe().Tumbling;
+   fovPunch=Mathf.MoveTowards(fovPunch,launched?1:0,Time.unscaledDeltaTime*(launched?6:2));view.fieldOfView=BaseFieldOfView+7*Mathf.SmoothStep(0,1,fovPunch);
    var rotation=Quaternion.Euler(pitch,yaw,0);
    var preferred=new Vector3(.6f,.3f,-5.5f);float length=preferred.magnitude;
    var chosen=preferred;float preferredClear=ClearDistance(target,rotation*preferred);
@@ -151,6 +164,28 @@ namespace AvH {
    var look=Quaternion.LookRotation(target+rotation*Vector3.forward*8-view.transform.position);
    feel.Observe(session.Observe(),network.LocalSlot,Time.unscaledDeltaTime);
    view.transform.rotation=look*feel.Shake();CameraShakeAngle=feel.LastShakeAngle;
+  }
+  // ---------- hit marker: the shooter's own confirmation, as shooters do it ----------
+  int markerSeen=-1;float markerAge=9;bool markerFriend;float landDip,fovPunch;
+  /// <summary>Age (s) of the newest hit marker and whether it was a friend (for tests).</summary>
+  public (float age,bool friend) HitMarker=>(markerAge,markerFriend);
+  public const float HitMarkerSeconds=.22f,BaseFieldOfView=65;
+  void DrawHitMarker(SessionState state,float w,float h) {
+   if(Event.current.type==EventType.Layout){
+    int newest=markerSeen;
+    foreach(var e in state.Events??new FeelEvent[0]) {
+     if(e.Id<=markerSeen)continue;newest=Mathf.Max(newest,e.Id);
+     if(markerSeen>=0&&e.Actor==network.LocalSlot&&(e.Kind==FeelEventKind.Stagger||e.Kind==FeelEventKind.Shoved||e.Kind==FeelEventKind.AttackHit)){if(markerAge>.06f)session.Audio.Play("confirm",view.transform.position,markerFriend?.8f:1,e.Kind==FeelEventKind.Shoved?.85f:1);markerAge=0;markerFriend=e.Kind==FeelEventKind.Shoved;}
+     // A hard landing of our own body dips the camera a little.
+     if(markerSeen>=0&&e.Kind==FeelEventKind.Landing&&e.Actor==network.LocalSlot)landDip=Mathf.Max(landDip,.12f+.2f*e.Strength);
+    }
+    markerSeen=Mathf.Max(markerSeen<0?newest:markerSeen,newest);markerAge+=Time.unscaledDeltaTime;
+   }
+   if(markerAge>HitMarkerSeconds)return;
+   float t=markerAge/HitMarkerSeconds,gap=7+5*t,len=8;var color=(markerFriend?new Color(1,.85f,.3f):new Color(1,.45f,.2f))*new Color(1,1,1,1-t*t);
+   var old=GUI.matrix;var oldColor=GUI.color;GUI.color=color;var center=new Vector2(w/2,h/2);
+   for(int k=0;k<4;k++){GUIUtility.RotateAroundPivot(45+90*k,center);GUI.DrawTexture(new Rect(center.x-1.5f,center.y-gap-len,3,len),Texture2D.whiteTexture);GUI.matrix=old;}
+   GUI.color=oldColor;
   }
   static float ClearDistance(Vector3 target,Vector3 offset) {
    float distance=offset.magnitude;
@@ -196,8 +231,13 @@ namespace AvH {
     GUI.Label(new Rect(w/2-250,h/2+35,500,45),$"다음 라운드까지 {seconds/60:00}:{seconds%60:00}",label);
    }
    if(state.Phase!=RoundPhase.Results)GUI.Label(new Rect(w/2-15,h/2-20,30,40),"+",title);
+   if(state.Phase!=RoundPhase.Results)DrawHitMarker(state,w,h);
+   // The tool drawn for this round, announced while everyone gets ready.
+   var mine=state.Players[network.LocalSlot];
+   if(state.Phase==RoundPhase.Preparation&&mine.Faction==Faction.Human)GUI.Label(new Rect(w/2-260,118,520,40),$"이번 도구: {Tools.Name(mine.Tool)}!",title);
+   hitFeed.Draw(view,session.PlayerTransform,network.LocalSlot);
    GUI.Box(new Rect(w/2-280,h-90,560,70),"");
-   GUI.Label(new Rect(w/2-275,h-85,550,35),$"{state.Players[network.LocalSlot].CharacterName} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · 라운드 {state.Round}",label);
+   GUI.Label(new Rect(w/2-275,h-85,550,35),$"{state.Players[network.LocalSlot].CharacterName} · {WeaponLabel(state.Players[network.LocalSlot],session.ObserveActiveSettings().Current.Magazine)} · {GameMaps.Name(state.Map)} · 라운드 {state.Round}",label);
    GUI.Label(new Rect(w/2-275,h-53,550,25),"WASD 이동 · 마우스 시점 · Space 점프 · 좌클릭 공격 · R 재장전 · Esc 메뉴 · F1 디버그",new GUIStyle(label){fontSize=15});
 
    if(Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog")==null) GUI.Label(new Rect(15,110,450,35),"개발 블록아웃 · 보유 에셋 적용 전",new GUIStyle(label){fontSize=16,alignment=TextAnchor.MiddleLeft});
@@ -219,7 +259,10 @@ namespace AvH {
   }
   static string WeaponLabel(PlayerState player,int magazine) {
    if(player.Faction==Faction.Animal)return player.AttackGraceRemaining>0?$"공격 대기 {player.AttackGraceRemaining:F1}초":"근접 공격";
-   return player.ReloadRemaining>0?$"재장전 중 ({player.ReloadRemaining:F1}초)":$"버블 {player.Ammo} / {magazine} (예비 ∞)";
+   var name=Tools.Name(player.Tool);
+   if(player.ReloadRemaining>0)return $"{name} 재장전 중 ({player.ReloadRemaining:F1}초)";
+   if(Tools.UsesAmmo(player.Tool))return $"{name} {player.Ammo} / {magazine} (예비 ∞)";
+   return player.FireCooldownRemaining>0?$"{name} 충전 중":$"{name} 준비됨";
   }
   void OnDestroy(){RestoreLocalRenderers();if(ownsView&&view!=null)Destroy(view.gameObject);if(ownedSun!=null)Destroy(ownedSun.gameObject);if(rosterHud!=null)Destroy(rosterHud.gameObject);Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
  }

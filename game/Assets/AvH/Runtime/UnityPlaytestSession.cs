@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 namespace AvH {
- [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload; public int RoundId; }
+ [Serializable] public struct PlayerInput { public float Right, Forward, Yaw, Pitch; public bool Jump, Attack, Reload; public int RoundId,Sequence; }
  /// <summary>Public game execution boundary. Inputs flow through real CharacterControllers.</summary>
  public sealed partial class UnityPlaytestSession : MonoBehaviour {
   public bool AutomaticStep = true;
@@ -13,18 +13,44 @@ namespace AvH {
   public PlaytestSession Session { get; private set; }
   readonly List<CharacterController> bodies = new List<CharacterController>();
   readonly PlayerInput[] inputs = new PlayerInput[12];
+  readonly int[] simulatedInputSequences=new int[12];
   readonly float[] vertical = new float[12];
+  // Jump buffer and time since last grounded, per body (see CharacterMotion.CanJump).
+  readonly float[] jumpBuffer=new float[12],airborne=new float[12];
   readonly MotionState[] motion = new MotionState[12];
   readonly Transform[] guns=new Transform[12];
-  readonly Vector3[] returns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
+  static readonly Vector3[] TownReturns = { new Vector3(-12,1,-6), new Vector3(12,1,0),new Vector3(0,1,-12),new Vector3(0,1,12) };
+  Vector3[] returns = TownReturns;
   public Vector3[] RecoveryPoints => (Vector3[])returns.Clone();
-  public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null) {
+  int builtMap=-1;
+  /// <summary>Map whose geometry this world currently stands in (GameMaps).</summary>
+  public int BuiltMap=>builtMap;
+  /// <summary>
+  /// Replaces the map geometry. The old map is deactivated at once so physics queries in this same frame
+  /// (bot grid, spawns) never see it, then destroyed.
+  /// </summary>
+  void BuildMap(int map) {
+   map=GameMaps.Clamp(map);if(map==builtMap)return;Layers.Ensure();
+   foreach(var name in new[]{"Village",WarehouseMap.RootName,CrossingMap.RootName,MapPlans.Sky.Root,MapPlans.Snow.Root,MapPlans.Ruins.Root}){var old=transform.Find(name);if(old!=null){old.gameObject.SetActive(false);old.name+=" (removed)";Destroy(old.gameObject);}}
+   switch(map){
+    case GameMaps.Warehouse:ShelterPoints=WarehouseMap.Build(transform);returns=WarehouseLayout.Recovery;props=PushProps.Adopt(transform.Find(WarehouseMap.RootName));break;
+    case GameMaps.Crossing:ShelterPoints=CrossingMap.Build(transform);returns=CrossingLayout.Recovery;props=PushProps.Adopt(transform.Find(CrossingMap.RootName));break;
+    case GameMaps.Sky:case GameMaps.Snow:case GameMaps.Ruins: {
+     var plan=MapPlans.For(map);var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
+     ShelterPoints=PlannedMap.Build(transform,plan,catalog!=null?catalog.Dressing(map):null,catalog!=null?catalog.Crate:null);returns=plan.Recovery;props=PushProps.Adopt(transform.Find(plan.Root));break;
+    }
+    default:ShelterPoints=PrototypeVillage.Build(transform);returns=TownReturns;props=PushProps.Adopt(transform.Find("Village"));break;
+   }
+   LowPolyLook.Scenery(transform);
+   builtMap=map;botDirector.ResetMap(map==GameMaps.Crossing?CrossingLayout.Grid:MapPlans.For(map)?.Grid??RouteGrid.Default);Physics.SyncTransforms();
+  }
+  public void StartSolo(string nickname, int? randomSeed = null, string settingsPath = null, int? map = null) {
    if(Session != null) throw new InvalidOperationException("이미 시작된 세션입니다.");
    Session = new PlaytestSession(randomSeed ?? Environment.TickCount, settingsPath ?? System.IO.Path.Combine(Application.persistentDataPath,"playtest-settings.xml"));
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
    Session.StartSolo(nickname, catalog==null?"임시 동물":catalog.AnimalDisplayName,catalog==null?"일반":catalog.Rarity,
-    catalog!=null&&catalog.Humans.Length>0?catalog.Humans.Select(c=>c.Definition()).ToArray():null,catalog!=null&&catalog.Animals.Length>0?catalog.Animals.Select(c=>c.Definition()).ToArray():null);
-   ShelterPoints=PrototypeVillage.Build(transform);props=PushProps.Adopt(transform.Find("Village"));
+    catalog!=null&&catalog.Humans.Length>0?catalog.Humans.Select(c=>c.Definition()).ToArray():null,catalog!=null&&catalog.Animals.Length>0?catalog.Animals.Select(c=>c.Definition()).ToArray():null,map);
+   BuildMap(Session.Observe().Map);
    foreach(var p in Session.Observe().Players) {
     var body = new GameObject("Slot " + p.Slot); body.transform.SetParent(transform);
     body.transform.position=ToVector(p.Position);
@@ -35,6 +61,8 @@ namespace AvH {
     var contacts=body.AddComponent<KnockbackContact>();contacts.World=this;contacts.Slot=p.Slot;
     RefreshVisual(p.Slot,p.Faction);
    }
+   // Separate in-process worlds (integration tests) must not collide with each other.
+   foreach(var other in UnityEngine.Object.FindObjectsByType<UnityPlaytestSession>(FindObjectsSortMode.None))if(other!=this)foreach(var a in bodies)foreach(var b in other.bodies)Physics.IgnoreCollision(a,b);
   }
   public SessionState Observe() => remoteSnapshot ?? Session.Observe();
   PushProps props;
@@ -43,6 +71,8 @@ namespace AvH {
   /// <summary>This world's village dressing at the current graphics quality.</summary>
   public TownDressingView ObserveTown(){var village=transform.Find("Village");var dressing=village==null?null:village.GetComponent<TownDressing>();return dressing==null?default:dressing.Observe();}
   public BotNavigationDiagnostics ObserveBotNavigation()=>botDirector.ObserveNavigation();
+  /// <summary>What a bot would plan between two points in this world's current map (layout checks).</summary>
+  public List<Vector3> PlanBotRoute(Vector3 from,Vector3 to,out bool reachable,bool allowDrop=false,Vector3? avoid=null)=>botDirector.Plan(from,to,out reachable,allowDrop,avoid);
   public void SubmitInput(int slot, PlayerInput input) {
    if(slot < 0 || slot >= bodies.Count) throw new ArgumentOutOfRangeException(nameof(slot));
    if(float.IsNaN(input.Right) || float.IsInfinity(input.Right) || float.IsNaN(input.Forward) || float.IsInfinity(input.Forward) || float.IsNaN(input.Yaw) || float.IsInfinity(input.Yaw)) return;
@@ -51,8 +81,9 @@ namespace AvH {
    input.Pitch=Mathf.Clamp(input.Pitch,-80,80);
    if(input.RoundId==0)input.RoundId=Session.Observe().Round;
    inputs[slot]=input;
+   if(slot==0&&FishBridge!=null&&!IsRemote)FishBridge.QueueInput(slot,input);
   }
-  void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);return;} if(AutomaticStep && Session!=null) Step(Time.deltaTime); }
+  void Update() { if(remoteSnapshot!=null){if(AutomaticRemotePlayback)InterpolateRemote(Time.deltaTime);}else if(AutomaticStep && Session!=null) Step(Time.deltaTime); if(Session!=null)PresentTools(Observe()); }
   /// <summary>Advances the host simulation, or on a remote view advances frame playback by the same time.</summary>
   public void Step(float seconds) {
    if(remoteSnapshot!=null){InterpolateRemote(seconds);return;}
@@ -61,16 +92,23 @@ namespace AvH {
    Session.Advance(seconds);
    var state=Session.Observe();
    PrepareCombatWorld(state,before.Round);
-   if(state.Round!=before.Round)props?.ResetHome();
+   if(state.Round!=before.Round&&state.Map!=builtMap)BuildMap(state.Map);
+   else if(state.Round!=before.Round)props?.ResetHome();
    if(state.Phase==RoundPhase.Results&&before.Phase!=RoundPhase.Results)CutTransformations();
    if(BotAutomationEnabled)botDirector.Step(this,seconds);
    var rules=Session.ObserveSettings().Current;
    for(int i=0;i<bodies.Count;i++) {
     var body=bodies[i]; var p=state.Players[i];var modifiers=AnimalBalance.For(rules,p);
-    if(state.Round!=before.Round) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; }
-    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId)ChangeVisual(before,state,i,body.transform.position);
+    // A new round, or a first animal sent to its own start (crossing): the session decided the place, the body follows.
+    bool released=state.Phase==RoundPhase.Chase&&before.Phase==RoundPhase.Preparation&&state.Round==before.Round&&GameMaps.AnimalsStartApart(state.Map)&&p.Faction==Faction.Animal&&before.Players[i].Faction==Faction.Human;
+    // Sent to the animals' start: a puff where the body stood, so nobody just vanishes.
+    if(released){Effects.Emit(body.transform.position+Vector3.up*.8f,new Color(.95f,.9f,1,.8f),14,1.6f);Effects.Emit(body.transform.position+Vector3.up*.2f,new Color(.8f,.75f,.65f,.6f),8,1.1f);}
+    if(state.Round!=before.Round||released) { Warp(body,ToVector(p.Position)); vertical[i]=0; motion[i]=default; pushVelocity[i]=Vector3.zero; }
+    if(p.Faction!=before.Players[i].Faction||p.CharacterId!=before.Players[i].CharacterId||p.Faction==Faction.Human&&p.Tool!=before.Players[i].Tool)ChangeVisual(before,state,i,body.transform.position);
+    if(FishControls(i)) continue;
     if(state.Phase!=RoundPhase.Results) {
      var input=inputs[i].RoundId==state.Round?inputs[i]:default;
+     simulatedInputSequences[i]=input.Sequence;
      if(guns[i]!=null&&input.RoundId==state.Round)guns[i].GetComponent<BubbleGunPose>().SetAim(input.Yaw,input.Pitch);
      if(CharacterMotion.Frozen(p)) {
       // Hit-stop holds only this body: no steering, gravity or knockback until it ends. Momentum resumes after.
@@ -78,7 +116,8 @@ namespace AvH {
       var held=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(held.x,held.y,held.z));inputs[i].Jump=false;continue;
      }
      if(body.isGrounded && vertical[i]<0) vertical[i]=-2;
-     if(body.isGrounded && input.Jump){vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
+     jumpBuffer[i]=input.Jump?CharacterMotion.JumpBufferSeconds:Mathf.Max(0,jumpBuffer[i]-seconds);airborne[i]=body.isGrounded?0:airborne[i]+seconds;
+     if(CharacterMotion.CanJump(body.isGrounded,airborne[i],vertical[i],jumpBuffer[i])){jumpBuffer[i]=0;airborne[i]=CharacterMotion.CoyoteSeconds;vertical[i]=Mathf.Sqrt(2*22*(p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump));Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.55f),5,.65f);}
      vertical[i]-=22*seconds;
      var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(input.Right,0,input.Forward),1);
      bool wasGrounded=body.isGrounded;float fallingSpeed=vertical[i];
@@ -90,14 +129,10 @@ namespace AvH {
      // Animate what the body actually did: a wall-blocked body does not run at full cadence.
      var moved=body.transform.position-from;moved.y=0;float actual=moved.magnitude/seconds;
      var shown=planar.sqrMagnitude>actual*actual?planar.normalized*actual:planar;
-     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed,Action=p.Action,ActionProgress=ActionProgress(p,rules)},seconds);
+     Animate(i,new LocomotionState{VelocityX=shown.x,VelocityZ=shown.z,VerticalSpeed=vertical[i],Grounded=body.isGrounded,AimYaw=input.Yaw,TopSpeed=profile.MaxSpeed,Action=p.Action,ActionProgress=ActionProgress(p,rules),PushX=pushVelocity[i].x,PushZ=pushVelocity[i].z},seconds);
      if(!wasGrounded&&body.isGrounded&&fallingSpeed< -PlaytestSession.HardLandingSpeed){Effects.Emit(body.transform.position,new Color(.9f,.83f,.64f,.6f),7,1);var landed=body.transform.position;Session.RecordWorldPosition(i,new WorldPosition(landed.x,landed.y,landed.z));Session.RecordLanding(i,-fallingSpeed);}
-     if(direction.sqrMagnitude>.01f) body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),540f*seconds);
-     if(body.transform.position.y < -12) {
-      var closest=returns[0]; float distance=float.MaxValue;
-      foreach(var point in returns) { var d=Vector2.SqrMagnitude(new Vector2(point.x-body.transform.position.x,point.z-body.transform.position.z)); if(d<distance) {distance=d;closest=point;} }
-      Warp(body,closest); vertical[i]=0; motion[i]=default;
-     }
+     if(direction.sqrMagnitude>.01f){Skid(body,planar,direction);body.transform.rotation=Quaternion.RotateTowards(body.transform.rotation,Quaternion.LookRotation(direction),CharacterMotion.TurnDegrees(p.Faction,p.CharacterId)*seconds);}
+     if(body.transform.position.y < FallLine) { Warp(body,Restart(i,body.transform.position)); vertical[i]=0; motion[i]=default; pushVelocity[i]=Vector3.zero; }
     } else {motion[i]=default;Animate(i,new LocomotionState{Grounded=true,AimYaw=PresentationYaw(i)},seconds);}
     var pos=body.transform.position;
     Session.RecordWorldPosition(i,new WorldPosition(pos.x,pos.y,pos.z));
@@ -141,25 +176,45 @@ namespace AvH {
    }
   }
   public Transform PlayerTransform(int slot) => bodies[slot].transform;
+  public Transform CameraFollowTransform(int slot) => FishControls(slot)&&fishMotors[slot].CameraAnchor!=null?fishMotors[slot].CameraAnchor:bodies[slot].transform;
   /// <summary>Locomotion animation currently shown for a slot (presentation only).</summary>
   public CharacterAnimationView ObserveAnimation(int slot)=>bodies[slot].GetComponent<CharacterAnimator>().Observe();
   readonly LocomotionState[] presented=new LocomotionState[12];
+  /// <summary>A hard turn at speed kicks up a puff of dust at the feet (presentation only).</summary>
+  void Skid(CharacterController body,Vector3 velocity,Vector3 wanted) {
+   if(!body.isGrounded||velocity.sqrMagnitude<16||Vector3.Angle(velocity,wanted)<100)return;
+   if(Time.frameCount%4==0)Effects.Emit(body.transform.position+velocity.normalized*.3f,new Color(.85f,.78f,.6f,.5f),3,.5f);
+  }
   void Animate(int slot,LocomotionState state,float seconds){presented[slot]=state;bodies[slot].GetComponent<CharacterAnimator>().Apply(state,seconds);}
   /// <summary>Host presentation frame for remote viewers: each body's position, facing, aim pitch and the motion it was animated with.</summary>
-  public NetworkMotionFrame CaptureMotion() {
+  public NetworkMotionFrame CaptureMotion(bool refreshAll=false) {
    // Resting displaced props ride a frame twice a second so late joiners learn where they lie.
-   bool refresh=Session.HostTime>=nextPropRefresh||Session.HostTime<nextPropRefresh-1;if(refresh)nextPropRefresh=Session.HostTime+.5;
-   return new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,Props=props==null?new NetworkPropMotion[0]:props.Capture(Session.HostTime,refresh),Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
+   bool refresh=refreshAll||Session.HostTime>=nextPropRefresh||Session.HostTime<nextPropRefresh-1;if(refresh)nextPropRefresh=Session.HostTime+.5;
+   return new NetworkMotionFrame{HostTime=Session.HostTime,Round=Session.Round,InputSequences=(int[])simulatedInputSequences.Clone(),Props=props==null?new NetworkPropMotion[0]:props.Capture(Session.HostTime,refresh),Bodies=Enumerable.Range(0,bodies.Count).Select(i=>{
    var p=bodies[i].transform.position;float pitch=guns[i]!=null?guns[i].GetComponent<BubbleGunPose>().AimPitch:0;
    return NetworkBodyMotion.Encode(new WorldPosition(p.x,p.y,p.z),PresentationYaw(i),pitch,presented[i]);}).ToArray()};
   }
   double nextPropRefresh;
   internal float PresentationYaw(int slot)=>guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>().AimYaw:bodies[slot].transform.eulerAngles.y;
+  /// <summary>Height below which a body has fallen off this map.</summary>
+  float FallLine=>GameMaps.FallTurnsAnimal(builtMap)?MapPlans.SkyFallLine:-12;
+  /// <summary>
+  /// Where a fallen body starts again. On the sky islands the session judges the fall (a human turns animal) and names
+  /// the restart; elsewhere the nearest recovery point.
+  /// </summary>
+  Vector3 Restart(int slot,Vector3 at) {
+   if(GameMaps.FallTurnsAnimal(builtMap)&&Session!=null){Session.RecordFall(slot,out var restart);return ToVector(restart);}
+   var closest=returns[0];float distance=float.MaxValue;
+   foreach(var point in returns){var d=Vector2.SqrMagnitude(new Vector2(point.x-at.x,point.z-at.z));if(d<distance){distance=d;closest=point;}}
+   return closest;
+  }
+  Vector3 NearestReturn(Vector3 at){var closest=returns[0];float distance=float.MaxValue;foreach(var p in returns){float d=(p-at).sqrMagnitude;if(d<distance){closest=p;distance=d;}}return closest;}
   static void Warp(CharacterController body,Vector3 position) {body.enabled=false;body.transform.position=position;body.enabled=true;}
   static Vector3 ToVector(WorldPosition p)=>new Vector3(p.X,p.Y,p.Z);
   void RefreshVisual(int slot,Faction faction,bool transformation=false) {
-   var parent=bodies[slot].transform;
-   if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Gun(parent):null;
+   bodies[slot].radius=CharacterMotion.BodyRadius(faction,Observe().Players[slot].CharacterId);
+   var body=bodies[slot].transform;var parent=body.Find("Predicted presentation")??body;
+   if(guns[slot]!=null){guns[slot].gameObject.SetActive(false);Destroy(guns[slot].gameObject);}guns[slot]=faction==Faction.Human?Effects.Tool(parent,Observe().Players[slot].Tool):null;
    var old=parent.Find("Visual");
    if(old!=null){if(transformation){old.name="Transform ghost";old.gameObject.AddComponent<TransformGhost>();}else{old.gameObject.SetActive(false);Destroy(old.gameObject);}}
    var catalog=Resources.Load<OwnedAssetCatalog>("OwnedAssetCatalog");
@@ -173,11 +228,11 @@ namespace AvH {
     Destroy(visual.GetComponent<Collider>());
     visual.GetComponent<Renderer>().sharedMaterial=PrototypeVillage.Material(faction==Faction.Human?new Color(.15f,.7f,.95f):new Color(1,.48f,.16f));
    }
-   visual.name="Visual";
+   visual.name="Visual";LowPolyLook.Character(visual.transform);
    foreach(var animator in visual.GetComponentsInChildren<Animator>()){animator.fireEvents=false;animator.applyRootMotion=false;animator.Rebind();animator.Update(0);}
    var gunPose=guns[slot]!=null?guns[slot].GetComponent<BubbleGunPose>():null;
    if(gunPose!=null)gunPose.Bind(visual.transform);
-   var locomotion=parent.GetComponent<CharacterAnimator>()??parent.gameObject.AddComponent<CharacterAnimator>();
+   var locomotion=body.GetComponent<CharacterAnimator>()??body.gameObject.AddComponent<CharacterAnimator>();
    locomotion.Bind(visual.transform,faction,Observe().Players[slot].CharacterId,gunPose);
    if(transformation)locomotion.PlayTransform();
    foreach(var collider in visual.GetComponentsInChildren<Collider>()) collider.enabled=false;

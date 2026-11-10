@@ -7,6 +7,8 @@ namespace AvH {
  /// <summary>What the animator is currently showing. Read-only presentation facts.</summary>
  public struct CharacterAnimationView {
   public LocomotionGait Gait;
+  /// <summary>Hit reactions: degrees tumbled head over heels (launched), 0..1 flinch lean (shoved), stumbling after a tumble lands.</summary>
+  public float TumbleAngle, Flinch; public bool Tumbling, Stumbling;
   /// <summary>0 = idle pose, 1 = full locomotion.</summary>
   public float MoveWeight;
   /// <summary>0 = walk clip, 1 = run clip.</summary>
@@ -61,6 +63,9 @@ namespace AvH {
   const float StartSpeed=.25f,StopSpeed=.12f,StopHold=.1f,AirDelay=.08f,LandSeconds=.2f;
   // Share of an attack clip used as the tell; the rest is the swing.
   const float WindupShare=.35f;
+  /// <summary>Knockback speed (m/s) above which an airborne body tumbles; a jump in shove speed this large flinches.</summary>
+  public const float TumbleSpeed=6,FlinchKick=2.5f,StumbleSeconds=.5f;
+  bool tumbling;float tumbleAngle,flinch,stumble,lastPush;Vector3 tumbleAxis=Vector3.right,flinchAxis=Vector3.right;
   PlayableGraph graph;AnimationMixerPlayable mixer;AnimationClipPlayable idle,walk,run,air,act;
   AnimationClip idleClip,walkClip,runClip,airClip,actClip;bool airIsJump,shakeTell;float lungeDistance;
   Transform visual;Vector3 baseScale,basePosition;Quaternion baseRotation;BubbleGunPose pose;Character character;float referenceSpeed;
@@ -76,7 +81,9 @@ namespace AvH {
    Release();act=default;visual=model;pose=gunPose;character=For(faction,characterId);
    transformTime=TransformSeconds;baseScale=model.localScale;baseRotation=model.localRotation;basePosition=model.localPosition;actionSquash=0;
    referenceSpeed=Mathf.Max(.1f,CharacterMotion.Profile(new PlaytestValues(),new PlayerState{Faction=faction,CharacterId=characterId}).MaxSpeed);
-   moving=airborne=false;lastGrounded=true;stillTime=airTime=landTimer=phase=idleTime=squash=squashVelocity=pitch=roll=actionPitch=actionRoll=0;lastYaw=transform.eulerAngles.y;lastSpeed=0;
+   moving=airborne=false;lastGrounded=true;stillTime=airTime=landTimer=phase=squash=squashVelocity=pitch=roll=actionPitch=actionRoll=0;
+   // Each body starts its idle loop at its own point, so a group never breathes in lockstep.
+   idleTime=Mathf.Abs((transform.position.x*7.3f+transform.position.z*3.1f+name.GetHashCode()%97)%13f);tumbling=false;tumbleAngle=flinch=stumble=lastPush=0;lastYaw=transform.eulerAngles.y;lastSpeed=0;
    view=new CharacterAnimationView{Gait=LocomotionGait.Idle,StrideDirection=1};strideTravel=0;
    Animator animator=null;foreach(var a in model.GetComponentsInChildren<Animator>())if(a.runtimeAnimatorController!=null){animator=a;break;}
    var clips=animator==null?new AnimationClip[0]:animator.runtimeAnimatorController.animationClips;
@@ -163,6 +170,19 @@ namespace AvH {
    const float stiffness=300;float damping=2*Mathf.Sqrt(stiffness)*character.Bounce;
    for(float left=dt;left>0;left-=.005f){float h=Mathf.Min(.005f,left);squashVelocity+=(-stiffness*squash-damping*squashVelocity)*h;squash+=squashVelocity*h;}
    if(Mathf.Abs(squash)<.0005f&&Mathf.Abs(squashVelocity)<.01f){squash=0;squashVelocity=0;}
+   // Hit reactions. A launch (carried hard while off the ground) tumbles the body head over heels about the push's
+   // side axis until it lands, then it stumbles; a sudden shove leans it away with the push and springs back.
+   var push=new Vector3(state.PushX,0,state.PushZ);float pushSpeed=push.magnitude;
+   if(airborne&&pushSpeed>TumbleSpeed) {
+    if(!tumbling){tumbling=true;tumbleAxis=Vector3.Cross(Vector3.up,push/pushSpeed);}
+    tumbleAngle+=Mathf.Min(760,pushSpeed*70)*dt;
+   } else if(tumbling&&!airborne) {
+    tumbling=false;stumble=StumbleSeconds;tumbleAngle=Mathf.Repeat(tumbleAngle,360);if(tumbleAngle>180)tumbleAngle-=360;
+   }
+   if(!tumbling)tumbleAngle=Mathf.MoveTowards(tumbleAngle,0,dt*900);
+   if(pushSpeed>lastPush+FlinchKick&&!tumbling){flinch=1;flinchAxis=Vector3.Cross(Vector3.up,push/pushSpeed);}
+   lastPush=pushSpeed;flinch=Mathf.MoveTowards(flinch,0,dt/.3f);stumble=Mathf.Max(0,stumble-dt);
+   view.TumbleAngle=tumbleAngle;view.Tumbling=tumbling;view.Flinch=flinch;view.Stumbling=stumble>0;
    // Bubble stun: a quick side-to-side totter that fades as control returns.
    view.Stagger=Mathf.MoveTowards(view.Stagger,state.Action==ActionPhase.Stunned?1-state.ActionProgress:0,dt/.05f);
    staggerClock+=dt;actionRoll=Mathf.Sin(staggerClock*26)*14*view.Stagger;
@@ -188,6 +208,14 @@ namespace AvH {
     visual.localScale=new Vector3(baseScale.x*(1+sq*.5f),baseScale.y*(1-sq),baseScale.z*(1+sq*.5f))*pop;
     visual.localPosition=basePosition+Vector3.forward*view.Lunge;
     if(pose==null)visual.localRotation=baseRotation*Quaternion.Euler(view.BodyPitch,0,view.BodyRoll);
+    // Reactions turn the whole model about its middle, in world space, on top of its own pose. A human's facing
+    // belongs to its aim pose, which applies the same reaction after it turns the body.
+    float ease=Mathf.Sin(flinch*Mathf.PI*.5f),wobble=stumble>0?Mathf.Sin(stumble*22)*12*stumble/StumbleSeconds:0;
+    var reaction=Mathf.Abs(tumbleAngle)>.1f||ease>.01f||Mathf.Abs(wobble)>.1f
+     ?Quaternion.AngleAxis(tumbleAngle,tumbleAxis)*Quaternion.AngleAxis(ease*22,flinchAxis)*Quaternion.AngleAxis(wobble,transform.forward)*Quaternion.AngleAxis(8*stumble/StumbleSeconds,transform.right)
+     :Quaternion.identity;
+    if(pose!=null){pose.Reaction=reaction;pose.RestLocalPosition=visual.localPosition;}
+    else if(reaction!=Quaternion.identity){var pivot=transform.position+Vector3.up*.9f;visual.SetPositionAndRotation(pivot+reaction*(visual.position-pivot),reaction*visual.rotation);}
    }
    if(!graph.IsValid())return;
    float ground=1-view.AirWeight;

@@ -14,5 +14,7 @@ namespace AvH {
   /// <summary>Host action phase (tell, swing, stun, hit-stop) and its 0..1 progress.</summary>
   public ActionPhase Action;
   public float ActionProgress;
+  /// <summary>Knockback velocity (m/s, horizontal) the body is carrying: flinches, tumbles and stumbles read it.</summary>
+  public float PushX, PushZ;
  }
 }

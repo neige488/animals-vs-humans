@@ -9,12 +9,19 @@ namespace AvH {
   const int Rate=22050;
   public static AudioClip Make(string cue) {
    if(cue==null)return null;
-   if(cue=="fire")return Bubble(true);
-   if(cue=="pop")return Bubble(false);
+   if(cue=="fire")return CorkShot();
+   if(cue=="pop")return CorkKnock();
+   if(cue=="punch")return Punch(true);
+   if(cue=="punch-whiff")return Punch(false);
+   if(cue=="disc")return Sweep(cue,.18f,900,1600,false);
+   if(cue=="disc-bounce")return Thump(cue,.1f,320,.4f);
+   if(cue=="gust")return Gust();
+   if(cue=="cushion")return Cushion();
    if(cue.StartsWith("step",StringComparison.Ordinal))return Thump(cue,.09f,140,.5f);
    if(cue=="land")return Thump(cue,.22f,90,.8f);
    if(cue=="prop-knock")return Thump(cue,.14f,210,1.1f);
    if(cue=="hit")return Hit();
+   if(cue=="confirm")return Confirm();
    if(cue=="swing")return Whoosh();
    if(cue=="transform")return Sweep(cue,.45f,300,1400,true);
    if(cue=="stagger")return Sweep(cue,.5f,700,180,false);
@@ -30,16 +37,54 @@ namespace AvH {
   }
   static AudioClip Clip(string name,float[] samples){var clip=AudioClip.Create("Synth "+name,samples.Length,1,Rate,false);clip.SetData(samples,0);return clip;}
   static float Envelope(float t,float attack=.08f,float decay=7)=>Mathf.Sin(Mathf.PI*.5f*Mathf.Min(1,t/attack))*Mathf.Exp(-t*decay);
-  // The original bubble shot (air puff) and pop, unchanged from the first prototype.
-  static AudioClip Bubble(bool air) {
-   int count=air?2205:3307;var samples=new float[count];var random=new System.Random(19);float phase=0;
-   for(int i=0;i<count;i++){float t=(float)i/count;phase+=(air?900:1600)*(1-t*.85f)*Mathf.PI*2/Rate;float noise=(float)random.NextDouble()*2-1;samples[i]=(air?noise*.5f:Mathf.Sin(phase)*.6f+noise*.15f)*Mathf.Sin(Mathf.PI*Mathf.Min(1,t*8))*Mathf.Exp(-t*7);}
-   return Clip(air?"fire":"pop",samples);
+  // Cork popper shot: a tight "pomp" — a 25 ms air crack, then a hollow tube note dropping 620 -> 210 Hz. 0.11 s in all.
+  static AudioClip CorkShot() {
+   int count=(int)(Rate*.11f);var s=new float[count];var random=new System.Random(29);float phase=0,low=0;
+   for(int i=0;i<count;i++){float t=(float)i/Rate;float hz=210+410*Mathf.Exp(-t*55);phase+=hz*Mathf.PI*2/Rate;
+    low+=(((float)random.NextDouble()*2-1)-low)*.5f;float crack=t<.025f?low*(1-t/.025f):0;
+    s[i]=(Mathf.Sin(phase)*.75f+Mathf.Sin(phase*2.01f)*.15f)*Mathf.Min(1,t/.003f)*Mathf.Exp(-t*38)+crack*.55f;}
+   return Clip("fire",s);
+  }
+  // Cork hitting something: a dry wooden "tok" (two short partials) and a soft body thud. 0.12 s.
+  static AudioClip CorkKnock() {
+   int count=(int)(Rate*.12f);var s=new float[count];float a=0,b=0,c=0;
+   for(int i=0;i<count;i++){float t=(float)i/Rate;a+=980*Mathf.PI*2/Rate;b+=1530*Mathf.PI*2/Rate;c+=(150-60*t/.12f)*Mathf.PI*2/Rate;
+    s[i]=(Mathf.Sin(a)*.5f+Mathf.Sin(b)*.25f)*Mathf.Exp(-t*70)*Mathf.Min(1,t/.0015f)+Mathf.Sin(c)*.45f*Mathf.Exp(-t*30);}
+   return Clip("pop",s);
+  }
+  // Spring glove: a rising "boing" (spring) and, on a hit, a fat thwack on top. 0.3 s.
+  static AudioClip Punch(bool hit) {
+   int count=(int)(Rate*.3f);var s=new float[count];var random=new System.Random(hit?13:17);float boing=0,body=0;
+   for(int i=0;i<count;i++){float t=(float)i/Rate;boing+=(220+260*t/.3f)*(1+.25f*Mathf.Sin(t*90))*Mathf.PI*2/Rate;
+    float v=Mathf.Sin(boing)*.35f*Mathf.Exp(-t*9);
+    if(hit&&t>.04f){float u=t-.04f;body+=(120-60*u)*Mathf.PI*2/Rate;float crack=u<.03f?((float)random.NextDouble()*2-1)*(1-u/.03f):0;v+=(Mathf.Sin(body)*.9f+crack*.7f)*Mathf.Exp(-u*14);}
+    s[i]=v;}
+   return Clip(hit?"punch":"punch-whiff",s);
+  }
+  // Leaf blower burst: band-passed noise with a motor hum. 0.25 s, voiced every gust.
+  static AudioClip Gust() {
+   int count=(int)(Rate*.25f);var s=new float[count];var random=new System.Random(37);float low=0,band=0,hum=0;
+   for(int i=0;i<count;i++){float t=(float)i/count;low+=(((float)random.NextDouble()*2-1)-low)*.35f;band+=(low-band)*.12f;hum+=180*Mathf.PI*2/Rate;
+    s[i]=((low-band)*1.4f+Mathf.Sin(hum)*.12f)*Mathf.Sin(Mathf.PI*t);}
+   return Clip("gust",s);
+  }
+  // Cushion pop: a soft low "fwump" with a little air. 0.22 s.
+  static AudioClip Cushion() {
+   int count=(int)(Rate*.22f);var s=new float[count];var random=new System.Random(41);float phase=0,low=0;
+   for(int i=0;i<count;i++){float t=(float)i/Rate;phase+=(95-40*t/.22f)*Mathf.PI*2/Rate;low+=(((float)random.NextDouble()*2-1)-low)*.08f;
+    s[i]=(Mathf.Sin(phase)*.8f+low*.6f)*Mathf.Min(1,t/.01f)*Mathf.Exp(-t*14);}
+   return Clip("cushion",s);
   }
   static AudioClip Thump(string name,float seconds,float hz,float noise) {
    int count=(int)(Rate*seconds);var s=new float[count];var random=new System.Random(name.Length*31);float phase=0,low=0;
    for(int i=0;i<count;i++){float t=(float)i/count;phase+=hz*(1-t*.6f)*Mathf.PI*2/Rate;low+=((float)random.NextDouble()*2-1-low)*.15f;s[i]=(Mathf.Sin(phase)*.7f+low*noise*2)*Envelope(t,.02f,9)*.8f;}
    return Clip(name,s);
+  }
+  // The shooter's hit confirm: two bright ticks, short enough to stack under rapid fire.
+  static AudioClip Confirm() {
+   int count=(int)(Rate*.07f);var s=new float[count];
+   for(int i=0;i<count;i++){float t=(float)i/Rate;float a=t<.03f?Mathf.Sin(t*2400*Mathf.PI*2)*(1-t/.03f):0,b=t>=.035f?Mathf.Sin(t*3200*Mathf.PI*2)*(1-(t-.035f)/.035f):0;s[i]=(a+b)*.55f;}
+   return Clip("confirm",s);
   }
   static AudioClip Hit() {
    int count=(int)(Rate*.25f);var s=new float[count];var random=new System.Random(5);float phase=0;

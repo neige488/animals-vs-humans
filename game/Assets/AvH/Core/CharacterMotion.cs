@@ -10,6 +10,13 @@ namespace AvH {
  public static class CharacterMotion {
   /// <summary>Share of steering an animal keeps while stunned by a bubble.</summary>
   public const float StunnedControl=.35f;
+  /// <summary>
+  /// Jump forgiveness, as action games do it: a press this long before landing still jumps on touchdown (buffer),
+  /// and a press this long after walking off a ledge still jumps (coyote time).
+  /// </summary>
+  public const float JumpBufferSeconds=.12f,CoyoteSeconds=.12f;
+  /// <summary>Whether a buffered jump may start now: on the ground, or just off it while not already rising.</summary>
+  public static bool CanJump(bool grounded,float airborneSeconds,float verticalSpeed,float buffer)=>buffer>0&&(grounded||airborneSeconds<CoyoteSeconds&&verticalSpeed<=0);
   /// <summary>Knockback decay (m/s per second). Ground keeps the original value; the air slides further.</summary>
   public const float GroundKnockbackFriction=20, AirKnockbackFriction=6;
   /// <summary>Hit-stop: this character holds still (no steering, gravity or knockback) until it ends.</summary>
@@ -24,6 +31,19 @@ namespace AvH {
    float length=(float)Math.Sqrt(x*x+y*y+z*z);if(length<1e-6f){x=y=z=0;return;}
    float next=Math.Max(0,length-(grounded?GroundKnockbackFriction:AirKnockbackFriction)*(float)Math.Max(0,seconds));
    float scale=next/length;x*=scale;y*=scale;z*=scale;
+  }
+  /// <summary>
+  /// Body radius (m) of the character's collision capsule, sized to its model so a bear no longer sinks into its
+  /// neighbours and a rabbit no longer bumps into air. Height stays 1.8 m for every body.
+  /// </summary>
+  public static float BodyRadius(Faction faction,string characterId) {
+   if(faction!=Faction.Animal)return .38f;
+   switch(characterId){case "animal-bear_grizzly":return .5f;case "animal-boar":return .46f;case "animal-wolf":return .42f;case "animal-fox":return .34f;case "animal-rabbit_brown":return .3f;case "animal-penguin":return .36f;default:return .38f;}
+  }
+  /// <summary>How fast a body turns toward where it moves (degrees per second): heavy animals swing round, light ones snap.</summary>
+  public static float TurnDegrees(Faction faction,string characterId) {
+   if(faction!=Faction.Animal)return 480;
+   switch(characterId){case "animal-bear_grizzly":return 240;case "animal-boar":return 300;case "animal-penguin":return 320;case "animal-wolf":return 460;case "animal-fox":return 620;case "animal-rabbit_brown":return 660;default:return 480;}
   }
   public static MotionProfile Profile(PlaytestValues rules,PlayerState player) {
    var modifiers=AnimalBalance.For(rules,player);float start,stop;Weight(player,out start,out stop);
