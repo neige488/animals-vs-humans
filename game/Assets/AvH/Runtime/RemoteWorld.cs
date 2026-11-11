@@ -107,7 +107,7 @@ namespace AvH {
   public SettingsState ObserveActiveSettings()=>remoteVisuals==null?Session.ObserveSettings():new SettingsState{Current=remoteVisuals.CurrentRules.Copy(),Pending=remoteVisuals.HasPending?remoteVisuals.PendingRules.Copy():null,Version=remoteVisuals.SettingsVersion};
   public void ResetSession() {
    System.Array.Clear(fishMotors,0,fishMotors.Length);AutomaticStep=true;builtMap=-1;returns=TownReturns;props=null;remoteSnapshot=null;remoteVisuals=null;remoteMotion.Clear();LocalViewerSlot=-1;Session=null;remoteBubbles.Clear();remoteBursts.Clear();remoteShotDirections.Clear();remoteShotKinds.Clear();bubbles.Clear();bursts.Clear();System.Array.Clear(pushVelocity,0,pushVelocity.Length);
-   seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;ForgetAudio();System.Array.Clear(presentedBirths,0,presentedBirths.Length);ForgetPresentedEvents();
+   seenRemoteImpacts.Clear();recentRemoteImpacts.Clear();effects=null;ForgetAudio();System.Array.Clear(presentedBirths,0,presentedBirths.Length);ForgetPresentedEvents();ForgetAbilityViews();
    foreach(Transform child in transform)Destroy(child.gameObject);bodies.Clear();
    System.Array.Clear(inputs,0,inputs.Length);System.Array.Clear(vertical,0,vertical.Length);System.Array.Clear(motion,0,motion.Length);
   }

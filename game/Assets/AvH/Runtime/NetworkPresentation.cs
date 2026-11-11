@@ -62,7 +62,7 @@ namespace AvH {
    LastPumpMilliseconds=pumpWatch.Elapsed.TotalMilliseconds;ReportTiming();
    if(client.Status==ConnectionStatus.Interrupted||client.Status==ConnectionStatus.Failed){if(world.Session!=null)world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
   }
-  public void SubmitInput(PlayerInput input){if(!CanPlay)return;if(!IsClient){input.RoundId=world.Observe().Round;client.QueueInput(0,input);world.SubmitInput(0,input);return;}input.RoundId=client.Snapshot.Round;input.Sequence=++inputSequence;client.SubmitInput(new NetworkInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,RoundId=input.RoundId,Sequence=input.Sequence});}
+  public void SubmitInput(PlayerInput input){if(!CanPlay)return;if(!IsClient){input.RoundId=world.Observe().Round;client.QueueInput(0,input);world.SubmitInput(0,input);return;}input.RoundId=client.Snapshot.Round;input.Sequence=++inputSequence;client.SubmitInput(new NetworkInput{Right=input.Right,Forward=input.Forward,Yaw=input.Yaw,Pitch=input.Pitch,Jump=input.Jump,Attack=input.Attack,Reload=input.Reload,Ability=input.Ability,RoundId=input.RoundId,Sequence=input.Sequence});}
   public void Leave(){host?.Dispose();host=null;client.Dispose();clientStarted=false;inputSequence=0;lastAppliedState=null;lastAppliedVisual=null;world.ResetSession();Cursor.lockState=CursorLockMode.None;Cursor.visible=true;}
   public void DrawStart(string nickname,GUIStyle label,float centerY=-1,System.Action<Rect> displayRows=null){
    var w=Screen.width;var h=Screen.height;float c=centerY<0?h/2:centerY;

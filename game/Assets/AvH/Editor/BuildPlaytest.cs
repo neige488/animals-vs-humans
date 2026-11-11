@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Xml;
 using UnityEditor;
@@ -17,7 +18,17 @@ namespace AvH.Editor {
    if(ConfigureOwnedAssets.VillageNeedsRebuild()||ConfigureOwnedAssets.CrossingNeedsRebuild())ConfigureOwnedAssets.Configure();
    var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions {scenes=new[]{"Assets/Scenes/SampleScene.unity"},locationPathName=path,target=target,options=BuildOptions.Development});
    if(report.summary.result!=BuildResult.Succeeded) throw new InvalidOperationException("빌드 실패: "+report.summary.result);
-   if(target==BuildTarget.StandaloneOSX)ConfigureMacPrivacy(path);
+   if(target==BuildTarget.StandaloneOSX){ConfigureMacPrivacy(path);SignMac(path);}
+  }
+  // Editing Info.plist breaks Unity's ad-hoc signature, and macOS then calls a downloaded app damaged. Sign again and check it.
+  static void SignMac(string appPath) {
+   Codesign("--force","--deep","--sign","-",appPath);
+   Codesign("--verify","--deep","--strict",appPath);
+  }
+  static void Codesign(params string[] args) {
+   var start=new ProcessStartInfo("/usr/bin/codesign",string.Join(" ",Array.ConvertAll(args,a=>"\""+a.Replace("\"","\\\"")+"\""))){UseShellExecute=false,RedirectStandardError=true,RedirectStandardOutput=true};
+   using var p=Process.Start(start);string err=p.StandardError.ReadToEnd();p.StandardOutput.ReadToEnd();p.WaitForExit();
+   if(p.ExitCode!=0)throw new InvalidOperationException("macOS 앱 서명 실패: "+err.Trim());
   }
   static void ConfigureMacPrivacy(string appPath) {
    var path=Path.Combine(appPath,"Contents/Info.plist");

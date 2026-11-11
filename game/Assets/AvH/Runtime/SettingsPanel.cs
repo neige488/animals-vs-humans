@@ -101,6 +101,7 @@ namespace AvH {
    if(changed){session.UpdateSettingsEdit(0,values);bool applied=session.ApplySettingsNow(0,false);applyError=applied?null:"적용되지 않았습니다. 값의 범위를 확인하거나 기본값으로 복원하세요.";}
 
    GUILayout.Space(8);GUILayout.Label(tab==3?"속도: 즉시 · 점프: 다음 점프부터\n밀림: 다음 피격부터 · 공통값 × 종별 배율":tab==1?"속도·관성: 즉시 · 점프: 다음 점프부터\n관성 0이면 즉시 최고속·즉시 정지":tab==4?"예비동작: 다음 공격부터 · 정지·경직: 다음 명중부터\n모두 0이면 클릭 즉시 판정·정지 없음·경직 없음":tab==5?"봇 조준: 즉시 적용\n둘 다 0이면 기존 봇처럼 즉시 정조준":"최초 동물 수·유예: 다음 탄생부터\n버블 속성: 새 발사부터 · 시간: 경과 유지",muted);
+   {string note=GameMaps.BalanceNote(GameMaps.Clamp(values.Map));if(tab==0&&note.Length>0)GUILayout.Label(note,muted);}
    GUILayout.Label(applyError??"변경은 이번 실행에 적용됩니다.",muted,GUILayout.Height(32));
    GUILayout.BeginHorizontal();
    if(GUILayout.Button("전체 기본값",GUILayout.Height(28))){session.BeginSettingsEdit(0);session.RestoreSettingsDefaults(0);session.ApplySettingsNow(0,false);applyError=null;}

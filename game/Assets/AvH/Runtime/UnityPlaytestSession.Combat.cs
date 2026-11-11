@@ -67,13 +67,15 @@ namespace AvH {
    for(int slot=0;slot<bodies.Count;slot++) {
     var input=inputs[slot];if(input.RoundId!=beforeCombat.Round)continue;
     if(input.Reload)Session.TryReload(slot,input.RoundId);
+    Session.RecordAim(slot,input.Yaw,input.Pitch);
+    if(input.Ability){var user=beforeCombat.Players[slot];if(Session.TryUseAbility(slot,input.RoundId,input.Yaw,input.Pitch))AbilityUsed(slot,user.Ability,input.Yaw);}
     if(input.Attack) {
      var state=Session.Observe();
      if(state.Players[slot].Faction==Faction.Human){var tool=state.Players[slot].Tool;if(Session.TryFire(slot,input.RoundId))UseTool(slot,input,tool,beforeCombat);}
      // A zero-windup swing is judged here, in slot order, exactly like the original click-frame rule.
      else if(Session.TryStartAttack(slot,input.RoundId)&&Session.AttackDue(slot))Melee(slot,beforeCombat.Round);
     }
-    inputs[slot].Reload=false;
+    inputs[slot].Reload=false;inputs[slot].Ability=false;
    }
    // Tells that reached their strike moment during this step's Advance are judged now (already-judged swings are no longer due).
    for(int slot=0;slot<bodies.Count;slot++)if(Session.AttackDue(slot))Melee(slot,beforeCombat.Round);
@@ -131,6 +133,17 @@ namespace AvH {
   internal static readonly Color MuzzlePuff=new Color(1,.96f,.86f,.75f),ImpactChips=new Color(.86f,.7f,.48f,.95f);
   /// <summary>Where a shot lands: a few cork-coloured chips, the knock and the cork pinging back. Host and remote alike.</summary>
   void CorkImpact(Vector3 at,Vector3 direction,ToolKind kind=ToolKind.Cork){if(kind==ToolKind.Disc){Effects.Emit(at,DiscChips,8,1.6f);Audio.Play("disc-bounce",at,1,.8f);return;}Effects.Emit(at,ImpactChips,8,1.6f);Effects.Ricochet(at,direction);Audio.Play("pop",at);}
+  /// <summary>What an ability does to the physical world beyond the rules: a headbutt or a slam also sends light props flying.</summary>
+  void AbilityUsed(int slot,AbilityKind kind,float yaw) {
+   if(props==null||kind!=AbilityKind.Headbutt&&kind!=AbilityKind.Slam)return;
+   var origin=bodies[slot].transform.position;var forward=Quaternion.Euler(0,yaw,0)*Vector3.forward;
+   float reach=kind==AbilityKind.Slam?Abilities.SlamRadius:Abilities.HeadbuttRange;
+   foreach(var prop in props.Observe()) {
+    var offset=prop.Position-origin;offset.y=0;if(offset.magnitude>reach)continue;
+    if(kind==AbilityKind.Headbutt&&offset.magnitude>.6f&&Vector3.Dot(forward,offset.normalized)<.5f)continue;
+    props.Push(prop.Index,(offset.sqrMagnitude<.01f?forward:offset.normalized)*9,slot);
+   }
+  }
   void Melee(int slot,int round) {
    var input=inputs[slot];float yaw=input.RoundId==round?input.Yaw:bodies[slot].transform.eulerAngles.y;
    var direction=Quaternion.Euler(0,yaw,0)*Vector3.forward;

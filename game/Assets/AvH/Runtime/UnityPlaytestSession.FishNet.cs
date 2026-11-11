@@ -14,11 +14,11 @@ namespace AvH {
   internal void SetFishMotor(int slot,FishPredictedMotor motor){fishMotors[slot]=motor;bodies[slot].enabled=true;FishGraphicalRoot(slot);}
   internal void ClearFishMotor(int slot){if(slot>=0&&slot<12){fishMotors[slot]=null;var root=slot<bodies.Count&&bodies[slot]!=null?bodies[slot].transform.Find("Predicted presentation"):null;if(root!=null){root.localPosition=Vector3.zero;root.localRotation=Quaternion.identity;}}}
   public Transform PlayerBodyTransform(int slot)=>bodies[slot].transform;
-  internal void ApplyFishCombatInput(int slot,FishMoveData input){inputs[slot]=new PlayerInput{Yaw=input.Yaw,Pitch=Mathf.Clamp(input.Pitch,-80,80),Attack=input.Attack,Reload=input.Reload,RoundId=input.Round};}
+  internal void ApplyFishCombatInput(int slot,FishMoveData input){inputs[slot]=new PlayerInput{Yaw=input.Yaw,Pitch=Mathf.Clamp(input.Pitch,-80,80),Attack=input.Attack,Reload=input.Reload,Ability=input.Ability,RoundId=input.Round};}
   internal FishMotorState CaptureFishState(int slot){
    var p=Observe().Players[slot];var rules=ObserveActiveSettings().Current;var modifiers=AnimalBalance.For(rules,p);
    return new FishMotorState{Position=bodies[slot].transform.position,Rotation=bodies[slot].transform.rotation,Vertical=vertical[slot],Motion=motion[slot],Push=pushVelocity[slot],Grounded=bodies[slot].isGrounded,Airborne=airborne[slot],Round=Observe().Round,
-    Action=p.Action,ActionProgress=ActionProgress(p,rules),Profile=CharacterMotion.Profile(rules,p),JumpHeight=p.Faction==Faction.Human?rules.HumanJump:rules.AnimalJump*modifiers.Jump,Control=p.StunRemaining>0?CharacterMotion.StunnedControl:1,Frozen=CharacterMotion.Frozen(p)||Observe().Phase==RoundPhase.Results};
+    Action=p.Action,ActionProgress=ActionProgress(p,rules),Profile=CharacterMotion.Profile(rules,p),JumpHeight=CharacterMotion.JumpHeight(rules,p),Control=CharacterMotion.Control(p),Air=CharacterMotion.Air(p),Locked=CharacterMotion.Locked(p),LockYaw=p.AbilityYaw,Frozen=CharacterMotion.Frozen(p)||Observe().Phase==RoundPhase.Results};
   }
   internal void RestoreFishState(int slot,FishMotorState state){
    Warp(bodies[slot],state.Position);bodies[slot].transform.rotation=state.Rotation;vertical[slot]=state.Vertical;motion[slot]=state.Motion;pushVelocity[slot]=state.Push;
@@ -33,9 +33,9 @@ namespace AvH {
    if(input.Jump)state.JumpBuffer=CharacterMotion.JumpBufferSeconds;else state.JumpBuffer=Mathf.Max(0,state.JumpBuffer-dt);
    if(state.Grounded&&state.Vertical<0)state.Vertical=-2;
    state.Airborne=state.Grounded?0:state.Airborne+dt;
-   if(CharacterMotion.CanJump(state.Grounded,state.Airborne,state.Vertical,state.JumpBuffer)){state.Vertical=Mathf.Sqrt(44*state.JumpHeight);state.Grounded=false;state.JumpBuffer=0;state.Airborne=CharacterMotion.CoyoteSeconds;}
-   state.Vertical-=22*dt;
-   var direction=Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(Mathf.Clamp(input.Right,-1,1),0,Mathf.Clamp(input.Forward,-1,1)),1);
+   if(state.JumpHeight>0&&CharacterMotion.CanJump(state.Grounded,state.Airborne,state.Vertical,state.JumpBuffer)){state.Vertical=Mathf.Sqrt(44*state.JumpHeight);state.Grounded=false;state.JumpBuffer=0;state.Airborne=CharacterMotion.CoyoteSeconds;}
+   state.Vertical=CharacterMotion.Fall(state.Vertical,state.Air,dt);
+   var direction=state.Locked?Quaternion.Euler(0,state.LockYaw,0)*Vector3.forward:Quaternion.Euler(0,input.Yaw,0)*Vector3.ClampMagnitude(new Vector3(Mathf.Clamp(input.Right,-1,1),0,Mathf.Clamp(input.Forward,-1,1)),1);
    state.Motion=CharacterMotion.Next(state.Motion,new MotionIntent{DirectionX=direction.x*state.Control,DirectionZ=direction.z*state.Control,Grounded=state.Grounded},state.Profile,dt);
    bool wasGrounded=state.Grounded;float falling=state.Vertical;var before=body.transform.position;
    pushVelocity[slot]=state.Push;
@@ -49,7 +49,8 @@ namespace AvH {
    if(body.transform.position.y<FallLine&&(server||!GameMaps.FallTurnsAnimal(builtMap))){Warp(body,server?Restart(slot,body.transform.position):NearestReturn(body.transform.position));state.Vertical=0;state.Motion=default;state.Push=Vector3.zero;state.Grounded=false;}
    state.Position=body.transform.position;state.Rotation=body.transform.rotation;vertical[slot]=state.Vertical;motion[slot]=state.Motion;
    CharacterMotion.DecayKnockback(ref state.Push.x,ref state.Push.y,ref state.Push.z,state.Grounded,dt);pushVelocity[slot]=state.Push;
-   if(server){Session.RecordWorldPosition(slot,new WorldPosition(state.Position.x,state.Position.y,state.Position.z));if(!wasGrounded&&state.Grounded&&falling< -PlaytestSession.HardLandingSpeed)Session.RecordLanding(slot,-falling);}
+   if(server){Session.RecordWorldPosition(slot,new WorldPosition(state.Position.x,state.Position.y,state.Position.z));if(!wasGrounded&&state.Grounded&&falling< -PlaytestSession.HardLandingSpeed)Session.RecordLanding(slot,-falling);if(!wasGrounded&&state.Grounded)Session.RecordTouchdown(slot);
+    if(state.Locked){var run=state.Position-before;run.y=0;if(Crashed(Session.Observe().Players[slot],new Vector2(state.Motion.VelocityX,state.Motion.VelocityZ).magnitude,run.magnitude/dt))Session.RecordCrash(slot);}}
    return state;
   }
  }

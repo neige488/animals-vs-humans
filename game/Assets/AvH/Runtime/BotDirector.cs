@@ -17,27 +17,75 @@ namespace AvH {
     // Grid nodes of the last route (teammates plan round them) and the side this animal closes in from.
     public List<int> Ids=new List<int>();public int ApproachPrey=-1;public Vector3 ApproachDir;
    // Personality: idle shuffle at a shelter, boar charge, rabbit hop.
-   public Vector3 Fidget;public float FidgetTime,Charge=-3,Hop;public Vector3 ChargeDir;}
+   public Vector3 Fidget;public float FidgetTime,Charge=-3,Hop,AbilityWait;public Vector3 ChargeDir;}
   readonly Brain[] brains=Enumerable.Range(0,12).Select(i=>new Brain{Shelter=i%3,Aim=new BotAim(i+1)}).ToArray();
   double clock;
   readonly VillageRoutes routes=new VillageRoutes();
   
+  const float SmokePenalty=40,DecoyRange=12;
+  static bool Disguised(PlayerState p)=>p.Ability==AbilityKind.Disguise&&p.AbilityActiveRemaining>0;
+  /// <summary>When a bot presses Q: each ability at the moment a player would reach for it.</summary>
+  static bool WantsAbility(SessionState state,PlayerState me,PlayerState target,float distance,bool visible,bool fleeing,Vector3 position) {
+   float rise=target.Position.Y-me.Position.Y;
+   int near(float radius)=>state.Players.Count(p=>p.Faction!=me.Faction&&Vector3.Distance(V(p.Position),position)<=radius);
+   switch(me.Ability) {
+    // Animals
+    case AbilityKind.Disguise:return me.StunRemaining>0&&distance>5;
+    case AbilityKind.DoubleJump:case AbilityKind.Flap:return distance<7&&rise>1.1f;
+    case AbilityKind.CatSpring:return distance<9&&rise>1.1f;
+    case AbilityKind.BellySlide:return visible&&distance>5&&distance<16;
+    case AbilityKind.Acorn:return visible&&distance<Abilities.AcornRange-1&&target.Slot>=0;
+    case AbilityKind.Howl:return !visible&&distance>10;
+    case AbilityKind.Charge:return visible&&distance>3&&distance<9&&Mathf.Abs(rise)<1;
+    case AbilityKind.Stampede:return visible&&distance>3&&distance<13&&Mathf.Abs(rise)<1;
+    case AbilityKind.Leap:return visible&&distance>5&&distance<10;
+    case AbilityKind.Headbutt:return visible&&distance<2.6f;
+    case AbilityKind.Bite:return visible&&distance<6;
+    case AbilityKind.Roar:return distance<Abilities.RoarRadius-.8f;
+    case AbilityKind.Dive:return visible&&distance>4&&distance<9;
+    case AbilityKind.Slam:return distance<Abilities.SlamRadius-1.2f;
+    case AbilityKind.Hunt:return visible&&distance<8;
+    // Humans
+    case AbilityKind.Kickboard:return fleeing&&distance<7;
+    case AbilityKind.Hook:return fleeing&&distance<6;
+    case AbilityKind.Umbrella:return distance<2.8f||rise<-2&&distance<6;
+    case AbilityKind.Helmet:return distance<8;
+    case AbilityKind.Banana:return distance<6;
+    case AbilityKind.Scarecrow:return distance>5&&distance<14;
+    case AbilityKind.SpringPad:return distance<4.5f;
+    case AbilityKind.Whistle:return near(Abilities.WhistleRadius-.5f)>0;
+    case AbilityKind.Lasso:return visible&&distance<Mathf.Min(7,Abilities.LassoRange-1);
+    case AbilityKind.BigBubble:return visible&&distance<Mathf.Min(7,Abilities.BubbleRange-1);
+    case AbilityKind.IceRay:return visible&&distance<Mathf.Min(7,Abilities.IceRange-1);
+    case AbilityKind.WaterCannon:return visible&&distance<Abilities.CannonRange-1;
+    case AbilityKind.Smoke:return distance<7;
+    case AbilityKind.ZeroG:return distance<Abilities.ZeroGRadius-.8f;
+    case AbilityKind.Balloon:return distance<4.5f;
+    case AbilityKind.Vaccine:return distance<3.2f;
+    default:return false;
+   }
+  }
   public void Step(UnityPlaytestSession game,float seconds) {
    var Shelters=game.ShelterPoints;var state=game.Observe();var rules=game.Session.ObserveSettings().Current;routes.BeginStep(seconds);clock+=seconds;
    // Animals share out the humans: each takes the nearest one that is not already well covered, so a pack
    // spreads over several targets instead of all piling onto the closest body.
    var hunted=new Dictionary<int,List<int>>();var prey=new Dictionary<int,PlayerState>();
-   foreach(var a in state.Players.Where(p=>p.IsBot&&p.Faction==Faction.Animal)) {
+   foreach(var a in state.Players.Where(p=>(p.IsBot||game.BotsDriveEveryone)&&p.Faction==Faction.Animal)) {
     var at=V(a.Position);PlayerState best=null;float score=float.MaxValue;
-    foreach(var h in state.Players.Where(p=>p.Faction==Faction.Human)){float s=Vector3.Distance(at,V(h.Position))+SpreadPenalty*(hunted.TryGetValue(h.Slot,out var l)?l.Count:0);if(s<score){score=s;best=h;}}
-    if(best==null)continue;prey[a.Slot]=best;if(!hunted.TryGetValue(best.Slot,out var list))hunted[best.Slot]=list=new List<int>();list.Add(a.Slot);
+    // A human inside smoke is hard to pick out: the animal prefers anyone it can see.
+    foreach(var h in state.Players.Where(p=>p.Faction==Faction.Human)){float s=Vector3.Distance(at,V(h.Position))+SpreadPenalty*(hunted.TryGetValue(h.Slot,out var l)?l.Count:0)+(PlaytestSession.Smoked(state,h,a)?SmokePenalty:0);if(s<score){score=s;best=h;}}
+    if(best==null)continue;
+    // A scarecrow nearer than the real prey fools the animal: it runs over and swings at straw.
+    var decoy=state.Gadgets?.Where(g=>g.Kind==AbilityKind.Scarecrow&&Vector3.Distance(at,V(g.Position))<Mathf.Min(DecoyRange,Vector3.Distance(at,V(best.Position)))).OrderBy(g=>Vector3.Distance(at,V(g.Position))).FirstOrDefault();
+    if(decoy!=null){prey[a.Slot]=new PlayerState{Slot=-1-decoy.Id,Faction=Faction.Human,Position=decoy.Position};continue;}
+    prey[a.Slot]=best;if(!hunted.TryGetValue(best.Slot,out var list))hunted[best.Slot]=list=new List<int>();list.Add(a.Slot);
    }
    foreach(var player in state.Players) {
-    if(!player.IsBot)continue;
+    if(!player.IsBot&&!game.BotsDriveEveryone)continue;
     var brain=brains[player.Slot];var position=V(player.Position);
     if(brain.Round!=state.Round||brain.Faction!=player.Faction) {brain.Round=state.Round;brain.Faction=player.Faction;brain.Replan=0;brain.Path.Clear();brain.Stuck=0;brain.Shelter=player.Slot%3;brain.Flee=0;brain.ProgressTime=0;brain.LastDistance=float.MaxValue;brain.Aim.Reset();brain.AvoidTime=0;}
     if(state.Phase==RoundPhase.Results){game.SubmitInput(player.Slot,new PlayerInput{RoundId=state.Round});continue;}
-    var target=player.Faction==Faction.Animal&&prey.TryGetValue(player.Slot,out var chosen)?chosen:state.Players.Where(p=>p.Faction!=player.Faction).OrderBy(p=>(V(p.Position)-position).sqrMagnitude).FirstOrDefault();
+    var target=player.Faction==Faction.Animal&&prey.TryGetValue(player.Slot,out var chosen)?chosen:state.Players.Where(p=>p.Faction!=player.Faction&&!Disguised(p)).OrderBy(p=>(V(p.Position)-position).sqrMagnitude).FirstOrDefault();
     float distance=target==null?float.MaxValue:Vector3.Distance(position,V(target.Position));
     brain.Flee-=seconds;brain.Replan-=seconds;brain.AvoidTime-=seconds;
     Vector3 goal;
@@ -129,6 +177,7 @@ namespace AvH {
       brain.Charge-=seconds;brain.Hop-=seconds;
       switch(player.CharacterId) {
        case "animal-boar":
+        if(player.Ability==AbilityKind.Charge&&rules.Abilities)break;
         // A boar lowers its head and charges in a straight line, often past where the human was.
         if(brain.Charge<=-2.5f&&distance>2.5f&&distance<9){brain.Charge=1.1f;brain.ChargeDir=toward.normalized;}
         if(brain.Charge>0)move=brain.ChargeDir;
@@ -156,18 +205,33 @@ namespace AvH {
     bool scanning=player.Faction==Faction.Human&&(target==null||distance>Tools.Range(player.Tool,rules)+6)&&Flat(goal-position).magnitude<2.5f;
     bool visible=target!=null;
     // Linecast normally ends at the target controller; accept that nearest hit.
-    if(target!=null && Physics.Linecast(position+Vector3.up*.9f,V(target.Position)+Vector3.up*.9f,out var sight,Layers.World,QueryTriggerInteraction.Ignore)) visible=sight.collider.transform==game.PlayerTransform(target.Slot);
+    if(target!=null && target.Slot>=0 && Physics.Linecast(position+Vector3.up*.9f,V(target.Position)+Vector3.up*.9f,out var sight,Layers.World,QueryTriggerInteraction.Ignore)) visible=sight.collider.transform==game.PlayerTransform(target.Slot);
     // Human-like aim: lags the seen heading and wanders slightly; zero settings return the exact aim above.
     bool canFire=visible;
     if(target!=null){var aimed=brain.Aim.Step(clock,target.Slot,visible,yaw,pitch,rules.BotAimDelaySeconds,rules.BotAimErrorDegrees);yaw=aimed.Yaw;pitch=aimed.Pitch;canFire=aimed.CanFire;}
     // Nothing in reach: the human looks around the approaches instead of staring at one spot.
     if(scanning){yaw+=Mathf.Sin((float)clock*.45f+player.Slot*1.3f)*65;pitch=-4;canFire=false;}
+    // A shaken human (acorn, slam) cannot hold their aim.
+    if(player.ShakeRemaining>0){yaw+=Mathf.Sin((float)clock*23+player.Slot)*14;pitch+=Mathf.Cos((float)clock*19)*8;}
+    // Smoke: the animal knows roughly where, not exactly; it weaves about and cannot strike until it is right there.
+    if(player.Faction==Faction.Animal&&target!=null&&target.Slot>=0&&PlaytestSession.Smoked(state,target,player)){canFire=false;move=Quaternion.Euler(0,Mathf.Sin((float)clock*1.7f+player.Slot*2)*80,0)*move*.7f;}
+    // A fox in its box holds still; that is the whole trick.
+    if(Disguised(player)){move=Vector3.zero;canFire=false;hop=false;}
+    bool ability=false;brain.AbilityWait-=seconds;
+    if(rules.Abilities&&state.Phase==RoundPhase.Chase&&target!=null&&player.Ability!=AbilityKind.None&&player.AbilityCooldownRemaining<=0&&player.AbilityActiveRemaining<=0&&brain.AbilityWait<=0) {
+     var away=move.sqrMagnitude>.04f?move.normalized:-Flat(V(target.Position)-position).normalized;
+     ability=WantsAbility(state,player,target,distance,visible,brain.Flee>0,position);
+     // People react a moment late, and not on the same frame as each other.
+     if(ability){brain.AbilityWait=.6f+Hash(player.Slot+3,clock)*.8f;
+      // A kickboard or a hook goes where the body is heading, not where the eyes are (on the animal).
+      if(player.Ability==AbilityKind.Kickboard||player.Ability==AbilityKind.Hook){yaw=Mathf.Atan2(away.x,away.z)*Mathf.Rad2Deg;pitch=-25;}}
+    }
     // Movement input is relative to the submitted aim, so aim lag never bends the path.
     var local=Quaternion.Euler(0,-yaw,0)*move;
     game.SubmitInput(player.Slot,new PlayerInput {Right=local.x,Forward=local.z,Yaw=yaw,
      Pitch=pitch,
      Jump=brain.Stuck>1.5f||hop,Attack=target!=null&&canFire&&distance<(player.Faction==Faction.Human?Tools.Range(player.Tool,rules):CombatRules.MeleeDistance-.15f),
-     Reload=player.Faction==Faction.Human&&Tools.UsesAmmo(player.Tool)&&player.Ammo==0,RoundId=state.Round});
+     Reload=player.Faction==Faction.Human&&Tools.UsesAmmo(player.Tool)&&player.Ammo==0,Ability=ability,RoundId=state.Round});
    }
   }
   static float FloorBelow(Vector3 position) {

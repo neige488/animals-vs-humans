@@ -153,6 +153,17 @@ namespace AvH {
     case "animal-fox":return new Species{Step="step-paw",StepPitch=1.2f,StepVolume=.55f,Growl="growl-wolf",GrowlPitch=1.45f,SnarlPitch=1.4f};
     case "animal-rabbit_brown":return new Species{Step="step-paw",StepPitch=1.45f,StepVolume=.45f,Growl="growl-rabbit",GrowlPitch=1.3f,SnarlPitch=1.7f};
     case "animal-penguin":return new Species{Step="step-paw",StepPitch=1.3f,StepVolume=.5f,Growl="growl-penguin",GrowlPitch=1,SnarlPitch=1.6f};
+    // The ten later species borrow the nearest owned voice at their own pitch: small is high, heavy is low.
+    case "animal-cat_orange":return new Species{Step="step-paw",StepPitch=1.4f,StepVolume=.4f,Growl="growl-rabbit",GrowlPitch=1.05f,SnarlPitch=1.6f};
+    case "animal-hen":return new Species{Step="step-paw",StepPitch=1.6f,StepVolume=.4f,Growl="growl-penguin",GrowlPitch=1.5f,SnarlPitch=1.8f};
+    case "animal-squirrel":return new Species{Step="step-paw",StepPitch=1.7f,StepVolume=.35f,Growl="growl-rabbit",GrowlPitch=1.6f,SnarlPitch=1.9f};
+    case "animal-deer":return new Species{Step="step-paw",StepPitch=1.05f,StepVolume=.6f,Growl="growl-rabbit",GrowlPitch=.8f,SnarlPitch=1.2f};
+    case "animal-goat":return new Species{Step="step-paw",StepPitch=1.1f,StepVolume=.65f,Growl="growl-penguin",GrowlPitch=.8f,SnarlPitch=1.3f};
+    case "animal-crocodile":return new Species{Step="step-paw",StepPitch=.75f,StepVolume=.8f,Growl="growl-bear",GrowlPitch=.8f,SnarlPitch=.8f};
+    case "animal-eagle":return new Species{Step="step-paw",StepPitch=1.3f,StepVolume=.4f,Growl="growl-penguin",GrowlPitch=1.25f,SnarlPitch=1.5f};
+    case "animal-gorilla_silver":return new Species{Step="step-paw",StepPitch=.65f,StepVolume=1,Growl="growl-bear",GrowlPitch=1.15f,SnarlPitch=.9f};
+    case "animal-rhino":return new Species{Step="step-paw",StepPitch=.55f,StepVolume=1,Growl="growl-bear",GrowlPitch=.7f,SnarlPitch=.75f};
+    case "animal-tiger":return new Species{Step="step-paw",StepPitch=.9f,StepVolume=.6f,Growl="growl-bear",GrowlPitch=1.25f,SnarlPitch=1};
     default:return new Species{Step="step-paw",StepPitch=1,StepVolume=.7f,Growl="growl-wolf",GrowlPitch=1.2f,SnarlPitch=1.2f};
    }
   }

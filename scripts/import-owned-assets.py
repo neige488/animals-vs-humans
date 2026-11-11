@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Import selected owned prefab dependency closure into ignored Assets/ThirdParty only."""
 import argparse, pathlib, tarfile, re, subprocess
-parser=argparse.ArgumentParser();parser.add_argument('packages',nargs='+');parser.add_argument('--extra-prefab',action='append',default=[]);args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('packages',nargs='+');parser.add_argument('--extra-prefab',action='append',default=[]);parser.add_argument('--keep-existing',action='store_true',help='keep files Unity already re-serialized instead of refusing');args=parser.parse_args()
 root=pathlib.Path(__file__).resolve().parents[1];dest=root/'game/Assets/ThirdParty'
 if subprocess.run(['git','check-ignore','-q',str(dest/'probe')],cwd=root).returncode!=0:
  raise RuntimeError('ThirdParty must be ignored')
@@ -18,8 +18,10 @@ seeds=[g for g,(_,_,p,_) in records.items() if str(p).endswith(('/Fox.prefab','/
 town_prefabs=['SM_Prop_Pot_01.prefab','SM_Item_Lantern_01.prefab','SM_Env_Bush_02.prefab','SM_Env_Grass_01.prefab','SM_Env_Rock_03.prefab','SM_Env_Rock_07.prefab']
 # Importing the Adventure package always includes the village generator's required props.
 has_adventure=any(p.name=='SM_Bld_Village_01.prefab' for _,_,p,_ in records.values())
-human_prefabs=['woman_casual.prefab','man_fire.prefab','woman_police.prefab','man_construction_worker.prefab','woman_explorer.prefab']
-animal_prefabs=['Wolf.prefab','Bear_Grizzly.prefab','Boar.prefab','Rabbit_Brown.prefab','Penguin.prefab']
+human_prefabs=['woman_casual.prefab','man_fire.prefab','woman_police.prefab','man_construction_worker.prefab','woman_explorer.prefab',
+ 'man_chef.prefab','man_farm.prefab','woman_mechanic.prefab','man_cowboy.prefab','woman_soldier.prefab','man_ninja.prefab','woman_scientist.prefab','man_astronaut.prefab','woman_doctor.prefab','man_clown.prefab']
+animal_prefabs=['Wolf.prefab','Bear_Grizzly.prefab','Boar.prefab','Rabbit_Brown.prefab','Penguin.prefab',
+ 'Cat_Orange.prefab','Hen.prefab','Squirrel.prefab','Deer.prefab','Goat.prefab','Crocodile.prefab','Eagle.prefab','Gorilla_Silver.prefab','Rhino.prefab','Tiger.prefab']
 required=town_prefabs if has_adventure else []
 if any(p.name=='man_casual.prefab' for _,_,p,_ in records.values()):required+=human_prefabs
 if any(p.name=='Fox.prefab' for _,_,p,_ in records.values()):required+=animal_prefabs
@@ -45,6 +47,8 @@ while pending:
   # Binary models may reference external materials in their metadata.
   pending.extend(x.decode().lower() for x in re.findall(rb'guid: ([0-9a-fA-F]{32})',data))
   output=pathlib.Path(str(target)+suffix)
-  if output.exists() and output.read_bytes()!=data:raise ValueError('Refusing differing existing asset: '+str(output))
+  if output.exists() and output.read_bytes()!=data:
+   if args.keep_existing:continue
+   raise ValueError('Refusing differing existing asset: '+str(output))
   output.write_bytes(data);files+=1;total+=len(data)
 print(f'Imported {files} files ({total//1024//1024} MiB), {len(seen)} dependency GUIDs, only inside ignored ThirdParty')

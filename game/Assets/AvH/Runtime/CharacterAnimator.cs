@@ -55,6 +55,13 @@ namespace AvH {
     case "animal-boar":return new Character(2,1.5f,8,4,0,1.2f,.8f);
     case "animal-rabbit_brown":return new Character(2.4f,1.5f,3,6,0,.9f,.22f);
     case "animal-penguin":return new Character(1,1,2,3,7,1.1f,.5f);
+    case "animal-cat_orange":case "animal-squirrel":return new Character(2,1.5f,4,8,0,.9f,.35f);
+    case "animal-hen":return new Character(1.6f,1.4f,2,3,5,.9f,.4f);
+    case "animal-deer":case "animal-goat":return new Character(1,1,4,6,0,1,.5f);
+    case "animal-crocodile":return new Character(1,1.2f,2,3,4,1.3f,.9f);
+    case "animal-eagle":return new Character(1,1,3,8,3,.9f,.5f);
+    case "animal-gorilla_silver":case "animal-rhino":return new Character(1,1.3f,3,3,0,1.8f,1);
+    case "animal-tiger":return new Character(1,1.2f,6,8,0,1.1f,.6f);
     default:return new Character(1,1,4,6,0,1,.6f);
    }
   }

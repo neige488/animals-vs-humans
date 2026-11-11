@@ -16,11 +16,11 @@ namespace AvH {
   readonly HashSet<int> dueAttacks=new HashSet<int>();
   int nextEventId;
   void ResetCombat() {
-   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();propKnocks.Clear();lastShove.Clear();ClearActions();
+   birthSecondsRemaining=0;birthBatchAge=double.MaxValue;events.Clear();propKnocks.Clear();lastShove.Clear();ClearActions();ResetAbilities();
    foreach(var p in players){p.Ammo=settings.Current.Magazine;p.ReloadRemaining=0;p.AttackGraceRemaining=0;p.FireCooldownRemaining=0;}
   }
   // Round end cuts every tell, freeze and stun in progress.
-  void ClearActions(){dueAttacks.Clear();toolHits.Clear();foreach(var p in players){p.ToolUseRemaining=0;p.AttackWindupRemaining=0;p.SwingRemaining=0;p.HitStopRemaining=0;p.StunRemaining=0;}}
+  void ClearActions(){dueAttacks.Clear();toolHits.Clear();foreach(var p in players){p.ToolUseRemaining=0;p.AttackWindupRemaining=0;p.SwingRemaining=0;p.HitStopRemaining=0;p.StunRemaining=0;ClearEffects(p);}}
   static ActionPhase ActionOf(PlayerState p)=>p.HitStopRemaining>0?ActionPhase.HitStop:p.StunRemaining>0?ActionPhase.Stunned:p.AttackWindupRemaining>0?ActionPhase.Windup:p.SwingRemaining>0?ActionPhase.Swing:ActionPhase.None;
   void Publish(FeelEventKind kind,int actor,int target,WorldPosition position,float strength=1) {
    events.Add(new FeelEvent{Id=++nextEventId,Round=round,Kind=kind,Actor=actor,Target=target,Position=position,HostTime=hostTime,Strength=strength});
@@ -39,12 +39,13 @@ namespace AvH {
     if(p.AttackWindupRemaining>0){p.AttackWindupRemaining=Math.Max(0,p.AttackWindupRemaining-(elapsed-frozen));if(p.AttackWindupRemaining==0)dueAttacks.Add(p.Slot);}
     if(p.ReloadRemaining>0){p.ReloadRemaining=Math.Max(0,p.ReloadRemaining-elapsed);if(p.ReloadRemaining==0)p.Ammo=settings.Current.Magazine;}
    }
+   AdvanceAbilities(elapsed);
   }
   bool CanAct(int slot,int roundId)=>slot>=0 && slot<players.Length && roundId==round && phase!=RoundPhase.Results;
   public bool TryFire(int slot,int roundId) {
    if(!CanAct(slot,roundId))return false;var p=players[slot];
    bool ammo=Tools.UsesAmmo(p.Tool);
-   if(p.Faction!=Faction.Human || ammo&&p.Ammo<=0 || p.ReloadRemaining>0 || p.FireCooldownRemaining>0)return false;
+   if(p.Faction!=Faction.Human || ammo&&p.Ammo<=0 || p.ReloadRemaining>0 || p.FireCooldownRemaining>0 || Active(p,AbilityKind.Balloon))return false;
    if(ammo)p.Ammo--;p.FireCooldownRemaining=settings.Current.FireInterval*Tools.IntervalScale(p.Tool);p.ToolUseRemaining=Tools.ActionSeconds(p.Tool);return true;
   }
   public bool TryReload(int slot,int roundId) {
@@ -65,6 +66,7 @@ namespace AvH {
   public bool RecordBubbleHit(int victimSlot,int ownerSlot) {
    if(victimSlot<0||victimSlot>=players.Length||phase!=RoundPhase.Chase)return false;var p=players[victimSlot];
    if(p.Faction!=Faction.Animal)return false;
+   if(Active(p,AbilityKind.Stampede))return false;
    p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
    Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
@@ -89,6 +91,7 @@ namespace AvH {
    if(tool==ToolKind.Blower){double last;var key=ownerSlot*64+victimSlot;if(toolHits.TryGetValue(key,out last)&&hostTime-last<GustEventSeconds)return false;toolHits[key]=hostTime;}
    if(p.Faction==Faction.Human){Publish(FeelEventKind.Shoved,ownerSlot,victimSlot,p.Position);return true;}
    if(phase!=RoundPhase.Chase)return false;
+   if(Active(p,AbilityKind.Stampede))return false;
    if(Tools.Stuns(tool))p.StunRemaining=Math.Max(p.StunRemaining,settings.Current.HitStunSeconds);
    Publish(FeelEventKind.Stagger,ownerSlot,victimSlot,p.Position);return true;
   }
@@ -109,7 +112,7 @@ namespace AvH {
     int by=lastShove.TryGetValue(slot,out var s)&&hostTime-s.at<=FallCreditSeconds?s.by:-1;
     Publish(FeelEventKind.FellOff,by,slot,p.Position);
     p.Faction=Faction.Animal;p.AttackGraceRemaining=settings.Current.TransformAttackGrace;
-    AssignCharacter(p,animalRoster[nextAnimal++%animalRoster.Length]);p.ReloadRemaining=0;p.FireCooldownRemaining=0;p.StunRemaining=0;
+    AssignCharacter(p,NextAnimal());p.ReloadRemaining=0;p.FireCooldownRemaining=0;p.StunRemaining=0;
     PublishBirth(new[]{p});turned=true;
    }
    p.Position=phase==RoundPhase.Chase&&p.Faction==Faction.Animal&&GameMaps.AnimalsStartApart(map)?GameMaps.AnimalStart(map,slot%6):Spawn(slot);
@@ -132,7 +135,9 @@ namespace AvH {
   public const float HardLandingSpeed=4;
   /// <summary>Called only by the authoritative physics adapter when a body touches down hard.</summary>
   public bool RecordLanding(int slot,float impactSpeed) {
-   if(slot<0||slot>=players.Length||float.IsNaN(impactSpeed)||impactSpeed<=HardLandingSpeed)return false;
+   if(slot<0||slot>=players.Length||float.IsNaN(impactSpeed))return false;
+   LandAbility(players[slot]);
+   if(impactSpeed<=HardLandingSpeed)return false;
    Publish(FeelEventKind.Landing,slot,-1,players[slot].Position,Math.Min(1,(impactSpeed-HardLandingSpeed)/12f));return true;
   }
   /// <summary>
@@ -141,9 +146,11 @@ namespace AvH {
   /// </summary>
   public bool TryStartAttack(int slot,int roundId) {
    if(!CanAct(slot,roundId)||phase!=RoundPhase.Chase)return false;var p=players[slot];
-   if(p.Faction!=Faction.Animal||p.AttackGraceRemaining>0||p.FireCooldownRemaining>0||p.AttackWindupRemaining>0||p.HitStopRemaining>0)return false;
+   if(p.Faction!=Faction.Animal||p.AttackGraceRemaining>0||p.FireCooldownRemaining>0||p.AttackWindupRemaining>0||p.HitStopRemaining>0||Helpless(p))return false;
    if(dueAttacks.Contains(slot))return true;
-   double windup=settings.Current.AttackWindupSeconds;
+   if(Active(p,AbilityKind.Disguise))EndAbility(p);
+   // A tiger on the hunt strikes without a tell.
+   double windup=Active(p,AbilityKind.Hunt)?0:settings.Current.AttackWindupSeconds;
    if(windup<=0){dueAttacks.Add(slot);return true;}
    if(p.SwingRemaining>0)return false;
    p.AttackWindupRemaining=windup;Publish(FeelEventKind.AttackWindup,slot,-1,p.Position);return true;
@@ -164,14 +171,17 @@ namespace AvH {
    if(attacker.Faction!=Faction.Animal||victim.Faction!=Faction.Human||attacker.AttackGraceRemaining>0||attacker.FireCooldownRemaining>0||attacker.HitStopRemaining>0)return false;
    double x=attacker.Position.X-victim.Position.X,y=attacker.Position.Y-victim.Position.Y,z=attacker.Position.Z-victim.Position.Z;
    if(x*x+y*y+z*z>CombatRules.MeleeDistance*CombatRules.MeleeDistance)return false;
+   if(Helpless(attacker))return false;
    dueAttacks.Remove(attackerSlot);
    attacker.FireCooldownRemaining=.5;attacker.SwingRemaining=CombatRules.SwingSeconds;
+   if(BlockInfection(attacker,victim))return true;
    // Hit-stop freezes only the two characters in the hit; everyone else and the match clock keep running.
    attacker.HitStopRemaining=victim.HitStopRemaining=settings.Current.HitStopSeconds;
    victim.Faction=Faction.Animal;victim.AttackGraceRemaining=settings.Current.TransformAttackGrace;
-   AssignCharacter(victim,animalRoster[nextAnimal++%animalRoster.Length]);
+   AssignCharacter(victim,NextAnimal());
    victim.ReloadRemaining=0;victim.FireCooldownRemaining=0;PublishBirth(new[]{victim});
    Publish(FeelEventKind.AttackHit,attackerSlot,victimSlot,victim.Position);Publish(FeelEventKind.Transform,attackerSlot,victimSlot,victim.Position);
+   AfterBite(attacker,victim);
    if(players.All(p=>p.Faction==Faction.Animal)){phase=RoundPhase.Results;remaining=settings.Current.ResultSeconds;phaseStartedAt=hostTime;phaseDeadline=hostTime+remaining;winner=Faction.Animal;ClearActions();}
    return true;
   }

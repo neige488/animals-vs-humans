@@ -1,3 +1,4 @@
+using System;
 namespace AvH {
  /// <summary>
  /// Playable maps. The host picks one in the settings (<see cref="PlaytestValues.Map"/>); it takes effect
@@ -21,6 +22,24 @@ namespace AvH {
   public static WorldPosition AnimalStart(int map,int index) {
    float x=(index%6-2.5f)*3,row=index/6*1.5f;
    switch(map){case Sky:return new WorldPosition(x,1,38+row);case Snow:return new WorldPosition(x,1,-32.5f+row);case Ruins:return new WorldPosition(x,1,-30.5f+row);default:return new WorldPosition(x,1,-33.5f+row);}
+  }
+  /// <summary>
+  /// Per-map balance on top of the host's settings, measured in bot matches with abilities on (target: animals win 40-60%).
+  /// Sky islands end fast (a fall turns a human), so their chase is shorter; the crossing's three lanes and the ruins' long sight lines need a longer one;
+  /// the town's spread-out streets and rooftop need two more first animals. The settings panel and the clock show the result.
+  /// </summary>
+  /// <summary>Per-map balance switch. Test assemblies turn it off so rule tests see the host settings as they are.</summary>
+  public static bool PerMapBalance=true;
+  public static float ChaseScale(int map){if(!PerMapBalance)return 1;switch(map){case Sky:return .75f;case Crossing:case Ruins:return 1.2f;default:return 1;}}
+  public static int ExtraAnimals(int map)=>PerMapBalance&&map==Town?2:0;
+  /// <summary>Chase length on this map for the host's round time.</summary>
+  public static double ChaseSeconds(int map,double roundSeconds)=>Math.Round(roundSeconds*ChaseScale(map));
+  /// <summary>First animals on this map: the host's count plus the map's extra, leaving at least one human.</summary>
+  public static int FirstAnimals(int map,int initialAnimals,int players)=>Math.Max(1,Math.Min(players-1,initialAnimals+ExtraAnimals(map)));
+  /// <summary>One line for the settings panel: what this map changes, or empty.</summary>
+  public static string BalanceNote(int map) {
+   string note="";if(ChaseScale(map)!=1)note+=$"추격 시간 ×{ChaseScale(map):0.##}";if(ExtraAnimals(map)>0)note+=(note.Length>0?" · ":"")+$"최초 동물 +{ExtraAnimals(map)}";
+   return note.Length==0?"":$"{Name(map)} 맵 보정: {note}";
   }
   /// <summary>Round start position. Every map starts in an open ground-floor area: the warehouse south of the mezzanine, the crossing in its south plaza.</summary>
   public static WorldPosition Spawn(int map,int slot) {

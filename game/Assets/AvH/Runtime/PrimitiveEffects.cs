@@ -5,7 +5,7 @@ namespace AvH {
  // Presentation only: pooled, collider-free geometry never participates in combat or navigation.
  public sealed class PrimitiveEffects : MonoBehaviour {
   const int Capacity=256;
-  sealed class Particle {public Transform Transform;public Renderer Renderer;public Vector3 Velocity;public float Age,Life,Size,Gravity;public Color Color;public bool Ring;}
+  sealed class Particle {public Transform Transform;public Renderer Renderer;public Vector3 Velocity;public float Age,Life,Size,Gravity,Grow=1.25f;public Color Color;public bool Ring;}
   readonly List<Particle> active=new List<Particle>();
   readonly Stack<Particle> pool=new Stack<Particle>();
   Material material,film;Mesh ringMesh;MaterialPropertyBlock properties;
@@ -131,6 +131,18 @@ namespace AvH {
    var renderer=go.GetComponent<Renderer>();renderer.sharedMaterial=film;renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;
    go.AddComponent<BubbleMotion>().Radius=radius;return go;
   }
+  /// <summary>A ground ring that spreads out to a radius: shows how far a roar, slam or whistle reaches.</summary>
+  public void Wave(Vector3 p,Color color,float radius) {Initialize();Spawn(p+Vector3.up*.1f,Vector3.zero,color,.6f,.4f,0,true);if(active.Count>0&&active[active.Count-1].Ring)active[active.Count-1].Grow=radius*2;}
+  /// <summary>One slow soft blob that drifts up (smoke, floating motes).</summary>
+  public void Puff(Vector3 p,Color color,float size,float life) {Initialize();Spawn(p,Vector3.up*.5f,color,life,size,-.2f,false);}
+  /// <summary>A soap-film sphere around something (a held animal, a zero-gravity field).</summary>
+  public Transform Dome(Transform parent,float radius) {
+   Initialize();var go=GameObject.CreatePrimitive(PrimitiveType.Sphere);go.name="Film dome";go.transform.SetParent(parent,false);go.transform.localScale=Vector3.one*radius*2;
+   var collider=go.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
+   var renderer=go.GetComponent<Renderer>();renderer.sharedMaterial=film;renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=false;return go.transform;
+  }
+  /// <summary>One collider-free painted primitive (ability props and gadgets).</summary>
+  public void Part(Transform parent,PrimitiveType type,Vector3 p,Vector3 size,Quaternion rotation,Color color)=>GunPart(parent,type,p,size,rotation,Paint(color));
   public void Emit(Vector3 p,Color color,int count,float power=.8f,bool ring=true) {
    Initialize();if(ring)Spawn(p+Vector3.up*.08f,Vector3.zero,color,.55f,.3f,0,true);
    count=count<=0?0:Mathf.Max(1,Mathf.RoundToInt(count*Mathf.Clamp01(Density)));
@@ -147,14 +159,14 @@ namespace AvH {
    if(sphereMesh==null){var primitive=GameObject.CreatePrimitive(PrimitiveType.Sphere);sphereMesh=primitive.GetComponent<MeshFilter>().sharedMesh;primitive.SetActive(false);Dispose(primitive);}
    particle.Transform.GetComponent<MeshFilter>().sharedMesh=ring?ringMesh:sphereMesh;
    particle.Renderer.sharedMaterial=material;particle.Transform.gameObject.SetActive(true);particle.Transform.position=p;particle.Transform.rotation=Quaternion.identity;
-   particle.Velocity=velocity;particle.Color=color;particle.Age=0;particle.Life=life;particle.Size=size;particle.Gravity=gravity;particle.Ring=ring;particle.Transform.localScale=Vector3.one*size;active.Add(particle);
+   particle.Velocity=velocity;particle.Color=color;particle.Age=0;particle.Life=life;particle.Size=size;particle.Gravity=gravity;particle.Ring=ring;particle.Grow=1.25f;particle.Transform.localScale=Vector3.one*size;active.Add(particle);
   }
   Mesh sphereMesh;
   void Update(){if(AutomaticUpdate)Advance(Time.deltaTime);}
   public void Advance(float seconds) {
    for(int i=active.Count-1;i>=0;i--){var p=active[i];p.Age+=seconds;if(p.Age>=p.Life){p.Transform.gameObject.SetActive(false);pool.Push(p);active.RemoveAt(i);continue;}
     float t=p.Age/p.Life;p.Velocity+=Vector3.down*p.Gravity*seconds;p.Transform.position+=p.Velocity*seconds;
-    float size=p.Ring?p.Size+t*1.25f:p.Size*(1-t*.8f);p.Transform.localScale=Vector3.one*size;
+    float size=p.Ring?p.Size+t*p.Grow:p.Size*(1-t*.8f);p.Transform.localScale=Vector3.one*size;
     properties.SetColor("_Color",new Color(p.Color.r,p.Color.g,p.Color.b,p.Color.a*(1-t)*(1-t)));p.Renderer.SetPropertyBlock(properties);
    }
   }

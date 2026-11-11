@@ -198,9 +198,9 @@ namespace AvH.Tests {
    Assert.LessOrEqual(RoomProtocol.EncodedBytes(frame)-RoomProtocol.EncodedBytes(new NetworkMotionFrame()),12*10);
   }
   [Test] public void WireSchemaIsExplicitAndPreservedForStandalone() {
-   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-15"));
-   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("W9bWZ4DoVPSxp9DSTMFk7HuAoBMuUi10kbywSwThpFs="),"Schema changes require explicit protocol version and guard update");
-   foreach(var t in new[]{typeof(NetworkMotionFrame),typeof(NetworkBodyMotion),typeof(NetworkPropMotion),typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent)}) {
+   Assert.That(RoomProtocol.Version,Is.EqualTo("avh-private-16"));
+   Assert.That(RoomProtocol.SchemaFingerprint(),Is.EqualTo("SgtOFwUVU6V+RNGMWbZ0RtqkYMxUIjex45BbeFuyyH8="),"Schema changes require explicit protocol version and guard update");
+   foreach(var t in new[]{typeof(NetworkMotionFrame),typeof(NetworkBodyMotion),typeof(NetworkPropMotion),typeof(SessionState),typeof(PlayerState),typeof(WorldPosition),typeof(PlaytestValues),typeof(NetworkInput),typeof(NetworkVisualState),typeof(NetworkBubble),typeof(NetworkBurst),typeof(BirthNotice),typeof(FeelEvent),typeof(GadgetState)}) {
     Assert.That(t.GetProperties(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance),Is.Empty,t.Name+" wire contract must use fields");
     Assert.That(t.GetFields(System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance).Length,Is.GreaterThan(0),t.Name);
    }
